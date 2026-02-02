@@ -21,7 +21,7 @@ filenames =  {
     'geometries_anatom_full_realistic_elec',...
 };
 
-geoms_path = 'D:\Simulations\Paper_1\but_actualy\geometries';
+geoms_path = '';
 
 %% Loop over each geometry file
 for fIdx = 1:numel(filenames)
@@ -32,7 +32,6 @@ for fIdx = 1:numel(filenames)
 
     ordering_cord = {'wm','bone','heart','lungs','torso'};
 
-    reduction_factor = 1;  
     reduction_torso = 0.5;
 
     % Prepare BEM meshes
@@ -46,18 +45,6 @@ for fIdx = 1:numel(filenames)
             patch_out = reducepatch(patch_in, reduction_torso);
             pos = patch_out.vertices;
             tri = patch_out.faces;
-        elseif ii == 2  
-            % Downsample bone only for homo/inhomo/realistic
-            if contains(filenames{fIdx}, 'cont') || contains(filenames{fIdx}, 'homo') || contains(filenames{fIdx}, 'inhomo') || contains(filenames{fIdx}, 'realistic')
-                patch_in.vertices = mesh_tmp.vertices;
-                patch_in.faces = mesh_tmp.faces;
-                patch_out = reducepatch(patch_in, reduction_factor);
-                pos = patch_out.vertices;
-                tri = patch_out.faces;
-            else
-                pos = mesh_tmp.vertices;
-                tri = mesh_tmp.faces;
-            end
         else
             pos = mesh_tmp.vertices;
             tri = mesh_tmp.faces;
@@ -164,7 +151,7 @@ for fIdx = 1:numel(filenames)
         leadfield_cord = ft_prepare_leadfield(cfg);
 
         % Output folder
-        outdir = fullfile('D:\Simulations\Paper_1\but_actualy\forward_fields_bemisa', filenames{fIdx});
+        outdir = fullfile('', filenames{fIdx});
         if ~exist(outdir,'dir'), mkdir(outdir); end
         
         model_name = filenames{fIdx};
@@ -183,5 +170,6 @@ for fIdx = 1:numel(filenames)
 end
 
 fprintf('All BEM computations completed.\n');
+
 
 
