@@ -1,15 +1,12 @@
-%% batch_fem_forward_all_models.m
+%% batch_fem_forward_all_models
 % Loop FEM forward modelling across all geometry files (front + back)
 clearvars
 close all
 clc
 
-cd('D:\');
-Metadata;
-proj_init;
 
-geoms_path = 'D:\Simulations\Paper_1\but_actualy\fem_bem_difference';
-output_base = 'D:\Simulations\Paper_1\but_actualy\forward_fields_3'; 
+geoms_path = '';
+output_base = ''; 
 
 % geometry filenames 
 filenames = {
@@ -40,9 +37,7 @@ for fIdx = 1:numel(filenames)
 
     % decide reductions
     reduce_torso  = contains(geom_fname_noext, 'anatom');   
-    reduce_bone   = contains(geom_fname_noext, 'homo')  || ...
-                    contains(geom_fname_noext, 'inhomo');   
-    reduction_factor = 1;      
+       
     reduction_torso  = 0.5;     
 
     %% Build boundary meshes 
@@ -58,16 +53,6 @@ for fIdx = 1:numel(filenames)
                 patch_in.vertices = pos;
                 patch_in.faces = tri;
                 patch_out = reducepatch(patch_in, reduction_torso);
-                pos = patch_out.vertices;
-                tri = patch_out.faces;
-            end
-        elseif ii == 2  % bone mesh
-            pos = mesh_tmp.vertices;
-            tri = mesh_tmp.faces;
-            if reduce_bone
-                patch_in.vertices = pos;
-                patch_in.faces = tri;
-                patch_out = reducepatch(patch_in, reduction_factor);
                 pos = patch_out.vertices;
                 tri = patch_out.faces;
             end
@@ -296,29 +281,10 @@ for fIdx = 1:numel(filenames)
         Lfem = fem_calc_fwds(S); %this takes SI unit source (A*m) which gives T per A*m -> need to scale to match a 1nA*m source -> Lfem * 1e-9 * 1e15
         Lfem = Lfem * 1e6; %this is now fT per nA*m
 
-        % Save outputs
-        % outdir = fullfile('D:\Simulations\Paper_1\but_actualy\OPM_data_analysis\forward_fields', model_short);
-        % if ~exist(outdir, 'dir'); mkdir(outdir); end
-        % 
-        % array_prefix = array_name;
-        % 
-        % 
-        % for source_idx = 1:length(src.pos)
-        %     num_sensors = size(grad_curr.coilpos, 1) / 3;
-        %     lead_fields = extract_lead_fields(Lfem, source_idx, num_sensors);
-        % 
-        %     x_1 = lead_fields.x(:,1); x_2 = lead_fields.x(:,2); x_3 = lead_fields.x(:,3);
-        %     y_1 = lead_fields.y(:,1); y_2 = lead_fields.y(:,2); y_3 = lead_fields.y(:,3);
-        %     z_1 = lead_fields.z(:,1); z_2 = lead_fields.z(:,2); z_3 = lead_fields.z(:,3);
-        % 
-        %     fname = fullfile(outdir, sprintf('%s_%d.mat', array_prefix, source_idx));
-        %     save(fname, 'x_1','x_2','x_3','y_1','y_2','y_3','z_1','z_2','z_3');
-        % end
-
         leadfield_ft = convert_duneuro_to_fieldtrip(Lfem, src, grad_curr, S);
         
         % Define output folder
-        outdir = fullfile('D:\Simulations\Paper_1\but_actualy\forward_fields_3', filenames{fIdx});
+        outdir = fullfile(' ', filenames{fIdx});
         if ~exist(outdir,'dir'), mkdir(outdir); end
 
         geom_fname_noext = filenames{fIdx};
@@ -337,3 +303,4 @@ for fIdx = 1:numel(filenames)
 end
 
 fprintf('\nAll FEM computations completed.\n');
+
