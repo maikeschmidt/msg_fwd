@@ -286,7 +286,7 @@ leadfields_organised.mat
 
 ## Acknowledgements
 
-The FEM forward modelling pipeline (`batch_fem_forward_all_models.m`) 
+The FEM forward modelling pipeline (`run_fem_leadfields.m`) 
 and the DUNEuro wrapper (`fem_calc_fwds.m`) are based on code originally 
 written by **George O'Neill** (2024), UCL Wellcome Centre for Human 
 Neuroimaging. The model comparison function (`compare_results.m`) is also 
