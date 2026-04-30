@@ -87,6 +87,7 @@ msg_fwd/
 ├── analyse_normal_angles.m          — surface normal angle analysis
 ├── compute_amplitude_diff_table.m   — amplitude % difference text report
 ├── compute_re_cc_table.m            — RE and r² summary text report
+├── plot_anatomical_figures.m        — anatomical figures for diagnoistic and publication use
 │   
 ├── functions/
 │   ├── compare_results.m            — pairwise RE and r² computation
