@@ -68,14 +68,14 @@ files required as input to this pipeline.
 
 ## Directory Structure
 
+```
 msg_fwd/
 ├── run_all_analysis.m               — master script: runs full pipeline
 ├── config_models.m                  — shared configuration (paths, labels,
 │                                      colours, orientation conventions)
 ├── load_and_organise_leadfields.m   — step 1: load and reshape all leadfields
-│
 ├── run_bem_leadfields.m             — BEM leadfield computation (all models)
-├── batch_fem_forward_all_models.m   — FEM leadfield computation (all models)
+├── run_fem_leadfields.m             — FEM leadfield computation (all models)
 │
 ├── plot_absmax_curves.m             — peak amplitude vs distance plots
 ├── plot_pairwise_heatmaps.m         — RE and r² heatmaps (all model pairs)
@@ -87,12 +87,14 @@ msg_fwd/
 ├── analyse_normal_angles.m          — surface normal angle analysis
 ├── compute_amplitude_diff_table.m   — amplitude % difference text report
 ├── compute_re_cc_table.m            — RE and r² summary text report
-│
-└── functions/
-├── compare_results.m            — pairwise RE and r² computation
-├── plot_topoplot_publication.m  — publication-style sensor topoplot
-├── getfield_safe.m              — safe struct field access with default
-├── convert_duneuro_to_fieldtrip.m — DUNEuro → FieldTrip conversion
+│   
+├── functions/
+│   ├── compare_results.m            — pairwise RE and r² computation
+│   ├── plot_topoplot_publication.m  — publication-style sensor topoplot
+│   ├── getfield_safe.m              — safe struct field access with default
+│   └── convert_duneuro_to_fieldtrip.m — DUNEuro → FieldTrip conversion
+└── README.md
+```
 
 ---
 
