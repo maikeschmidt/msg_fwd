@@ -1,3 +1,106 @@
+% batch_fem_forward_all_models - Batch FEM leadfield computation across all
+%                                spinal cord geometry models
+%
+% Loops over a predefined set of geometry files (canonical and anatomical,
+% across all bone model variants) and computes FEM leadfield matrices for
+% front and back OPM sensor arrays using DUNEuro via FieldTrip. Each
+% geometry is meshed into a tetrahedral volume using TetGen (via surf2mesh),
+% compartments are labelled, and leadfields are saved as FieldTrip-compatible
+% .mat files.
+%
+% This script is part of the forward modelling pipeline accompanying:
+%   msg_coreg: https://github.com/maikeschmidt/msg_coreg
+%   msg_fwd:   https://github.com/maikeschmidt/msg_fwd
+%
+% WORKFLOW:
+%   1. Load pre-computed geometry .mat file for each model variant
+%   2. Assemble and orient BEM boundary meshes (mm → m)
+%   3. Merge all boundaries and split into labelled anatomical components
+%   4. Generate seed points for each compartment (random interior sampling)
+%   5. Call surf2mesh/TetGen to produce a tetrahedral volume mesh
+%   6. Remap TetGen region IDs to tissue conductivity labels
+%   7. Run DUNEuro FEM forward model via fem_calc_fwds()
+%   8. Scale output to fT/nAm and convert to FieldTrip leadfield struct
+%   9. Save leadfield .mat file per geometry per sensor array
+%
+% GEOMETRY VARIANTS PROCESSED:
+%   Anatomical model:
+%     - anatom_full_cont, anatom_full_homo, anatom_full_inhomo,
+%       anatom_full_realistic
+%   Canonical model:
+%     - canon_cervical_cont, canon_cervical_inhomo,
+%       canon_full_cont, canon_full_homo, canon_full_inhomo
+%
+% FEM COMPARTMENTS AND CONDUCTIVITIES (S/m):
+%   1. White matter (spinal cord)  — 0.33
+%   2. Bone                        — 0.33/40 (cratio = 40)
+%   3. Heart                       — 0.62
+%   4. Lungs                       — 0.05
+%   5. Torso                       — 0.23
+%
+% TETRAHEDRAL MESHING PARAMETERS:
+%   tetgen_maxvol      = 5e-7   (maximum tetrahedron volume, m^3)
+%   surf2mesh_opt_scale = 1     (mesh quality optimisation scale)
+%   Torso mesh downsampled by 50% for anatomical models only
+%
+% INPUTS (configured within script):
+%   geoms_path    - Path to folder containing geometry .mat files
+%   output_base   - Base output path for DUNEuro working directories
+%                   and saved leadfields
+%   geoms.(field) - Each geometry file must contain:
+%                     mesh_wm, mesh_bone, mesh_heart, mesh_lungs, mesh_torso
+%                     sources_cent        — spinal cord centreline source model
+%                     front_coils_3axis   — front OPM sensor array
+%                     back_coils_3axis    — back OPM sensor array
+%
+% OUTPUTS:
+%   cord_leadfield_<model>_fem_<array>.mat - FieldTrip leadfield struct,
+%                   scaled to fT/nAm, saved per geometry and sensor array
+%                   (front / back) in subfolders named after each geometry
+%
+% DEPENDENCIES:
+%   - mergemesh()                    : ISO2Mesh mesh merging
+%   - surf2mesh()                    : ISO2Mesh surface-to-tetrahedral meshing
+%   - removeisolatednode()           : ISO2Mesh mesh cleanup
+%   - meshreorient()                 : ISO2Mesh tetrahedron reorientation
+%   - spm_mesh_split()               : splits merged mesh into components
+%   - hbf_CheckTriangleOrientation() : ensures consistent mesh winding
+%   - tt_is_inside()                 : point-in-mesh test for seed placement
+%   - ft_convert_units()             : unit conversion (mm → m)
+%   - fem_calc_fwds()                : DUNEuro FEM forward solve
+%   - convert_duneuro_to_fieldtrip() : converts DUNEuro output to FieldTrip
+%   - DUNEuro binaries               : expected at C:\wtcnapps\duneuro
+%
+% NOTES:
+%   - Compartment seed points for TetGen are found by random interior
+%     sampling on a fine grid (step: 0.5 mm); spinal cord and each bone
+%     segment are seeded independently
+%   - FEM output is in T/(A*m); scaling by 1e6 converts to fT/nAm
+%   - DUNEuro working directories are deleted and recreated for each
+%     geometry+array combination to force fresh minifile generation
+%   - TetGen is called via surf2mesh with the 'tetgen1.5' flag
+%   - DUNEuro binary path is hardcoded; update S.bindir if your
+%     installation differs
+%
+% EXAMPLE:
+%   % Configure geoms_path and output_base, then run:
+%   batch_fem_forward_all_models
+%
+% REPOSITORY:
+%   https://github.com/maikeschmidt/msg_fwd
+%
+% -------------------------------------------------------------------------
+% Copyright (c) 2026 University College London
+% Department of Imaging Neuroscience
+%
+% Author: Maike Schmidt
+% Email:  maike.schmidt.23@ucl.ac.uk
+% Date:   April 2026
+%
+% This file is part of the MSG Forward Modelling Toolbox (msg_fwd).
+% Used in conjunction with msg_coreg:
+%   https://github.com/maikeschmidt/msg_coreg
+
 %% batch_fem_forward_all_models
 % Loop FEM forward modelling across all geometry files (front + back)
 clearvars
