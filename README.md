@@ -188,7 +188,32 @@ plot_absmax_curves             % then any analysis script in any order
 plot_pairwise_heatmaps
 % ... etc
 ```
+### Figure generation
 
+`plot_anatomical_figures.m` produces a series of 3D anatomical context 
+figures that do not depend on the leadfield computations and can be run 
+independently of the rest of the pipeline. All figures use the realistic 
+anatomical geometry as the reference model.
+
+| Figure | Description |
+|---|---|
+| Figure 1 | Torso and spinal cord meshes with source positions labelled by distance along the cord. Posterior camera view. |
+| Figure 2 | Anterior OPM sensor array on the torso surface with three highlighted source positions. |
+| Figure 3 | All five BEM compartments (spinal cord, heart, lungs, torso) rendered simultaneously in distinct colours. |
+| Figure 4 | Bone and spinal cord only, with a single highlighted source position. |
+| Figure 5 | Anterior sensor array on torso with an inset showing the triaxial (X/Y/Z) orientation of a representative sensor. |
+| Figure 6 | Full cord view with all source positions labelled at every 10th source and one highlighted source annotated with its distance. |
+| Figure 7 | Cropped regional view (250–300 mm) showing bone, spinal cord, and source positions within that cord region. |
+| Figure 8 | Zoomed view of sources 40–80 with inward-pointing torso surface normals (red arrows) and Z-direction (VD) unit vectors from each source (black arrows). Illustrates the geometric relationship between dipole orientation and local surface geometry used in the normal angle analysis. |
+
+Figures are not saved automatically. Use `exportgraphics()` or `saveas()` 
+after running to save the figures you need.
+
+```matlab
+% Example: save Figure 1 after running plot_anatomical_figures
+exportgraphics(figure(1), fullfile(save_base_dir, 'fig1_anatomical_context.png'), ...
+    'Resolution', 600);
+```
 ---
 
 ## Pipeline Description
