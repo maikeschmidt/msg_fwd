@@ -162,7 +162,7 @@ variants. BEM and FEM can be run independently:
 run_bem_leadfields
 
 % FEM leadfields (requires DUNEuro and ISO2Mesh)
-batch_fem_forward_all_models
+run_fem_leadfields
 ```
 
 Each script loops over all geometry variants defined in its `filenames` 
