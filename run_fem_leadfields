@@ -1,4 +1,4 @@
-% batch_fem_forward_all_models - Batch FEM leadfield computation across all
+% run_fem_leadfields - Batch FEM leadfield computation across all
 %                                spinal cord geometry models
 %
 % Loops over a predefined set of geometry files (canonical and anatomical,
