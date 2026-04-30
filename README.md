@@ -106,9 +106,12 @@ msg_fwd/
 2. **SPM** — the developmental version is recommended  
    https://www.fil.ion.ucl.ac.uk/spm/
 
-3. **FieldTrip** — required for sensor formatting, unit conversion, and 
-   mesh rendering  
-   https://www.fieldtriptoolbox.org/
+3. **FieldTrip** — required for sensor formatting, unit conversion, and
+   mesh rendering. The version of FieldTrip bundled with SPM should be
+   used rather than a standalone FieldTrip installation, as standalone
+   versions may not be compatible with the SPM-dependent functions used
+   in this pipeline. FieldTrip is included automatically with SPM and
+   does not need to be installed separately.
 
 4. **Helsinki BEM Framework (HBF)** by Matti Stenroos — required for BEM 
    forward modelling. Add as a subfolder named `hbf_lc_p` inside 
@@ -119,7 +122,7 @@ msg_fwd/
    https://duneuro.org/  
    The Windows binary (`bst_duneuro_meeg_win64.exe`) is expected at 
    `C:\wtcnapps\duneuro` by default; update `S.bindir` in 
-   `batch_fem_forward_all_models.m` if your installation differs.
+   `run_fem_leadfields.m` if your installation differs.
 
 6. **ISO2Mesh** — required for tetrahedral mesh generation in the FEM 
    pipeline  
@@ -128,9 +131,6 @@ msg_fwd/
 7. **msg_coreg** — companion coregistration toolbox; must be run first to 
    generate the geometry `.mat` files used as input here  
    https://github.com/maikeschmidt/msg_coreg
-
-8. **MATLAB Statistics and Machine Learning Toolbox** — required for 
-   `corrcoef()`, `corr()`, `knnsearch()`
 
 ---
 
