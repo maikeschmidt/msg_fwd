@@ -1,3 +1,92 @@
+% run_bem_leadfields - Compute BEM leadfields for all spinal cord geometry models
+%
+% Loops over a predefined set of geometry files (canonical and anatomical,
+% across all bone model variants, for both MEG/OPM and EEG sensor types)
+% and computes BEM leadfield matrices for front and back sensor arrays using
+% the Helsinki BEM Framework via FieldTrip. Leadfields are saved as
+% individual .mat files organised by geometry and sensor array.
+%
+% This script is part of the forward modelling pipeline accompanying:
+%   msg_coreg: https://github.com/maikeschmidt/msg_coreg
+%   msg_fwd:   https://github.com/maikeschmidt/msg_fwd
+%
+% WORKFLOW:
+%   1. Load pre-computed geometry .mat file for each model variant
+%   2. Assemble BEM boundary meshes (white matter, bone, heart, lungs, torso)
+%   3. Assign conductivity values for each compartment
+%   4. Detect sensor type (MEG/OPM or EEG) and load front/back arrays
+%   5. Compute BEM head model via ft_prepare_headmodel (HBF method)
+%   6. Compute leadfield matrix via ft_prepare_leadfield
+%   7. Save leadfield .mat file per geometry per sensor array
+%
+% GEOMETRY VARIANTS PROCESSED:
+%   Canonical model:
+%     - canon_full_cont, canon_full_homo, canon_full_inhomo
+%   Anatomical model (MEG/OPM):
+%     - anatom_full_cont, anatom_full_homo, anatom_full_inhomo,
+%       anatom_full_realistic
+%   Anatomical model (EEG):
+%     - anatom_full_cont_elec, anatom_full_homo_elec,
+%       anatom_full_inhomo_elec, anatom_full_realistic_elec
+%
+% BEM COMPARTMENTS (inner to outer):
+%   1. White matter (spinal cord)  — ci: 0.33,        co: 0.23  S/m
+%   2. Bone                        — ci: 0.33/40,      co: 0.23  S/m
+%   3. Heart                       — ci: 0.62,         co: 0.23  S/m
+%   4. Lungs                       — ci: 0.05,         co: 0.23  S/m
+%   5. Torso                       — ci: 0.23,         co: 0.00  S/m
+%
+% INPUTS (configured within script):
+%   Metadata.m    - Script defining subject/study metadata and paths
+%   geoms_path    - Path to folder containing geometry .mat files
+%   geoms.(field) - Each geometry file must contain:
+%                     mesh_wm, mesh_bone, mesh_heart, mesh_lungs, mesh_torso
+%                     sources_cent   — spinal cord centreline source model
+%                     front_sensors / back_sensors (or coil equivalents)
+%
+% OUTPUTS:
+%   leadfield_<model>_<array>.mat - FieldTrip leadfield struct saved per
+%                                   geometry variant and sensor array
+%                                   (front / back), in subfolders named
+%                                   after each geometry variant
+%
+% DEPENDENCIES:
+%   - cr_add_functions()        : initialises toolbox and HBF paths
+%   - ft_prepare_headmodel()    : FieldTrip BEM head model (method: 'hbf')
+%   - ft_prepare_leadfield()    : FieldTrip leadfield computation
+%   - ft_convert_units()        : unit conversion (mm → m)
+%   - hbf_CheckTriangleOrientation() : ensures consistent mesh winding
+%   - reducepatch()             : downsamples torso mesh (factor: 0.5)
+%
+% NOTES:
+%   - Torso mesh is downsampled by 50% before BEM assembly to reduce
+%     computational cost; all other meshes are used at full resolution
+%   - Sensor type (MEG or EEG) is detected automatically from the struct
+%     fields present in the geometry file
+%   - The HBF method string may need to be changed to 'bem_hbf' depending
+%     on your SPM/FieldTrip version (see cfg_hm.method comment in script)
+%   - dipoleunit is set to 'nA*m'; a patch to ft_prepare_leadfield may
+%     be required — see inline comment at cfg.dipoleunit
+%
+% EXAMPLE:
+%   % Configure geoms_path and run:
+%   run_bem_leadfields
+%
+% REPOSITORY:
+%   https://github.com/maikeschmidt/msg_fwd
+%
+% -------------------------------------------------------------------------
+% Copyright (c) 2026 University College London
+% Department of Imaging Neuroscience
+%
+% Author: Maike Schmidt
+% Email:  maike.schmidt.23@ucl.ac.uk
+% Date:   April 2026
+%
+% This file is part of the MSG Forward Modelling Toolbox (msg_fwd).
+% Used in conjunction with msg_coreg:
+%   https://github.com/maikeschmidt/msg_coreg
+
 clearvars
 close all
 clc
