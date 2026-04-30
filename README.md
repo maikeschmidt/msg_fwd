@@ -259,6 +259,7 @@ FEM output is scaled to fT/nAm for consistency with BEM.
 | `analyse_normal_angles` | For each source, estimates the local torso surface normal and measures the angle between each dipole orientation and that normal. Correlates angles with BEM vs FEM r² to investigate geometric drivers of forward model discrepancy. |
 | `compute_amplitude_diff_table` | Writes a `.txt` report of symmetric percentage amplitude differences between all bone model pairs. |
 | `compute_re_cc_table` | Writes a `.txt` report of RE and r² statistics (median, min, max, worst-case source) for all bone model pairs. |
+| plot_anatomical_figures | 3D visualisations of the anatomical model components, sensor geometry, source positions, and surface normal relationships. Does not require leadfields — can be run independently. |
 
 ### Orientation convention
 
