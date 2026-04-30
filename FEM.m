@@ -89,6 +89,21 @@
 % REPOSITORY:
 %   https://github.com/maikeschmidt/msg_fwd
 %
+% ATTRIBUTION:
+%   This script is based on the DUNEuro FEM forward modelling workflow
+%   originally developed by George O'Neill (2024), UCL Wellcome Centre
+%   for Human Neuroimaging. The core FEM solve is implemented in
+%   fem_calc_fwds.m (George O'Neill, 2024), which this script calls
+%   directly without modification.
+%
+%   Modifications made for this pipeline include:
+%     - Batch processing across multiple geometry and bone model variants
+%     - Automated tetrahedral mesh generation via surf2mesh/TetGen
+%     - Anatomical compartment labelling and seed point generation
+%     - Integration with the msg_coreg geometry pipeline
+%     - Conversion of DUNEuro output to FieldTrip format via
+%       convert_duneuro_to_fieldtrip()
+%
 % -------------------------------------------------------------------------
 % Copyright (c) 2026 University College London
 % Department of Imaging Neuroscience
@@ -96,6 +111,8 @@
 % Author: Maike Schmidt
 % Email:  maike.schmidt.23@ucl.ac.uk
 % Date:   April 2026
+%
+% Based on fem_calc_fwds.m by George O'Neill, UCL WCHN, 2024.
 %
 % This file is part of the MSG Forward Modelling Toolbox (msg_fwd).
 % Used in conjunction with msg_coreg:
