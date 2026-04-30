@@ -65,7 +65,7 @@ for fIdx = 1:numel(filenames)
     % Conductivities
     cratio = 40;
     ci_cord = [0.33 (0.33/cratio) .62 .05 .23];
-    co_cord = [(0.33/cratio) .23 .23 .23 0];
+    co_cord = [.23 .23 .23 .23 0];
 
     % Sensors
     if isfield(geoms, 'front_coils_3axis')
