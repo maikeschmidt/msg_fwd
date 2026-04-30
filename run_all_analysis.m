@@ -13,19 +13,22 @@
 %
 % WORKFLOW:
 %    1. load_and_organise_leadfields   load, reshape, and save all leadfields
-%    2. plot_absmax_curves             peak amplitude vs distance plots
-%    3. plot_pairwise_heatmaps         RE and R² heatmaps
-%    4. plot_per_source_cc_re          per-source CC and RE for model pairs
-%    5. plot_topoplots                 sensor-space topoplot figures
-%    6. plot_distance_vs_amplitude     amplitude vs sensor distance scatter
-%    7. plot_front_back_ratio          front/back amplitude ratio plots
-%    8. plot_rsq_re_vs_realistic       R² and RE vs realistic bone reference
-%    9. analyse_normal_angles          surface normal angle analysis
-%   10. compute_amplitude_diff_table   amplitude % difference text report
-%   11. compute_re_cc_table            RE and CC summary text report
+%    2. plot_anatomical_figures        anatomical context and mesh figures
+%    3. plot_absmax_curves             peak amplitude vs distance plots
+%    4. plot_pairwise_heatmaps         RE and r² heatmaps
+%    5. plot_per_source_cc_re          per-source CC and RE for model pairs
+%    6. plot_topoplots                 sensor-space topoplot figures
+%    7. plot_distance_vs_amplitude     amplitude vs sensor distance scatter
+%    8. plot_front_back_ratio          front/back amplitude ratio plots
+%    9. plot_rsq_re_vs_realistic       r² and RE vs realistic bone reference
+%   10. analyse_normal_angles          surface normal angle analysis
+%   11. compute_amplitude_diff_table   amplitude % difference text report
+%   12. compute_re_cc_table            RE and r² summary text report
 %
 % NOTES:
 %   - All paths are configured in config_models.m — update that file first
+%   - plot_anatomical_figures does not depend on leadfields_organised.mat
+%     and can be run at any point independently
 %   - Each script saves its own outputs independently; if one script fails
 %     the others continue
 %   - To run a single analysis, call the relevant script directly
@@ -45,6 +48,7 @@
 % This file is part of the MSG Forward Modelling Toolbox (msg_fwd).
 % Used in conjunction with msg_coreg:
 %   https://github.com/maikeschmidt/msg_coreg
+
 clearvars
 close all
 clc
@@ -59,24 +63,38 @@ fprintf('  Department of Imaging Neuroscience\n');
 % STEP 1: Load and organise leadfields
 % Only needs to run once unless leadfield files change
 
-fprintf('[1/11] Loading and organising leadfields...\n');
+fprintf('[1/12] Loading and organising leadfields...\n');
 run('load_and_organise_leadfields.m');
-fprintf('[1/11] Complete.\n\n');
+fprintf('[1/12] Complete.\n\n');
 
 
-% STEPS 2-11: Analysis and figure generation
+% STEP 2: Anatomical figures
+% Does not depend on leadfields_organised.mat — can be run independently
+
+fprintf('[2/12] Generating anatomical figures...\n');
+try
+    run('plot_anatomical_figures.m');
+    fprintf('[2/12] Complete.\n\n');
+catch err
+    fprintf('WARNING: plot_anatomical_figures failed:\n  %s\n', err.message);
+    fprintf('Continuing with remaining scripts...\n\n');
+end
+
+
+% STEPS 3-12: Analysis and figure generation
+% All scripts load leadfields_organised.mat and config_models independently
 
 scripts = {
-    'plot_absmax_curves',          '[2/11] Absolute max amplitude curves';
-    'plot_pairwise_heatmaps',      '[3/11] Pairwise RE and R² heatmaps';
-    'plot_per_source_cc_re',       '[4/11] Per-source CC and RE curves';
-    'plot_topoplots',              '[5/11] Topoplot figures';
-    'plot_distance_vs_amplitude',  '[6/11] Distance vs amplitude scatter';
-    'plot_front_back_ratio',       '[7/11] Front/back amplitude ratio';
-    'plot_rsq_re_vs_realistic',    '[8/11] R² and RE vs realistic bone';
-    'analyse_normal_angles',       '[9/11] Surface normal angle analysis';
-    'compute_amplitude_diff_table','[10/11] Amplitude % difference table';
-    'compute_re_cc_table',         '[11/11] RE and CC summary table';
+    'plot_absmax_curves',          '[3/12]  Absolute max amplitude curves';
+    'plot_pairwise_heatmaps',      '[4/12]  Pairwise RE and r² heatmaps';
+    'plot_per_source_cc_re',       '[5/12]  Per-source CC and RE curves';
+    'plot_topoplots',              '[6/12]  Topoplot figures';
+    'plot_distance_vs_amplitude',  '[7/12]  Distance vs amplitude scatter';
+    'plot_front_back_ratio',       '[8/12]  Front/back amplitude ratio';
+    'plot_rsq_re_vs_realistic',    '[9/12]  r² and RE vs realistic bone';
+    'analyse_normal_angles',       '[10/12] Surface normal angle analysis';
+    'compute_amplitude_diff_table','[11/12] Amplitude % difference table';
+    'compute_re_cc_table',         '[12/12] RE and r² summary table';
 };
 
 for s = 1:size(scripts, 1)
@@ -93,6 +111,6 @@ for s = 1:size(scripts, 1)
     end
 end
 
-
 fprintf('  Pipeline complete.\n');
 fprintf('  Figures saved to: %s\n', save_base_dir);
+
