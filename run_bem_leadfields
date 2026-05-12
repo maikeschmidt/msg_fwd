@@ -126,10 +126,8 @@ filenames = {
 };
 
 
-% MAIN LOOP — iterate over each geometry file
-
 for fIdx = 1:numel(filenames)
-    fprintf('\n=== Processing geometry: %s (%d/%d) ===\n', ...
+    fprintf('\n Processing geometry: %s (%d/%d) \n', ...
         filenames{fIdx}, fIdx, numel(filenames));
 
     % Load geometry file
@@ -196,41 +194,65 @@ for fIdx = 1:numel(filenames)
     ci_cord = [0.33,  0.33/cratio,  0.62,  0.05,  0.23];
     co_cord = [0.23,  0.23,         0.23,  0.23,  0.00];
 
-
-    %% STEP 3: Load sensor arrays
+%% STEP 3: Load sensor arrays
     % Sensor type (MEG/OPM or EEG) is detected automatically from the
     % fields present in the geometry struct, so the same script handles
-    % both modalities without any manual configuration.
+    % both modalities and array configurations without manual configuration.
     %
-    % Field name priority (most to least specific):
-    %   MEG: front_coils_3axis → front_coils_2axis → front_sensors
-    %   EEG: same priority order (elecpos/chanpos detected separately)
-    
-    if isfield(geoms, 'front_coils_3axis')
-        front_sens = geoms.front_coils_3axis;
-    elseif isfield(geoms, 'front_coils_2axis')
-        front_sens = geoms.front_coils_2axis;
-    elseif isfield(geoms, 'front_sensors')
-        front_sens = geoms.front_sensors;
+    % Detection priority:
+    %   1. Experimental array  — 'experimental_sensors' (single array,
+    %                             arbitrary layout)
+    %   2. Standard front/back — 'front_coils_3axis' → 'front_coils_2axis'
+    %                             → 'front_sensors' (and equivalent back)
+    %   EEG modality is detected separately from the struct fields
+    %   (elecpos/chanpos present, coilpos absent)
+
+    % Check for experimental (single) array first 
+    if isfield(geoms, 'experimental_sensors')
+
+        % Single experimental array — not split into front/back
+        fprintf('  Detected: experimental sensor array\n');
+
+        exp_sens       = ft_convert_units(geoms.experimental_sensors, 'm');
+        sensor_arrays  = {'experimental'};
+        sensor_structs = {exp_sens};
+
+    % Standard front/back array configuration
     else
-        error('No front sensor structure found in geometry file: %s', filenames{fIdx});
+
+        % Front array
+        if isfield(geoms, 'front_coils_3axis')
+            front_sens = geoms.front_coils_3axis;
+        elseif isfield(geoms, 'front_coils_2axis')
+            front_sens = geoms.front_coils_2axis;
+        elseif isfield(geoms, 'front_sensors')
+            front_sens = geoms.front_sensors;
+        else
+            error('No front sensor structure found in geometry file: %s', ...
+                filenames{fIdx});
+        end
+
+        % Back array
+        if isfield(geoms, 'back_coils_3axis')
+            back_sens = geoms.back_coils_3axis;
+        elseif isfield(geoms, 'back_coils_2axis')
+            back_sens = geoms.back_coils_2axis;
+        elseif isfield(geoms, 'back_sensors')
+            back_sens = geoms.back_sensors;
+        else
+            error('No back sensor structure found in geometry file: %s', ...
+                filenames{fIdx});
+        end
+
+        fprintf('  Detected: standard front/back sensor arrays\n');
+
+        front_sens = ft_convert_units(front_sens, 'm');
+        back_sens  = ft_convert_units(back_sens,  'm');
+
+        sensor_arrays  = {'front', 'back'};
+        sensor_structs = {front_sens, back_sens};
+
     end
-
-    if isfield(geoms, 'back_coils_3axis')
-        back_sens = geoms.back_coils_3axis;
-    elseif isfield(geoms, 'back_coils_2axis')
-        back_sens = geoms.back_coils_2axis;
-    elseif isfield(geoms, 'back_sensors')
-        back_sens = geoms.back_sensors;
-    else
-        error('No back sensor structure found in geometry file: %s', filenames{fIdx});
-    end
-
-    front_sens = ft_convert_units(front_sens, 'm');
-    back_sens  = ft_convert_units(back_sens,  'm');
-
-    sensor_arrays  = {'front', 'back'};
-    sensor_structs = {front_sens, back_sens};
 
 
     %% STEP 4: Load spinal cord source model
@@ -337,6 +359,5 @@ for fIdx = 1:numel(filenames)
 end
 
 fprintf('\n All BEM computations completed (woohoo) \n');
-
 
 
