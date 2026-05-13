@@ -87,6 +87,7 @@ msg_fwd/
 ├── analyse_normal_angles.m          — surface normal angle analysis
 ├── compute_amplitude_diff_table.m   — amplitude % difference text report
 ├── compute_re_cc_table.m            — RE and r² summary text report
+├── plot_sensitivity_analysis.m      — source position sensitivity analysis
 ├── plot_anatomical_figures.m        — anatomical figures for diagnoistic and publication use
 │   
 ├── functions/
@@ -185,7 +186,7 @@ Or run individual analysis scripts directly — each loads
 ```matlab
 load_and_organise_leadfields   % must run first to create organised .mat file
 plot_absmax_curves             % then any analysis script in any order
-plot_pairwise_heatmaps
+plot_sensitivity_analysis      % can be run standalone once leadfields are loaded
 % ... etc
 ```
 ### Figure generation
@@ -227,6 +228,19 @@ bone, heart, lungs, and torso. Conductivities follow standard values from
 the literature (cord: 0.33 S/m, bone: 0.33/40 S/m, heart: 0.62 S/m, 
 lungs: 0.05 S/m, torso: 0.23 S/m). The torso mesh is downsampled by 50% 
 before assembly to reduce BEM matrix size.
+Sensor array detection is automatic. The script supports three 
+configurations, checked in priority order:
+
+| Priority | Field name | Description |
+|---|---|---|
+| 1 | `experimental_sensors` | Single experimental array (arbitrary layout) |
+| 2 | `front_coils_3axis` / `back_coils_3axis` | Standard triaxial OPM arrays |
+| 3 | `front_coils_2axis` / `back_coils_2axis` | Standard biaxial arrays |
+
+Output files are named accordingly:
+leadfield_<model>bem_experimental.mat   % experimental array
+leadfield<model>bem_front.mat           % standard front array
+leadfield<model>_bem_back.mat           % standard back array
 
 **FEM** (`batch_fem_forward_all_models.m`) uses DUNEuro via the 
 `fem_calc_fwds` wrapper. The pipeline merges surface meshes, labels 
@@ -260,6 +274,44 @@ FEM output is scaled to fT/nAm for consistency with BEM.
 | `compute_amplitude_diff_table` | Writes a `.txt` report of symmetric percentage amplitude differences between all bone model pairs. |
 | `compute_re_cc_table` | Writes a `.txt` report of RE and r² statistics (median, min, max, worst-case source) for all bone model pairs. |
 | plot_anatomical_figures | 3D visualisations of the anatomical model components, sensor geometry, source positions, and surface normal relationships. Does not require leadfields — can be run independently. |
+| `plot_sensitivity_analysis` | Source position sensitivity analysis — see below. |
+
+### Source position sensitivity analysis
+
+`plot_sensitivity_analysis.m` evaluates how MSG leadfields change when the 
+spinal cord source model is shifted by small amounts, addressing reviewer 
+questions about the impact of anatomical uncertainty on forward solutions.
+
+Source positions are shifted independently along each anatomical axis by 
+±2, ±4, and ±6 mm (18 shifted models plus the original = 19 total). For 
+each shift, per-source r² is computed against the original unshifted model.
+
+Shifted geometry files are generated in `msg_coreg` (see 
+`example_script_1.m`) and BEM leadfields computed via `run_bem_leadfields`.
+
+**Outputs** (saved to `<save_base_dir>/sensitivity_analysis/`):
+
+| Output | Description |
+|---|---|
+| `sensitivity_<X\|Y\|Z>shift_sensorax<N>_<ori>.png/.fig` | Per-axis figures showing r² vs distance for ±2, ±4, ±6 mm. Positive = solid, negative = dashed. Lightness encodes magnitude. |
+| `sensitivity_overview_sensorax<N>_<ori>.png/.fig` | Combined figure with all three shift axes side by side for direct comparison. |
+| `sensitivity_rsq_table.csv` | Summary statistics per shift: median r², minimum r², source position at minimum, distance where r² first drops below 0.99 and 0.95. |
+| `sensitivity_rsq_table.txt` | Same data in formatted text report. |
+
+**Configuration** — add to `config_models.m`:
+```matlab
+sensitivity_ref_key = 'bem_original_experimental';   % reference model
+sensitivity_keys    = { ... };   % shifted model keys
+sensitivity_labels  = { ... };   % display labels
+sensitivity_shift_axis = [1 1 1 1 1 1, 2 2 2 2 2 2, 3 3 3 3 3 3];
+                                 % 1=X(LR), 2=Y(RC), 3=Z(VD)
+```
+
+To run the sensitivity analysis standalone:
+```matlab
+load_and_organise_leadfields   % if not already run
+plot_sensitivity_analysis
+```
 
 ### Orientation convention
 
@@ -303,7 +355,7 @@ If you use this toolbox in your work, please cite:
 
 > Schmidt, M. et al. (2026). *Forward Modelling for Magnetospinography:
 > Systematic Comparison of Boundary Element and Finite Element Methods.*
-> [Journal TBC] [DOI TBC]
+> [Journal TBC] [DOI TBC] 
 
 Please also cite the companion coregistration toolbox:
 
