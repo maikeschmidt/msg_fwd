@@ -145,6 +145,17 @@ for m = 1:numel(model_names)
         else
             warning('BEM back file not found: %s', bem_back_file);
         end
+
+        % Experimental sensor array (single array, non-standard setup
+        % Handles files named: leadfield_<model>_bem_experimental.mat
+        bem_exp_file = fullfile(model_path, ...
+            ['leadfield_' model '_bem_experimental.mat']);
+        if isfile(bem_exp_file)
+            tmp = load(bem_exp_file);
+            data.(['bem_' model '_experimental']) = tmp.leadfield_cord;
+            fprintf('  Loaded: bem_%s_experimental\n', model);
+        end
+        % No warning if not found — experimental array is optional
     end
 end
 
