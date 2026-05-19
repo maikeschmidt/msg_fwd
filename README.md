@@ -300,10 +300,10 @@ computationally expensive r² calculation.
 
 The four scripts are:
 
-| compute_sensitivity_rsq       ← run once per mode; saves .mat files |
-| plot_sensitivity_curves       ← loads .mat files; run any time |
-| plot_sensitivity_displacement ← loads .mat files; sensor mode only |
-| compute_sensitivity_table     ← loads .mat files; run any time |
+- compute_sensitivity_rsq       ← run once per mode; saves .mat files 
+- plot_sensitivity_curves       ← loads .mat files; run any time 
+- plot_sensitivity_displacement ← loads .mat files; sensor mode only 
+- compute_sensitivity_table     ← loads .mat files; run any time 
 
 When `run_all_analysis` is called, steps 13–16 are **skipped automatically** 
 if no sensitivity r² files exist and no sensitivity reference models are 
