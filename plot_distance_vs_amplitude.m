@@ -3,8 +3,9 @@
 %
 % For each model, plots the maximum absolute leadfield amplitude at each
 % source position against that source's minimum distance to any sensor.
-% One figure per orientation per sensor axis. Points are coloured by the
-% CB-safe palette per model with no colourmap colouring.
+% Produces individual figures (one per orientation per sensor axis) and
+% combined overview figures (one per sensor axis, all three orientations
+% side by side).
 %
 % USAGE:
 %   plot_distance_vs_amplitude
@@ -15,7 +16,7 @@
 %
 % OUTPUTS (saved to <save_base_dir>/distance/):
 %   distance_vs_amp_axis<N>_<ori>.png/.fig
-%   One figure per sensor axis per orientation (VD, RC, LR)
+%   distance_vs_amp_overview_axis<N>.png/.fig
 %
 % CONFIGURATION (set in this script):
 %   scatter_models      — cell array of model keys to include
@@ -28,6 +29,8 @@
 %   - First and last sources are trimmed (vals(2:end-1))
 %   - The same distance vector is used for all models, so geom_ref_name
 %     should be consistent with the models being plotted
+%   - Combined overview figures share y-axis limits across all three
+%     orientation panels for fair cross-orientation comparison
 %
 % REPOSITORY:
 %   https://github.com/maikeschmidt/msg_fwd
@@ -44,22 +47,15 @@
 % Used in conjunction with msg_coreg:
 %   https://github.com/maikeschmidt/msg_coreg
 
-clearvars
-close all
-clc
-
 
 % INITIALISE
 
 config_models;
-cr_add_functions;
 
 load(fullfile(forward_fields_base, 'leadfields_organised.mat'), ...
     'leadfields', 'abs_max_per_source', 'loaded_models');
 
-
 % CONFIGURATION
-
 
 % SET THIS: models to plot
 scatter_models = {
@@ -68,16 +64,12 @@ scatter_models = {
 };
 
 % SET THIS: geometry variant used to compute source-to-sensor distances
-% Should match the sensor array geometry of scatter_models
 geom_ref_name = 'anatom_full_realistic';
 
 save_dir = fullfile(save_base_dir, 'distance');
 if ~exist(save_dir, 'dir'); mkdir(save_dir); end
 
-
 % COMPUTE SOURCE-TO-SENSOR DISTANCES
-% Minimum distance from each source position to any sensor in the back
-% array of the reference geometry, in mm.
 
 geom_ref_file = fullfile(geoms_path, ['geometries_' geom_ref_name '.mat']);
 if ~isfile(geom_ref_file)
@@ -97,7 +89,6 @@ end
 
 fprintf('Distance range: %.1f – %.1f mm (%d sources)\n', ...
     min(min_distances), max(min_distances), n_sources_ref);
-
 
 % VALIDATE MODELS
 
@@ -121,7 +112,7 @@ sc_markers = pair_markers(1:n_scatter);
 % Build display labels
 scatter_labels = cell(1, n_scatter);
 for m = 1:n_scatter
-    key              = valid_scatter{m};
+    key               = valid_scatter{m};
     scatter_labels{m} = getfield_safe(model_display, key, key);
 end
 
@@ -137,8 +128,7 @@ end
 
 fprintf('Generating distance vs amplitude scatter plots...\n');
 
-
-%% PLOT: one figure per orientation per sensor axis
+%% STEP 1: Individual figures — one per sensor axis per orientation
 
 for ori_idx = 1:numel(orientation_labels)
     ori_label = orientation_labels{ori_idx};
@@ -161,17 +151,16 @@ for ori_idx = 1:numel(orientation_labels)
 
             amp_vals_raw = abs_max_per_source.(key).(fieldname);
 
-            % Trim edge sources consistently
             if numel(amp_vals_raw) > 2 && numel(min_distances) > 2
-                amp_vals  = amp_vals_raw(2:end-1);
-                dists     = min_distances(2:end-1);
+                amp_vals = amp_vals_raw(2:end-1);
+                dists    = min_distances(2:end-1);
             else
                 error('Not enough sources to trim for model: %s', key);
             end
 
-            n_plot    = min(numel(amp_vals), numel(dists));
-            amp_vals  = amp_vals(1:n_plot);
-            dists     = dists(1:n_plot);
+            n_plot   = min(numel(amp_vals), numel(dists));
+            amp_vals = amp_vals(1:n_plot);
+            dists    = dists(1:n_plot);
 
             col = sc_colors(m, :);
             h   = scatter(dists, amp_vals, 90, ...
@@ -192,11 +181,10 @@ for ori_idx = 1:numel(orientation_labels)
         grid on;
         set(gca, 'FontSize', 16, 'LineWidth', 1.2, 'TickDir', 'out');
 
-        lgd       = legend(legend_handles, legend_entries, ...
+        lgd     = legend(legend_handles, legend_entries, ...
             'Location', 'eastoutside', 'FontSize', 14);
-        lgd.Box   = 'off';
+        lgd.Box = 'off';
 
-        % Save
         fname = sprintf('distance_vs_amp_axis%d_%s', ax, ori_label);
         exportgraphics(fig, fullfile(save_dir, [fname '.png']), 'Resolution', 600);
         saveas(fig,          fullfile(save_dir, [fname '.fig']));
@@ -204,6 +192,115 @@ for ori_idx = 1:numel(orientation_labels)
 
         fprintf('  Saved: axis %d | %s\n', ax, ori_label);
     end
+end
+
+%% STEP 2: Combined overview figures — one per sensor axis
+% Three panels side by side (VD, RC, LR).
+% Y-axis limits shared across all orientation panels for fair comparison.
+
+fprintf('\nGenerating combined overview figures...\n');
+
+for ax = 1:n_axes
+
+    % Pre-collect all amplitude values for shared y-axis
+    amp_all_panels  = cell(1, numel(orientation_labels));
+    dist_all_panels = cell(1, numel(orientation_labels));
+    y_max_global    = 0;
+
+    for ori_idx = 1:numel(orientation_labels)
+        ori_label    = orientation_labels{ori_idx};
+        amp_by_model = cell(1, n_scatter);
+        dist_trimmed = min_distances(2:end-1);
+
+        for m = 1:n_scatter
+            key       = valid_scatter{m};
+            fieldname = sprintf('axis%d_%s', ax, ori_label);
+
+            if ~isfield(abs_max_per_source.(key), fieldname)
+                amp_by_model{m} = [];
+                continue;
+            end
+
+            amp_vals_raw = abs_max_per_source.(key).(fieldname);
+            if numel(amp_vals_raw) > 2
+                amp_vals = amp_vals_raw(2:end-1);
+            else
+                amp_vals = amp_vals_raw;
+            end
+
+            n_plot           = min(numel(amp_vals), numel(dist_trimmed));
+            amp_by_model{m}  = amp_vals(1:n_plot);
+            y_max_global     = max(y_max_global, max(amp_vals(1:n_plot)));
+        end
+
+        amp_all_panels{ori_idx}  = amp_by_model;
+        dist_all_panels{ori_idx} = dist_trimmed(1:n_plot);
+    end
+
+    % Shared y-axis with 5% headroom
+    if y_max_global < 1e-10
+        y_max_global = 1;
+    end
+    y_lim_shared = [0, y_max_global * 1.05];
+
+    % Draw figure 
+    fig = figure('Color', 'w', 'Position', [100, 100, 1800, 520]);
+    tl  = tiledlayout(1, numel(orientation_labels), ...
+        'TileSpacing', 'compact', 'Padding', 'loose');
+
+    title(tl, sprintf('Distance to Closest Sensor vs Peak Amplitude — Sensor axis %d of %d', ...
+        ax, n_axes), 'FontSize', 14, 'FontWeight', 'bold');
+
+    for ori_idx = 1:numel(orientation_labels)
+        ori_label    = orientation_labels{ori_idx};
+        amp_by_model = amp_all_panels{ori_idx};
+        dists        = dist_all_panels{ori_idx};
+
+        ax_panel = nexttile(tl);
+        hold(ax_panel, 'on');
+
+        legend_handles = gobjects(n_scatter, 1);
+
+        for m = 1:n_scatter
+            if isempty(amp_by_model{m}); continue; end
+
+            col = sc_colors(m, :);
+            legend_handles(m) = scatter(ax_panel, ...
+                dists, amp_by_model{m}, 60, ...
+                'Marker',          sc_markers{m}, ...
+                'MarkerFaceColor', col, ...
+                'MarkerEdgeColor', col, ...
+                'LineWidth',       1.0, ...
+                'MarkerFaceAlpha', 0.7);
+        end
+
+        title(ax_panel, ori_titles.(ori_label), ...
+            'FontSize', 14, 'FontWeight', 'bold');
+        xlabel(ax_panel, 'Distance to closest sensor (mm)', 'FontSize', 13);
+
+        if ori_idx == 1
+            ylabel(ax_panel, amp_label, 'FontSize', 13);
+        end
+
+        % Legend on last panel only
+        if ori_idx == numel(orientation_labels)
+            lgd     = legend(ax_panel, legend_handles, scatter_labels, ...
+                'Location', 'eastoutside', 'FontSize', 12);
+            lgd.Box = 'off';
+        end
+
+        ylim(ax_panel, y_lim_shared);
+        grid(ax_panel, 'on');
+        set(ax_panel, 'FontSize', 12, 'LineWidth', 1.2, 'TickDir', 'out');
+        hold(ax_panel, 'off');
+    end
+
+    fname = sprintf('distance_vs_amp_overview_axis%d', ax);
+    exportgraphics(fig, fullfile(save_dir, [fname '.png']), 'Resolution', 600);
+    saveas(fig,          fullfile(save_dir, [fname '.fig']));
+    close(fig);
+
+    fprintf('  Saved: distance_vs_amp_overview_axis%d\n', ax);
 end
 
 fprintf('Distance vs amplitude scatter plots saved to: %s\n', save_dir);
