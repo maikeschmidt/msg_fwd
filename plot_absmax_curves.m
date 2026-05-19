@@ -40,15 +40,10 @@
 % Used in conjunction with msg_coreg:
 %   https://github.com/maikeschmidt/msg_coreg
 
-clearvars
-close all
-clc
-
 
 % INITIALISE
 
 config_models;
-cr_add_functions;
 
 % Load pre-organised leadfields
 load(fullfile(forward_fields_base, 'leadfields_organised.mat'), ...
@@ -60,13 +55,13 @@ load(fullfile(forward_fields_base, 'leadfields_organised.mat'), ...
 % SET THIS: models to include in the overlay plot.
 % Must match keys in abs_max_per_source (method_geometry_array format).
 models_to_compare = {
-    'bem_anatom_full_cont_back', ...
-    'bem_anatom_full_homo_back', ...
-    'bem_anatom_full_inhomo_back', ...
+    % 'bem_anatom_full_cont_back', ...
+    % 'bem_anatom_full_homo_back', ...
+    % 'bem_anatom_full_inhomo_back', ...
     'bem_anatom_full_realistic_back', ...
-    'fem_anatom_full_cont_back', ...
-    'fem_anatom_full_homo_back', ...
-    'fem_anatom_full_inhomo_back', ...
+    % 'fem_anatom_full_cont_back', ...
+    % 'fem_anatom_full_homo_back', ...
+    % 'fem_anatom_full_inhomo_back', ...
     'fem_anatom_full_realistic_back', ...
 };
 
@@ -186,5 +181,113 @@ for ax = 1:n_axes
         fprintf('  Saved: axis %d | %s\n', ax, ori_label);
     end
 end
+
+%% PLOT: combined overview figure — one per sensor axis
+% Three panels side by side (VD, RC, LR) for direct orientation comparison.
+% One figure per sensor axis.
+
+fprintf('\nGenerating combined overview figures...\n');
+
+for ax = 1:n_axes
+
+    fig = figure('Color', 'w', 'Position', [100, 100, 1800, 500]);
+    tl  = tiledlayout(1, numel(orientation_labels), ...
+        'TileSpacing', 'compact', 'Padding', 'loose');
+
+    ax_handles = gobjects(1, numel(orientation_labels));
+
+    for ori_idx = 1:numel(orientation_labels)
+        ori_label = orientation_labels{ori_idx};
+
+        ax_handles(ori_idx) = nexttile(tl);
+        hold on;
+
+        legend_handles = [];
+        legend_entries = {};
+        y_max_all      = 0;
+
+        for m = 1:n_models
+            key       = valid_models{m};
+            fieldname = sprintf('axis%d_%s', ax, ori_label);
+
+            if ~isfield(abs_max_per_source.(key), fieldname)
+                continue;
+            end
+
+            vals = abs_max_per_source.(key).(fieldname);
+
+            % Trim first and last sources
+            if numel(vals) > 2
+                vals = vals(2:end-1);
+            end
+
+            distances  = (1:numel(vals)) * src_spacing_mm;
+            marker_idx = 1:5:numel(distances);
+            col        = plot_colors(m, :);
+
+            h = plot(distances, vals, ...
+                'LineStyle',       plot_line_styles{m}, ...
+                'Color',           col, ...
+                'LineWidth',       pub_line_width, ...
+                'Marker',          plot_markers{m}, ...
+                'MarkerIndices',   marker_idx, ...
+                'MarkerSize',      pub_marker_size, ...
+                'MarkerFaceColor', col, ...
+                'MarkerEdgeColor', col);
+
+            legend_handles(end+1) = h;
+            legend_entries{end+1} = display_labels{m};
+            y_max_all = max(y_max_all, max(vals));
+        end
+
+        % X-axis formatting
+        x_max = numel(vals) * src_spacing_mm;
+        xlim([0, ceil(x_max)]);
+        xticks(0:200:ceil(x_max));
+
+        % Panel title — orientation name
+        title(ori_titles.(ori_label), 'FontSize', 16, 'FontWeight', 'bold');
+        xlabel('Distance along spinal cord (mm)', 'FontSize', 14);
+
+        % Y-axis label on first panel only
+        if ori_idx == 1
+            if is_meg
+                ylabel('Amplitude (fT/nAm)', 'FontSize', 14);
+            else
+                ylabel('Amplitude (µV/nAm)', 'FontSize', 14);
+            end
+        end
+
+        % Legend on last panel only
+        if ori_idx == numel(orientation_labels)
+            lgd     = legend(legend_handles, legend_entries, ...
+                'Location', 'eastoutside', 'FontSize', 12);
+            lgd.Box = 'off';
+        end
+
+        grid on;
+        set(gca, 'FontSize', 13, 'LineWidth', 1.2, 'TickDir', 'out');
+        hold off;
+    end
+
+    % Share y-axis limits across all three panels for fair comparison
+    y_max_global = 0;
+    for ori_idx = 1:numel(orientation_labels)
+        y_max_global = max(y_max_global, max(ylim(ax_handles(ori_idx))));
+    end
+    for ori_idx = 1:numel(orientation_labels)
+        ylim(ax_handles(ori_idx), [0, y_max_global * 1.05]);
+    end
+
+    % Save
+    fname = sprintf('absmax_overview_axis%d', ax);
+    exportgraphics(fig, fullfile(save_dir, [fname '.png']), 'Resolution', 600);
+    saveas(fig,          fullfile(save_dir, [fname '.fig']));
+    close(fig);
+
+    fprintf('  Saved: absmax_overview_axis%d\n', ax);
+end
+
+fprintf('Combined overview figures saved to: %s\n', save_dir);
 
 fprintf('Absolute max plots saved to: %s\n', save_dir);
