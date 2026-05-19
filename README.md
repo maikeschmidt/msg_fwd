@@ -87,8 +87,11 @@ msg_fwd/
 ├── analyse_normal_angles.m          — surface normal angle analysis
 ├── compute_amplitude_diff_table.m   — amplitude % difference text report
 ├── compute_re_cc_table.m            — RE and r² summary text report
-├── plot_sensitivity_analysis.m      — source position sensitivity analysis
 ├── plot_anatomical_figures.m        — anatomical figures for diagnoistic and publication use
+├── compute_sensitivity_rsp.m        — compute r² for source and/or sensor sensitivity analyses (saves results to .mat files for downstream scripts)
+├── plot_sensitivity_curves.m        — r² vs cord distance figures (source and/or sensor mode)
+├── plot_sensitivty_displacement.m   — median displacement vs r² figures (sensor mode only) 
+├── compute_sensitivity_table.m      — sensitivty summary tables (source and/or sensor mdoe)
 │   
 ├── functions/
 │   ├── compare_results.m            — pairwise RE and r² computation
@@ -97,7 +100,6 @@ msg_fwd/
 │   └── convert_duneuro_to_fieldtrip.m — DUNEuro → FieldTrip conversion
 └── README.md
 ```
-
 ---
 
 ## Requirements
@@ -154,7 +156,9 @@ save_base_dir       = '';   % path for saving figures and tables
 ```
 
 Also update `model_names` and `model_types` to match the geometry variants 
-you have available.
+you have available. Two commented blocks are provided — one for source 
+sensitivity models and one for sensor sensitivity models. Uncomment the 
+relevant block before running `load_and_organise_leadfields`.
 
 ### Step 3: Compute leadfields
 
@@ -162,11 +166,11 @@ Run the forward model scripts to compute leadfields for all geometry
 variants. BEM and FEM can be run independently:
 
 ```matlab
-% BEM leadfields
+% BEM leadfields (supports standard front/back and experimental arrays)
 run_bem_leadfields
 
 % FEM leadfields (requires DUNEuro and ISO2Mesh)
-run_fem_leadfields
+batch_fem_forward_all_models
 ```
 
 Each script loops over all geometry variants defined in its `filenames` 
@@ -180,15 +184,23 @@ Once leadfields are computed, run the full analysis pipeline:
 run_all_analysis
 ```
 
-Or run individual analysis scripts directly — each loads 
-`leadfields_organised.mat` and `config_models` independently:
+Sensitivity analysis steps (13–16) are skipped automatically if the 
+required sensitivity r² files do not exist and no sensitivity models are 
+present in the current `leadfields_organised.mat`. See the 
+[Sensitivity analyses](#sensitivity-analyses) section for setup instructions.
+
+Or run individual scripts directly — each loads `leadfields_organised.mat` 
+and `config_models` independently:
 
 ```matlab
-load_and_organise_leadfields   % must run first to create organised .mat file
-plot_absmax_curves             % then any analysis script in any order
-plot_sensitivity_analysis      % can be run standalone once leadfields are loaded
+load_and_organise_leadfields   % must run first
+plot_absmax_curves             % then any script in any order
+compute_sensitivity_rsq        % sensitivity computation
+plot_sensitivity_curves        % sensitivity figures
 % ... etc
 ```
+
+---
 ### Figure generation
 
 `plot_anatomical_figures.m` produces a series of 3D anatomical context 
@@ -274,20 +286,111 @@ FEM output is scaled to fT/nAm for consistency with BEM.
 | `compute_amplitude_diff_table` | Writes a `.txt` report of symmetric percentage amplitude differences between all bone model pairs. |
 | `compute_re_cc_table` | Writes a `.txt` report of RE and r² statistics (median, min, max, worst-case source) for all bone model pairs. |
 | plot_anatomical_figures | 3D visualisations of the anatomical model components, sensor geometry, source positions, and surface normal relationships. Does not require leadfields — can be run independently. |
-| `plot_sensitivity_analysis` | Source position sensitivity analysis — see below. |
+| `compute_sensitivity_rsq` | Computes per-source r² between each shifted model and the original reference. Supports source mode, sensor mode, or both in a single call. Saves results to `sensitivity_source_rsq.mat` and/or `sensitivity_sensor_rsq.mat`. Must be run separately for each mode if both are needed (different `leadfields_organised.mat` required). |
+| `plot_sensitivity_curves` | Plots r² vs distance along the spinal cord. Source mode: figures grouped by shift axis (X/Y/Z). Sensor mode: figures grouped by error bundle. Runs whichever modes have a saved r² file. |
+| `plot_sensitivity_displacement` | Sensor mode only. Plots r² vs median sensor displacement for selected source points (50–75 mm along cord). Individual 3×3 grid figures per source point and combined line-of-best-fit figures per sensor axis. |
+| `compute_sensitivity_table` | Writes `.txt` and `.csv` summary tables. Source mode: grouped by shift axis. Sensor mode: grouped by error bundle. Runs whichever modes have a saved r² file. |
 
-### Source position sensitivity analysis
+### Sensitivity analyses
 
-`plot_sensitivity_analysis.m` evaluates how MSG leadfields change when the 
-spinal cord source model is shifted by small amounts, addressing reviewer 
-questions about the impact of anatomical uncertainty on forward solutions.
+The toolbox includes two complementary sensitivity analyses implemented as 
+a four-script pipeline that separates computation from visualisation. This 
+allows figures and tables to be regenerated without repeating the 
+computationally expensive r² calculation.
 
-Source positions are shifted independently along each anatomical axis by 
-±2, ±4, and ±6 mm (18 shifted models plus the original = 19 total). For 
-each shift, per-source r² is computed against the original unshifted model.
+The four scripts are:
 
-Shifted geometry files are generated in `msg_coreg` (see 
-`example_script_1.m`) and BEM leadfields computed via `run_bem_leadfields`.
+| compute_sensitivity_rsq       ← run once per mode; saves .mat files |
+| plot_sensitivity_curves       ← loads .mat files; run any time |
+| plot_sensitivity_displacement ← loads .mat files; sensor mode only |
+| compute_sensitivity_table     ← loads .mat files; run any time |
+
+When `run_all_analysis` is called, steps 13–16 are **skipped automatically** 
+if no sensitivity r² files exist and no sensitivity reference models are 
+present in `leadfields_organised.mat`. No configuration changes are needed 
+to run the main bone model pipeline without sensitivity analyses.
+
+#### Source position sensitivity
+
+Evaluates how MSG leadfields change when the spinal cord source model is 
+shifted by small amounts independently along each anatomical axis, 
+addressing uncertainty in spinal cord localisation.
+
+Source positions are shifted by ±2, ±4, and ±6 mm independently along 
+X (left–right), Y (rostral–caudal), and Z (ventral–dorsal), giving 18 
+shifted models plus the original (19 total).
+
+**Setup and workflow:**
+
+```matlab
+% 1. Generate shifted geometries in msg_coreg (example_script_1.m)
+% 2. Compute BEM leadfields:
+run_bem_leadfields
+
+% 3. In config_models.m: uncomment the source sensitivity model_names block
+% 4. Load leadfields:
+load_and_organise_leadfields
+
+% 5. In compute_sensitivity_rsq.m: set run_source=true, run_sensor=false
+compute_sensitivity_rsq
+
+% 6. Generate figures and tables (set run_source=true in each):
+plot_sensitivity_curves
+compute_sensitivity_table
+```
+
+**Outputs** (saved to `<save_base_dir>/sensitivity_analysis/source/`):
+
+| Output | Description |
+|---|---|
+| `source_<X\|Y\|Z>shift_sensorax<N>_<ori>.png/.fig` | Per-axis figures: r² vs cord distance for ±2, ±4, ±6 mm. Positive = solid, negative = dashed. Lightness encodes magnitude. |
+| `source_overview_sensorax<N>_<ori>.png/.fig` | All three shift axes side by side for direct comparison. |
+| `source_rsq_table.csv` | Summary statistics: median r², minimum r², source position at minimum, distance where r² first drops below 0.99 and 0.95. |
+| `source_rsq_table.txt` | Same data in formatted text report. |
+
+#### Sensor array sensitivity
+
+Evaluates how MSG leadfields change when the entire sensor array is shifted 
+by a random 3D displacement [dx, dy, dz], addressing uncertainty in sensor 
+array registration. All three axes are displaced simultaneously but by 
+independently drawn amounts.
+
+Eight random shift realisations are generated in three bundles representing 
+different registration error scales:
+
+| Bundle | Target magnitude | Distribution per axis |
+|---|---|---|
+| 1 — small | ~2 mm | U(1, 3) mm + random sign |
+| 2 — medium | ~5 mm | U(3, 7) mm + random sign |
+| 3 — large | ~10 mm | U(7, 13) mm + random sign |
+
+This gives 24 shifted configurations plus the original (25 total). Sensor 
+orientations (`coilori`, `chanori`) and the transfer matrix (`tra`) are not 
+modified — only `coilpos` and `chanpos` are shifted, preserving the triaxial 
+orthogonal structure. Shifts are seeded with `rng(42)` in `example_script_1.m` 
+for reproducibility; the exact [dx, dy, dz] vectors are printed at runtime 
+and can be hardcoded for exact reproduction.
+
+**Setup and workflow:**
+
+```matlab
+% 1. Generate shifted sensor geometries in msg_coreg (example_script_1.m)
+% 2. Compute BEM leadfields:
+run_bem_leadfields
+
+% 3. In config_models.m: uncomment the sensor sensitivity model_names block
+%    Paste shift vectors printed by example_script_1.m into sensor_shift_vectors
+% 4. Load leadfields:
+load_and_organise_leadfields
+
+% 5. In compute_sensitivity_rsq.m: set run_source=false, run_sensor=true
+compute_sensitivity_rsq
+
+% 6. Generate figures and tables (set run_sensor=true in each):
+plot_sensitivity_curves
+plot_sensitivity_displacement
+compute_sensitivity_table
+```
 
 **Outputs** (saved to `<save_base_dir>/sensitivity_analysis/`):
 
