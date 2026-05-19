@@ -49,15 +49,9 @@
 % Used in conjunction with msg_coreg:
 %   https://github.com/maikeschmidt/msg_coreg
 
-clearvars
-close all
-clc
-
-
 % INITIALISE
 
 config_models;
-cr_add_functions;
 
 load(fullfile(forward_fields_base, 'leadfields_organised.mat'), ...
     'leadfields', 'abs_max_per_source', 'loaded_models');
