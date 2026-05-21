@@ -1,6 +1,3 @@
-% =========================================================================
-% HELPER: compute cc and re for one comparison pair, one axis, one ori
-% =========================================================================
 function [cc_vec, re_vec] = compute_metrics(lf, key_A, key_B, ori, ax, src_range, min_sensors)
     n_si   = numel(src_range);
     cc_vec = nan(1, n_si);
