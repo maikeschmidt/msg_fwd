@@ -168,7 +168,7 @@ for g = 1:n_geometries
 
             % Spinal cord sources (coloured by cord distance)
             scatter3(ax, sources_m(:,1), sources_m(:,2), sources_m(:,3), ...
-                18, src_colors, 'filled', 'CDataMapping', 'scaled');
+                18, src_colors, 'filled');
             colormap(ax, 'cool');
 
             % Sensors
@@ -217,8 +217,6 @@ for g = 1:n_geometries
 
             hold(ax, 'off');
         end
-
-        fprintf('    Figure created — use rotate3d for interactive inspection.\n');
     end
     fprintf('\n');
 end
