@@ -99,6 +99,7 @@ msg_fwd/
 │   ├── config_simpler_models.m      — configuration (paths, methods, geometry names)
 │   ├── load_simpler_models.m        — load and organise all method leadfields
 │   ├── run_biot_savart_leadfields.m — Biot-Savart (infinite homogeneous space) computation
+│   ├── run_sphere_leadfields.m      — single-sphere (giant sphere) computation via FieldTrip
 │   ├── plot_sm_absmax.m             — peak amplitude curves for all methods
 │   ├── plot_sm_per_source_rsq_re.m  — per-source r² and RE vs ground truth
 │   ├── plot_sm_heatmaps.m           — pairwise r² and RE heatmaps + Biot-Savart sanity check
@@ -467,7 +468,7 @@ approximates the full numerical solution. Currently implemented:
 | Method | Description |
 |---|---|
 | **Biot-Savart (infinite space)** | Analytical solution for a current dipole in infinite homogeneous conducting space. No volume conductor geometry — purely source-to-sensor geometry. |
-| **Sphere model** *(planned)* | Analytical solution for a spherically symmetric conductor. Placeholder infrastructure is in place; a dedicated computation script will be added. |
+| **Single sphere (giant sphere)** | Analytical Sarvas solution for a single homogeneous sphere. The sphere is fitted automatically to the torso mesh surface. For MEG/OPM the solution is conductivity-independent. |
 
 BEM is always required. If FEM leadfields are also provided, FEM becomes 
 the ground truth and BEM is included as a comparison method alongside the 
@@ -487,13 +488,16 @@ simpler models. If FEM is not available, BEM is used as the ground truth.
 See `simpler_models/README.md` for the full setup and usage guide.
 
 ```matlab
-% 1. Compute Biot-Savart leadfields (MATLAB only, no toolbox required)
+% 1. Compute Biot-Savart leadfields (pure MATLAB, no toolbox required)
 cd simpler_models
 run_biot_savart_leadfields
 
-% 2. Set paths and geometry names in config_simpler_models.m
+% 2. Compute single-sphere leadfields (requires SPM/FieldTrip)
+run_sphere_leadfields
 
-% 3. Run the full sub-pipeline
+% 3. Set paths and geometry names in config_simpler_models.m
+
+% 4. Run the full sub-pipeline
 run_simpler_models_analysis
 ```
 
