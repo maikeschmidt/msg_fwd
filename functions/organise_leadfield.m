@@ -1,6 +1,3 @@
-% =========================================================================
-% HELPER: organise one leadfield struct into lf and abs_max
-% =========================================================================
 function [lf, abs_max] = organise_leadfield(lf, abs_max, lf_struct, ...
     model_key, unit_scale, orientation_labels)
 
