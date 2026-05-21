@@ -87,14 +87,27 @@ msg_fwd/
 ├── analyse_normal_angles.m          — surface normal angle analysis
 ├── compute_amplitude_diff_table.m   — amplitude % difference text report
 ├── compute_re_cc_table.m            — RE and r² summary text report
-├── plot_anatomical_figures.m        — anatomical figures for diagnoistic and publication use
-├── compute_sensitivity_rsp.m        — compute r² for source and/or sensor sensitivity analyses (saves results to .mat files for downstream scripts)
+├── plot_anatomical_figures.m        — anatomical figures for diagnostic and publication use
+├── compute_sensitivity_rsq.m        — compute r² for source and/or sensor sensitivity analyses (saves results to .mat files for downstream scripts)
 ├── plot_sensitivity_curves.m        — r² vs cord distance figures (source and/or sensor mode)
-├── plot_sensitivty_displacement.m   — median displacement vs r² figures (sensor mode only) 
-├── compute_sensitivity_table.m      — sensitivty summary tables (source and/or sensor mdoe)
-│   
+├── plot_sensitivity_displacement.m  — median displacement vs r² figures (sensor mode only)
+├── compute_sensitivity_table.m      — sensitivity summary tables (source and/or sensor mode)
+│
+├── simpler_models/                  — standalone sub-pipeline: compare BEM/FEM against
+│   │                                  analytically simpler forward models
+│   ├── run_simpler_models_analysis.m — master script for this sub-pipeline
+│   ├── config_simpler_models.m      — configuration (paths, methods, geometry names)
+│   ├── load_simpler_models.m        — load and organise all method leadfields
+│   ├── run_biot_savart_leadfields.m — Biot-Savart (infinite homogeneous space) computation
+│   ├── plot_sm_absmax.m             — peak amplitude curves for all methods
+│   ├── plot_sm_per_source_rsq_re.m  — per-source r² and RE vs ground truth
+│   ├── plot_sm_heatmaps.m           — pairwise r² and RE heatmaps + Biot-Savart sanity check
+│   ├── plot_sm_topoplots.m          — sensor-space topoplots for all methods
+│   └── README.md                    — setup and usage guide for this sub-pipeline
+│
 ├── functions/
 │   ├── compare_results.m            — pairwise RE and r² computation
+│   ├── organise_leadfield.m         — reshape raw leadfield into orientation struct
 │   ├── plot_topoplot_publication.m  — publication-style sensor topoplot
 │   ├── getfield_safe.m              — safe struct field access with default
 │   └── convert_duneuro_to_fieldtrip.m — DUNEuro → FieldTrip conversion
@@ -436,6 +449,53 @@ cord_leadfield_<model>fem<front|back>.mat
 
 Organised leadfields (produced by `load_and_organise_leadfields`):
 leadfields_organised.mat
+
+---
+
+## Simpler Forward Models
+
+The `simpler_models/` subdirectory is a **standalone sub-pipeline** for 
+comparing BEM and FEM against analytically simpler forward models. It is 
+independent of the main bone model pipeline and has its own configuration, 
+loader, and figure scripts.
+
+### Purpose
+
+This sub-pipeline asks how well a simple, anatomy-free forward model 
+approximates the full numerical solution. Currently implemented:
+
+| Method | Description |
+|---|---|
+| **Biot-Savart (infinite space)** | Analytical solution for a current dipole in infinite homogeneous conducting space. No volume conductor geometry — purely source-to-sensor geometry. |
+| **Sphere model** *(planned)* | Analytical solution for a spherically symmetric conductor. Placeholder infrastructure is in place; a dedicated computation script will be added. |
+
+BEM is always required. If FEM leadfields are also provided, FEM becomes 
+the ground truth and BEM is included as a comparison method alongside the 
+simpler models. If FEM is not available, BEM is used as the ground truth.
+
+### Key outputs
+
+| Script | Description |
+|---|---|
+| `plot_sm_absmax` | Peak amplitude vs cord distance for all methods overlaid on one figure. Individual per-orientation and combined overview figures. |
+| `plot_sm_per_source_rsq_re` | Per-source r² and relative error of each simpler method against the ground truth. |
+| `plot_sm_heatmaps` | Pairwise heatmaps of median r² and RE. Includes a Biot-Savart sanity-check heatmap (all geometry variants should produce r²≈1 / RE≈0 since bone is invisible in infinite homogeneous space). |
+| `plot_sm_topoplots` | Sensor-space topoplots at a user-chosen source index, one row per method. |
+
+### Quick start
+
+See `simpler_models/README.md` for the full setup and usage guide.
+
+```matlab
+% 1. Compute Biot-Savart leadfields (MATLAB only, no toolbox required)
+cd simpler_models
+run_biot_savart_leadfields
+
+% 2. Set paths and geometry names in config_simpler_models.m
+
+% 3. Run the full sub-pipeline
+run_simpler_models_analysis
+```
 
 ---
 
