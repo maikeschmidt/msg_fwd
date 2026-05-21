@@ -100,6 +100,7 @@ msg_fwd/
 │   ├── load_simpler_models.m        — load and organise all method leadfields
 │   ├── run_biot_savart_leadfields.m — Biot-Savart (infinite homogeneous space) computation
 │   ├── run_sphere_leadfields.m      — single-sphere (giant sphere) computation via FieldTrip
+│   ├── plot_sphere_check.m          — diagnostic: renders sphere vs torso mesh, sources, sensors
 │   ├── plot_sm_absmax.m             — peak amplitude curves for all methods
 │   ├── plot_sm_per_source_rsq_re.m  — per-source r² and RE vs ground truth
 │   ├── plot_sm_heatmaps.m           — pairwise r² and RE heatmaps + Biot-Savart sanity check

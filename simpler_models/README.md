@@ -39,6 +39,7 @@ simpler_models/
 ├── load_simpler_models.m          — loads all method leadfields into one struct
 ├── run_biot_savart_leadfields.m   — computes Biot-Savart leadfields (pure MATLAB, no toolbox)
 ├── run_sphere_leadfields.m        — computes single-sphere leadfields (requires SPM/FieldTrip)
+├── plot_sphere_check.m            — diagnostic: renders sphere vs torso mesh, sources, sensors
 ├── plot_sm_absmax.m               — peak amplitude vs cord distance, all methods
 ├── plot_sm_per_source_rsq_re.m    — per-source r² and RE vs ground truth
 ├── plot_sm_heatmaps.m             — pairwise r²/RE heatmaps + sanity check
