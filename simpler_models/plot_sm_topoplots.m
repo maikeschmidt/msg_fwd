@@ -1,23 +1,19 @@
 % plot_sm_topoplots - Sensor-space topoplot comparison at a chosen source
 %
-% Produces 3x3 grid topoplots (rows = method, columns = dipole orientation)
-% for BEM, FEM, and Biot-Savart at a single chosen source point, for one
-% reference bone variant. One figure per sensor axis. Colour limits are
-% shared within each dipole orientation column so the three methods can be
-% directly compared.
+% For each geometry variant, produces a grid topoplot with one row per
+% available method and one column per dipole orientation. One figure per
+% sensor axis. Colour limits are shared within each orientation column
+% so methods can be directly compared.
 %
 % USAGE:
 %   plot_sm_topoplots
 %
 % DEPENDENCIES:
 %   config_simpler_models, load_simpler_models
-%   plot_topoplot_publication (functions/ in main msg_fwd)
+%   plot_topoplot_publication (msg_fwd/functions/)
 %
 % OUTPUTS (saved to <save_base_dir>/figures/topoplots/):
-%   topoplot_source<N>_<variant>_<array>_axis<N>.png/.fig
-%
-% REPOSITORY:
-%   https://github.com/maikeschmidt/msg_fwd/simpler_models
+%   topoplot_<geom>_source<N>_axis<N>.png/.fig
 %
 % -------------------------------------------------------------------------
 % Copyright (c) 2026 University College London
@@ -28,138 +24,147 @@
 config_simpler_models;
 load_simpler_models;
 
-% Add path to main pipeline functions/ folder
-addpath(fullfile(fileparts(mfilename('fullpath')), '..', 'functions'));
-
 if ~exist(save_topoplot_dir, 'dir'); mkdir(save_topoplot_dir); end
 
-% =========================================================================
-% SETUP
-% =========================================================================
 src_idx = topoplot_source_idx;
+fprintf('Generating topoplots at source %d...\n', src_idx);
 
-% Reference variant index
-ref_idx = find(strcmp(bone_variants, ref_variant), 1);
-if isempty(ref_idx)
-    error('ref_variant ''%s'' not found in bone_variants.', ref_variant);
-end
+% LOOP OVER GEOMETRY VARIANTS
 
-% Three methods to compare — rows in the grid
-method_keys = { ...
-    bem_keys{ref_idx}, ...
-    fem_keys{ref_idx}, ...
-    bslaw_keys{ref_idx}, ...
-};
-method_row_labels = { ...
-    ['BEM — ' ref_variant_label], ...
-    ['FEM — ' ref_variant_label], ...
-    ['Biot-Savart (infinite space) — ' ref_variant_label], ...
-};
+for g = 1:n_geometries
+    geom       = geometry_names{g};
+    geom_label = geometry_display{g};
+    gfield     = strrep(geom, '.', '_');
 
-% Validate
-valid = cellfun(@(k) isfield(lf, k), method_keys);
-if ~all(valid)
-    warning('Some method keys not found — available methods reduced.');
-    method_keys       = method_keys(valid);
-    method_row_labels = method_row_labels(valid);
-end
-n_methods = numel(method_keys);
+    fprintf('\n  Geometry: %s\n', geom_label);
 
-% Reference model dimensions
-ref_key   = method_keys{1};
-n_axes    = lf.(ref_key).n_sensor_axes;
-n_sources = lf.(ref_key).n_sources;
-n_sensors = lf.(ref_key).n_sensors_per_axis;
+    % Collect one key per method for this geometry (first matching array)
+    plot_keys   = {};
+    plot_labels = {};
 
-if src_idx < 1 || src_idx > n_sources
-    error('topoplot_source_idx (%d) out of range (1-%d).', src_idx, n_sources);
-end
-
-fprintf('Generating topoplots at source %d — %s — %s array\n', ...
-    src_idx, ref_variant_label, array_to_use);
-
-% Load sensor positions from geometry file for topoplot interpolation
-geom_file = fullfile(geoms_path, ['geometries_' ref_variant '.mat']);
-if ~isfile(geom_file)
-    error('Geometry file not found: %s', geom_file);
-end
-geom = load(geom_file);
-
-arr_field = [array_to_use '_coils_3axis'];
-if ~isfield(geom, arr_field)
-    error('Array field ''%s'' not found in geometry file.', arr_field);
-end
-grad = geom.(arr_field);
-
-% Sensor positions for one axis (first n_sensors rows)
-sensor_pos_2d = grad.coilpos(1:n_sensors, :);
-
-% =========================================================================
-% PRODUCE ONE FIGURE PER SENSOR AXIS
-% =========================================================================
-for ax = 1:n_axes
-
-    fig = figure('Color', 'w', ...
-        'Position', [100, 100, 350 * numel(orientation_labels), 320 * n_methods]);
-    tl  = tiledlayout(n_methods, numel(orientation_labels), ...
-        'TileSpacing', 'compact', 'Padding', 'loose');
-
-    title(tl, sprintf(['Method Comparison — Source %d — %s bone\n' ...
-                       'Sensor axis %d of %d — %s array\n' ...
-                       'Rows = method,  Columns = dipole orientation'], ...
-        src_idx, ref_variant_label, ax, n_axes, array_to_use), ...
-        'FontSize', 13, 'FontWeight', 'bold');
-
-    % Compute shared colour limits per orientation column
-    % so the three methods are comparable within each orientation
-    clim_per_ori = zeros(numel(orientation_labels), 2);
-    for ori_idx = 1:numel(orientation_labels)
-        ori_label = orientation_labels{ori_idx};
-        all_vals  = [];
-        for m = 1:n_methods
-            vec = lf.(method_keys{m}).(ori_label){ax, src_idx};
-            all_vals = [all_vals; vec];
+    for m = 1:n_methods_all
+        tag = all_methods{m};
+        if ~isfield(model_keys, tag) || ~isfield(model_keys.(tag), gfield) || ...
+           isempty(model_keys.(tag).(gfield))
+            continue;
         end
-        abs_max_val = max(abs(all_vals));
-        clim_per_ori(ori_idx, :) = [-abs_max_val, abs_max_val];
+        key = model_keys.(tag).(gfield){1};
+        if ~isfield(lf, key); continue; end
+        arr_suffix = regexprep(key, ['^' tag '_' geom '_'], '');
+        plot_keys{end+1}   = key;
+        plot_labels{end+1} = [all_labels{m} ' (' arr_suffix ')'];
     end
 
-    % Draw grid: rows = methods, columns = orientations
-    for m = 1:n_methods
+    n_rows = numel(plot_keys);
+    if n_rows == 0
+        warning('No valid models for topoplot: %s', geom);
+        continue;
+    end
+
+    ref_key   = plot_keys{1};
+    n_axes    = lf.(ref_key).n_sensor_axes;
+    n_sources = lf.(ref_key).n_sources;
+    arr_tag   = regexprep(ref_key, ['^[^_]+_' geom '_'], '');
+
+    if src_idx < 1 || src_idx > n_sources
+        error('topoplot_source_idx (%d) out of range (1-%d).', ...
+            src_idx, n_sources);
+    end
+
+    % Load geometry for sensor positions
+    geom_file = fullfile(geoms_path, ['geometries_' geom '.mat']);
+    if ~isfile(geom_file)
+        warning('Geometry file not found: %s', geom_file);
+        continue;
+    end
+    geom_data = load(geom_file);
+
+    % PRODUCE ONE FIGURE PER SENSOR AXIS
+    for ax = 1:n_axes
+
+        % Get sensor positions for this axis
+        % Try each possible array field in priority order
+        array_fields = {'experimental_sensors', ...
+                        'back_coils_3axis', 'front_coils_3axis', ...
+                        'back_coils_2axis', 'front_coils_2axis'};
+        grad = [];
+        for af = 1:numel(array_fields)
+            if isfield(geom_data, array_fields{af})
+                grad = geom_data.(array_fields{af});
+                break;
+            end
+        end
+        if isempty(grad)
+            warning('No sensor array found in geometry file: %s', geom);
+            continue;
+        end
+
+        n_channels_total = size(grad.chanpos, 1);
+        n_per_axis       = n_channels_total / n_axes;
+        sens_pos         = grad.chanpos((ax-1)*n_per_axis+1 : ax*n_per_axis, :);
+
+        % Shared colour limits per orientation column
+        clim_per_ori = zeros(numel(orientation_labels), 2);
         for ori_idx = 1:numel(orientation_labels)
             ori_label = orientation_labels{ori_idx};
-
-            % Tile index: row m, column ori_idx
-            tile_idx = (m-1) * numel(orientation_labels) + ori_idx;
-            ax_panel = nexttile(tl, tile_idx);
-
-            % Leadfield vector for this method, orientation, sensor axis
-            lf_vec = lf.(method_keys{m}).(ori_label){ax, src_idx};
-
-            % Call main pipeline topoplot function
-            plot_topoplot_publication(ax_panel, lf_vec, sensor_pos_2d, ...
-                clim_per_ori(ori_idx, :), true);
-
-            % Column title on first row only
-            if m == 1
-                title(ax_panel, orientation_display{ori_idx}, ...
-                    'FontSize', 12, 'FontWeight', 'bold');
+            all_vals  = [];
+            for k = 1:n_rows
+                if src_idx > lf.(plot_keys{k}).n_sources; continue; end
+                vec      = lf.(plot_keys{k}).(ori_label){ax, src_idx};
+                all_vals = [all_vals; vec];
             end
+            abs_max_val             = max(abs(all_vals));
+            clim_per_ori(ori_idx,:) = [-abs_max_val, abs_max_val];
+        end
 
-            % Row label on first column only
-            if ori_idx == 1
-                ylabel(ax_panel, method_row_labels{m}, 'FontSize', 10);
+        fig = figure('Color', 'w', ...
+            'Position', [100, 100, ...
+                         340*numel(orientation_labels), 300*n_rows]);
+        tl  = tiledlayout(n_rows, numel(orientation_labels), ...
+            'TileSpacing', 'compact', 'Padding', 'loose');
+
+        title(tl, sprintf(['%s — Source %d\n' ...
+                           'Sensor axis %d of %d\n' ...
+                           'Rows = method  |  Columns = dipole orientation\n' ...
+                           'Colour limits shared within each column  |  ' ...
+                           'Ground truth: %s'], ...
+            geom_label, src_idx, ax, n_axes, ground_truth_label), ...
+            'FontSize', 12, 'FontWeight', 'bold');
+
+        for m = 1:n_rows
+            key = plot_keys{m};
+            for ori_idx = 1:numel(orientation_labels)
+                ori_label = orientation_labels{ori_idx};
+                tile_idx  = (m-1)*numel(orientation_labels) + ori_idx;
+                ax_panel  = nexttile(tl, tile_idx);
+
+                if src_idx > lf.(key).n_sources
+                    axis(ax_panel, 'off');
+                    continue;
+                end
+
+                lf_vec = lf.(key).(ori_label){ax, src_idx};
+                clim   = clim_per_ori(ori_idx, :);
+
+                plot_topoplot_publication(sens_pos, lf_vec, clim, true);
+
+                if m == 1
+                    title(ax_panel, orientation_display{ori_idx}, ...
+                        'FontSize', 11, 'FontWeight', 'bold');
+                end
+                if ori_idx == 1
+                    ylabel(ax_panel, plot_labels{m}, 'FontSize', 9);
+                end
             end
         end
-    end
 
-    fname = sprintf('topoplot_source%d_%s_%s_axis%d', ...
-        src_idx, strrep(ref_variant, '_', ''), array_to_use, ax);
-    exportgraphics(fig, fullfile(save_topoplot_dir, [fname '.png']), ...
-        'Resolution', 600);
-    saveas(fig, fullfile(save_topoplot_dir, [fname '.fig']));
-    close(fig);
-    fprintf('  Saved: %s\n', fname);
+        fname = sprintf('topoplot_%s_source%d_axis%d', geom, src_idx, ax);
+        exportgraphics(fig, fullfile(save_topoplot_dir, [fname '.png']), ...
+            'Resolution', 600);
+        saveas(fig, fullfile(save_topoplot_dir, [fname '.fig']));
+        close(fig);
+        fprintf('    Saved: %s\n', fname);
+    end
 end
 
-fprintf('Topoplots saved to: %s\n', save_topoplot_dir);
+fprintf('\nTopoplots saved to: %s\n', save_topoplot_dir);

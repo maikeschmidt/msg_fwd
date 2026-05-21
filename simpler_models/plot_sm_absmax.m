@@ -1,10 +1,9 @@
-% plot_sm_absmax - Peak absolute amplitude curves: BEM vs FEM vs Biot-Savart
+% plot_sm_absmax - Peak absolute amplitude curves for all available methods
 %
-% Plots peak absolute leadfield amplitude vs distance along the spinal cord
-% for BEM, FEM, and Biot-Savart for one reference bone variant. All three
-% methods are overlaid on the same figure. One figure per sensor axis per
-% dipole orientation, plus combined overview figures (one per sensor axis,
-% all three orientations side by side).
+% For each geometry variant, overlays peak absolute leadfield amplitude
+% vs distance along the cord for all available methods (BEM, FEM,
+% Biot-Savart, sphere). One figure per geometry per sensor axis per
+% orientation, plus combined overview figures (all orientations side by side).
 %
 % USAGE:
 %   plot_sm_absmax
@@ -13,11 +12,8 @@
 %   config_simpler_models, load_simpler_models
 %
 % OUTPUTS (saved to <save_base_dir>/figures/absmax/):
-%   absmax_<array>_axis<N>_<ori>.png/.fig
-%   absmax_overview_<array>_axis<N>.png/.fig
-%
-% REPOSITORY:
-%   https://github.com/maikeschmidt/msg_fwd/simpler_models
+%   absmax_<geom>_<array>_axis<N>_<ori>.png/.fig
+%   absmax_overview_<geom>_<array>_axis<N>.png/.fig
 %
 % -------------------------------------------------------------------------
 % Copyright (c) 2026 University College London
@@ -30,190 +26,199 @@ load_simpler_models;
 
 if ~exist(save_absmax_dir, 'dir'); mkdir(save_absmax_dir); end
 
-% =========================================================================
-% Build model keys and labels for the reference variant only
-% =========================================================================
-ref_idx = find(strcmp(bone_variants, ref_variant), 1);
-if isempty(ref_idx)
-    error('ref_variant ''%s'' not found in bone_variants.', ref_variant);
-end
+fprintf('Generating absmax figures...\n');
 
-plot_keys = { ...
-    bem_keys{ref_idx}, ...
-    fem_keys{ref_idx}, ...
-    bslaw_keys{ref_idx}, ...
-};
-plot_labels = { ...
-    ['BEM — ' ref_variant_label], ...
-    ['FEM — ' ref_variant_label], ...
-    ['Biot-Savart (infinite space) — ' ref_variant_label], ...
-};
+% LOOP OVER GEOMETRY VARIANTS
 
-% Validate
-valid = true(1, numel(plot_keys));
-for i = 1:numel(plot_keys)
-    if ~isfield(abs_max, plot_keys{i})
-        warning('Key not found: %s', plot_keys{i});
-        valid(i) = false;
+for g = 1:n_geometries
+    geom       = geometry_names{g};
+    geom_label = geometry_display{g};
+    gfield     = strrep(geom, '.', '_');
+
+    fprintf('\n  Geometry: %s\n', geom_label);
+
+    % Collect all keys and labels for this geometry across all methods
+    geom_keys   = {};
+    geom_labels = {};
+    geom_colors = zeros(0, 3);
+    geom_styles  = {};
+    geom_markers = {};
+
+    for m = 1:n_methods_all
+        tag = all_methods{m};
+        if ~isfield(model_keys, tag) || ~isfield(model_keys.(tag), gfield)
+            continue;
+        end
+        keys_m = model_keys.(tag).(gfield);
+        for k = 1:numel(keys_m)
+            key = keys_m{k};
+            if ~isfield(abs_max, key); continue; end
+            % Extract array suffix from key for label
+            arr_suffix = regexprep(key, ['^' tag '_' geom '_'], '');
+            geom_keys{end+1}        = key;
+            geom_labels{end+1}      = [all_labels{m} ' (' arr_suffix ')'];
+            geom_colors(end+1, :)   = all_method_colors(m, :);
+            geom_styles{end+1}      = all_method_styles{m};
+            geom_markers{end+1}     = all_method_markers{m};
+        end
     end
-end
-plot_keys   = plot_keys(valid);
-plot_labels = plot_labels(valid);
-n_plot      = numel(plot_keys);
 
-% Reference model for dimensions
-ref_key = plot_keys{1};
-n_axes  = lf.(ref_key).n_sensor_axes;
+    if isempty(geom_keys)
+        warning('No valid models found for geometry: %s', geom);
+        continue;
+    end
 
-fprintf('Generating absmax figures for: %s\n', ref_variant_label);
+    % Get n_axes from first valid key
+    ref_key = geom_keys{1};
+    n_axes  = lf.(ref_key).n_sensor_axes;
 
-% =========================================================================
-%% STEP 1: Individual figures
-% =========================================================================
-for ax = 1:n_axes
-    for ori_idx = 1:numel(orientation_labels)
-        ori_label = orientation_labels{ori_idx};
-        fieldname = sprintf('axis%d_%s', ax, ori_label);
+    % Infer array suffix for filename from first key
+    arr_tag = regexprep(geom_keys{1}, ['^[^_]+_' geom '_'], '');
 
-        fig = figure('Color', 'w', 'Position', [100, 100, 1000, 580]);
-        hold on;
-        leg_h = gobjects(n_plot, 1);
+    % STEP 1: Individual figures
+    for ax = 1:n_axes
+        for ori_idx = 1:numel(orientation_labels)
+            ori_label = orientation_labels{ori_idx};
+            fieldname = sprintf('axis%d_%s', ax, ori_label);
 
-        for m = 1:n_plot
-            key = plot_keys{m};
-            if ~isfield(abs_max.(key), fieldname); continue; end
+            fig = figure('Color', 'w', 'Position', [100, 100, 1000, 580]);
+            hold on;
+            leg_h = gobjects(numel(geom_keys), 1);
 
-            vals = abs_max.(key).(fieldname);
-            if numel(vals) > 2; vals = vals(2:end-1); end
-            distances  = (1:numel(vals)) * src_spacing_mm;
-            marker_idx = 1:5:numel(distances);
+            for k = 1:numel(geom_keys)
+                key = geom_keys{k};
+                if ~isfield(abs_max.(key), fieldname); continue; end
+                vals = abs_max.(key).(fieldname);
+                if numel(vals) > 2; vals = vals(2:end-1); end
+                distances  = (1:numel(vals)) * src_spacing_mm;
+                marker_idx = 1:5:numel(distances);
+                col        = geom_colors(k, :);
 
-            col = method_colors(m, :);
-            leg_h(m) = plot(distances, vals, ...
-                'LineStyle',       method_styles{m}, ...
-                'Color',           col, ...
-                'LineWidth',       pub_line_width, ...
-                'Marker',          method_markers{m}, ...
-                'MarkerIndices',   marker_idx, ...
-                'MarkerSize',      pub_marker_size, ...
-                'MarkerFaceColor', col, ...
-                'MarkerEdgeColor', col);
+                leg_h(k) = plot(distances, vals, ...
+                    'LineStyle',       geom_styles{k}, ...
+                    'Color',           col, ...
+                    'LineWidth',       pub_line_width, ...
+                    'Marker',          geom_markers{k}, ...
+                    'MarkerIndices',   marker_idx, ...
+                    'MarkerSize',      pub_marker_size, ...
+                    'MarkerFaceColor', col, ...
+                    'MarkerEdgeColor', col);
+            end
+
+            xlim([distances(1), distances(end)]);
+            xticks(0:200:ceil(distances(end)));
+
+            title(sprintf('%s — %s\nSensor axis %d', ...
+                ori_titles.(ori_label), geom_label, ax), ...
+                'FontSize', 15, 'FontWeight', 'bold');
+            xlabel('Distance along spinal cord (mm)', 'FontSize', 14);
+            ylabel('Peak absolute amplitude (fT/nAm)', 'FontSize', 14);
+
+            lgd     = legend(leg_h, geom_labels, ...
+                'Location', 'eastoutside', 'FontSize', 12);
+            lgd.Box = 'off';
+            grid on;
+            set(gca, 'FontSize', 13, 'LineWidth', 1.2, 'TickDir', 'out');
+
+            fname = sprintf('absmax_%s_%s_axis%d_%s', ...
+                geom, arr_tag, ax, ori_label);
+            exportgraphics(fig, fullfile(save_absmax_dir, [fname '.png']), ...
+                'Resolution', 600);
+            saveas(fig, fullfile(save_absmax_dir, [fname '.fig']));
+            close(fig);
+            fprintf('    Saved: %s\n', fname);
+        end
+    end
+
+    % STEP 2: Combined overview
+    for ax = 1:n_axes
+
+        % Pre-collect for shared y-axis
+        y_max_global = 0;
+        data_panels  = cell(1, numel(orientation_labels));
+
+        for ori_idx = 1:numel(orientation_labels)
+            ori_label  = orientation_labels{ori_idx};
+            fieldname  = sprintf('axis%d_%s', ax, ori_label);
+            panel_data = struct();
+
+            for k = 1:numel(geom_keys)
+                key = geom_keys{k};
+                if ~isfield(abs_max.(key), fieldname); continue; end
+                vals = abs_max.(key).(fieldname);
+                if numel(vals) > 2; vals = vals(2:end-1); end
+                panel_data(k).vals      = vals;
+                panel_data(k).distances = (1:numel(vals)) * src_spacing_mm;
+                y_max_global = max(y_max_global, max(vals));
+            end
+            data_panels{ori_idx} = panel_data;
         end
 
-        xlim([distances(1), distances(end)]);
-        xticks(0:200:ceil(distances(end)));
+        if y_max_global < 1e-10; y_max_global = 1; end
+        y_shared = [0, y_max_global * 1.05];
 
-        title(sprintf('%s — Sensor axis %d — %s array', ...
-            ori_titles.(ori_label), ax, array_to_use), ...
-            'FontSize', 16, 'FontWeight', 'bold');
-        xlabel('Distance along spinal cord (mm)', 'FontSize', 14);
-        ylabel('Peak absolute amplitude (fT/nAm)',  'FontSize', 14);
+        fig = figure('Color', 'w', 'Position', [100, 100, 1800, 520]);
+        tl  = tiledlayout(1, numel(orientation_labels), ...
+            'TileSpacing', 'compact', 'Padding', 'loose');
+        title(tl, sprintf(['Peak Absolute Leadfield Amplitude\n' ...
+                           '%s — Sensor axis %d of %d — Ground truth: %s'], ...
+            geom_label, ax, n_axes, ground_truth_label), ...
+            'FontSize', 13, 'FontWeight', 'bold');
 
-        lgd     = legend(leg_h, plot_labels, 'Location', 'eastoutside', 'FontSize', 12);
-        lgd.Box = 'off';
-        grid on;
-        set(gca, 'FontSize', 13, 'LineWidth', 1.2, 'TickDir', 'out');
+        for ori_idx = 1:numel(orientation_labels)
+            ori_label  = orientation_labels{ori_idx};
+            panel_data = data_panels{ori_idx};
 
-        fname = sprintf('absmax_%s_axis%d_%s', array_to_use, ax, ori_label);
-        exportgraphics(fig, fullfile(save_absmax_dir, [fname '.png']), 'Resolution', 600);
+            ax_panel = nexttile(tl);
+            hold(ax_panel, 'on');
+            leg_h = gobjects(numel(geom_keys), 1);
+
+            for k = 1:numel(geom_keys)
+                if ~isfield(panel_data(k), 'vals') || isempty(panel_data(k).vals)
+                    continue;
+                end
+                distances  = panel_data(k).distances;
+                marker_idx = 1:5:numel(distances);
+                col        = geom_colors(k, :);
+
+                leg_h(k) = plot(ax_panel, distances, panel_data(k).vals, ...
+                    'LineStyle',       geom_styles{k}, ...
+                    'Color',           col, ...
+                    'LineWidth',       pub_line_width, ...
+                    'Marker',          geom_markers{k}, ...
+                    'MarkerIndices',   marker_idx, ...
+                    'MarkerSize',      pub_marker_size, ...
+                    'MarkerFaceColor', col, ...
+                    'MarkerEdgeColor', col);
+            end
+
+            xlim(ax_panel, [panel_data(1).distances(1), ...
+                            panel_data(1).distances(end)]);
+            xticks(ax_panel, 0:200:ceil(panel_data(1).distances(end)));
+            ylim(ax_panel, y_shared);
+            title(ax_panel, ori_titles.(ori_label), ...
+                'FontSize', 14, 'FontWeight', 'bold');
+            xlabel(ax_panel, 'Distance along spinal cord (mm)', 'FontSize', 13);
+            if ori_idx == 1
+                ylabel(ax_panel, 'Peak amplitude (fT/nAm)', 'FontSize', 13);
+            end
+            if ori_idx == numel(orientation_labels)
+                lgd     = legend(ax_panel, leg_h, geom_labels, ...
+                    'Location', 'eastoutside', 'FontSize', 11);
+                lgd.Box = 'off';
+            end
+            grid(ax_panel, 'on');
+            set(ax_panel, 'FontSize', 12, 'LineWidth', 1.2, 'TickDir', 'out');
+            hold(ax_panel, 'off');
+        end
+
+        fname = sprintf('absmax_overview_%s_%s_axis%d', geom, arr_tag, ax);
+        exportgraphics(fig, fullfile(save_absmax_dir, [fname '.png']), ...
+            'Resolution', 600);
         saveas(fig, fullfile(save_absmax_dir, [fname '.fig']));
         close(fig);
-        fprintf('  Saved: %s\n', fname);
+        fprintf('    Saved: %s\n', fname);
     end
 end
 
-% =========================================================================
-%% STEP 2: Combined overview figures — one per sensor axis
-% =========================================================================
-fprintf('Generating combined overview figures...\n');
-
-for ax = 1:n_axes
-
-    % Pre-collect for shared y-axis
-    y_max_global = 0;
-    data_panels  = cell(1, numel(orientation_labels));
-
-    for ori_idx = 1:numel(orientation_labels)
-        ori_label = orientation_labels{ori_idx};
-        fieldname = sprintf('axis%d_%s', ax, ori_label);
-        panel_data = struct();
-
-        for m = 1:n_plot
-            key = plot_keys{m};
-            if ~isfield(abs_max.(key), fieldname); continue; end
-            vals = abs_max.(key).(fieldname);
-            if numel(vals) > 2; vals = vals(2:end-1); end
-            panel_data(m).vals      = vals;
-            panel_data(m).distances = (1:numel(vals)) * src_spacing_mm;
-            y_max_global = max(y_max_global, max(vals));
-        end
-        data_panels{ori_idx} = panel_data;
-    end
-
-    if y_max_global < 1e-10; y_max_global = 1; end
-    y_shared = [0, y_max_global * 1.05];
-
-    fig = figure('Color', 'w', 'Position', [100, 100, 1800, 520]);
-    tl  = tiledlayout(1, numel(orientation_labels), ...
-        'TileSpacing', 'compact', 'Padding', 'loose');
-    title(tl, sprintf(['Peak Absolute Leadfield Amplitude\n' ...
-                       'BEM vs FEM vs Biot-Savart (infinite space) — ' ...
-                       '%s bone — %s array — Sensor axis %d of %d'], ...
-        ref_variant_label, array_to_use, ax, n_axes), ...
-        'FontSize', 13, 'FontWeight', 'bold');
-
-    for ori_idx = 1:numel(orientation_labels)
-        ori_label  = orientation_labels{ori_idx};
-        panel_data = data_panels{ori_idx};
-
-        ax_panel = nexttile(tl);
-        hold(ax_panel, 'on');
-        leg_h = gobjects(n_plot, 1);
-
-        for m = 1:n_plot
-            if ~isfield(panel_data(m), 'vals') || isempty(panel_data(m).vals)
-                continue;
-            end
-            distances  = panel_data(m).distances;
-            marker_idx = 1:5:numel(distances);
-            col        = method_colors(m, :);
-
-            leg_h(m) = plot(ax_panel, distances, panel_data(m).vals, ...
-                'LineStyle',       method_styles{m}, ...
-                'Color',           col, ...
-                'LineWidth',       pub_line_width, ...
-                'Marker',          method_markers{m}, ...
-                'MarkerIndices',   marker_idx, ...
-                'MarkerSize',      pub_marker_size, ...
-                'MarkerFaceColor', col, ...
-                'MarkerEdgeColor', col);
-        end
-
-        xlim(ax_panel, [panel_data(1).distances(1), panel_data(1).distances(end)]);
-        xticks(ax_panel, 0:200:ceil(panel_data(1).distances(end)));
-        ylim(ax_panel, y_shared);
-
-        title(ax_panel, ori_titles.(ori_label), 'FontSize', 14, 'FontWeight', 'bold');
-        xlabel(ax_panel, 'Distance along spinal cord (mm)', 'FontSize', 13);
-        if ori_idx == 1
-            ylabel(ax_panel, 'Peak amplitude (fT/nAm)', 'FontSize', 13);
-        end
-        if ori_idx == numel(orientation_labels)
-            lgd     = legend(ax_panel, leg_h, method_short, ...
-                'Location', 'eastoutside', 'FontSize', 11);
-            lgd.Box = 'off';
-        end
-
-        grid(ax_panel, 'on');
-        set(ax_panel, 'FontSize', 12, 'LineWidth', 1.2, 'TickDir', 'out');
-        hold(ax_panel, 'off');
-    end
-
-    fname = sprintf('absmax_overview_%s_axis%d', array_to_use, ax);
-    exportgraphics(fig, fullfile(save_absmax_dir, [fname '.png']), 'Resolution', 600);
-    saveas(fig, fullfile(save_absmax_dir, [fname '.fig']));
-    close(fig);
-    fprintf('  Saved: %s\n', fname);
-end
-
-fprintf('Absmax figures saved to: %s\n', save_absmax_dir);
+fprintf('\nAbsmax figures saved to: %s\n', save_absmax_dir);

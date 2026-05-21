@@ -1,10 +1,10 @@
 % plot_sm_heatmaps - Pairwise median r² and RE heatmaps
 %
-% Produces annotated colour heatmaps of median r² and relative error (RE)
-% between all model pairs across all bone variants and methods.
-% Also produces a within-Biot-Savart sanity check heatmap — since bone
-% geometry is irrelevant in infinite space, all Biot-Savart variants should
-% show r²≈1 and RE≈0 against each other.
+% For each geometry variant, produces annotated heatmaps comparing all
+% available methods pairwise. Also produces a within-Biot-Savart sanity
+% check heatmap (all geometry variants vs each other using Biot-Savart,
+% which should show r²≈1 and RE≈0 since bone geometry is irrelevant
+% in infinite homogeneous space).
 %
 % USAGE:
 %   plot_sm_heatmaps
@@ -13,12 +13,8 @@
 %   config_simpler_models, load_simpler_models, compare_results (functions/)
 %
 % OUTPUTS (saved to <save_base_dir>/figures/heatmaps/):
-%   heatmap_rsq_<array>_axis<N>_<ori>.png/.fig
-%   heatmap_re_<array>_axis<N>_<ori>.png/.fig
-%   heatmap_bslaw_sanity_<array>_axis<N>_<ori>.png/.fig
-%
-% REPOSITORY:
-%   https://github.com/maikeschmidt/msg_fwd/simpler_models
+%   heatmap_<geom>_axis<N>.png/.fig
+%   heatmap_bslaw_sanity_axis<N>.png/.fig
 %
 % -------------------------------------------------------------------------
 % Copyright (c) 2026 University College London
@@ -29,256 +25,262 @@
 config_simpler_models;
 load_simpler_models;
 
-% Add path to main pipeline functions/ folder for compare_results
-addpath(fullfile(fileparts(mfilename('fullpath')), '..', 'functions'));
-
 if ~exist(save_heatmap_dir, 'dir'); mkdir(save_heatmap_dir); end
 
-% =========================================================================
-% BUILD FULL MODEL LIST FOR PAIRWISE HEATMAP
-% All BEM, FEM, and Biot-Savart variants
-% =========================================================================
-all_keys   = [bem_keys,   fem_keys,   bslaw_keys  ];
-all_labels = [ ...
-    cellfun(@(v) ['BEM — ' v], bone_display, 'UniformOutput', false), ...
-    cellfun(@(v) ['FEM — ' v], bone_display, 'UniformOutput', false), ...
-    cellfun(@(v) ['BS — '  v], bone_display, 'UniformOutput', false), ...
-];
+fprintf('Generating pairwise heatmaps...\n');
 
-% Filter to loaded models only
-valid = cellfun(@(k) isfield(lf, k), all_keys);
-all_keys   = all_keys(valid);
-all_labels = all_labels(valid);
-n_all      = numel(all_keys);
+%% STEP 1: Per-geometry pairwise heatmap — all methods
 
-% Reference for dimensions
-ref_key   = all_keys{1};
-n_axes    = lf.(ref_key).n_sensor_axes;
-n_src_ref = lf.(ref_key).n_sources;
-src_range = 2:(n_src_ref - 1);
+for g = 1:n_geometries
+    geom       = geometry_names{g};
+    geom_label = geometry_display{g};
+    gfield     = strrep(geom, '.', '_');
 
-min_sensors = inf;
-for i = 1:numel(loaded_keys)
-    min_sensors = min(min_sensors, ...
-        numel(lf.(loaded_keys{i}).(orientation_labels{1}){1, 1}));
-end
+    fprintf('\n  Geometry: %s\n', geom_label);
 
-fprintf('Generating pairwise heatmaps (%d x %d)...\n', n_all, n_all);
+    % Collect all keys for this geometry in method order
+    geom_keys   = {};
+    geom_labels = {};
 
-% =========================================================================
-%% STEP 1: Full pairwise heatmap — all methods and bone variants
-% =========================================================================
-for ax = 1:n_axes
-    for ori_idx = 1:numel(orientation_labels)
-        ori = orientation_labels{ori_idx};
+    for m = 1:n_methods_all
+        tag = all_methods{m};
+        if ~isfield(model_keys, tag) || ~isfield(model_keys.(tag), gfield)
+            continue;
+        end
+        keys_m = model_keys.(tag).(gfield);
+        for k = 1:numel(keys_m)
+            if ~isfield(lf, keys_m{k}); continue; end
+            arr_suffix = regexprep(keys_m{k}, ['^' tag '_' geom '_'], '');
+            geom_keys{end+1}   = keys_m{k};
+            geom_labels{end+1} = [all_labels{m} ' (' arr_suffix ')'];
+        end
+    end
 
-        % Compute pairwise median r² and RE
-        rsq_mat = nan(n_all, n_all);
-        re_mat  = nan(n_all, n_all);
+    n_geom_keys = numel(geom_keys);
+    if n_geom_keys < 2
+        warning('Need at least 2 models for heatmap: %s', geom);
+        continue;
+    end
 
-        for i = 1:n_all
-            for j = 1:n_all
-                if i == j
-                    rsq_mat(i,j) = 1;
-                    re_mat(i,j)  = 0;
-                    continue;
-                end
+    % Reference for dimensions
+    ref_key   = geom_keys{1};
+    n_axes    = lf.(ref_key).n_sensor_axes;
+    n_src_ref = lf.(ref_key).n_sources;
+    src_range = 2:(n_src_ref-1);
+    arr_tag   = regexprep(ref_key, ['^[^_]+_' geom '_'], '');
 
-                n_trunc = min(min_sensors, ...
-                    min(numel(lf.(all_keys{i}).(ori){ax,1}), ...
-                        numel(lf.(all_keys{j}).(ori){ax,1})));
+    min_sensors = inf;
+    for k = 1:n_geom_keys
+        min_sensors = min(min_sensors, ...
+            numel(lf.(geom_keys{k}).(orientation_labels{1}){1,1}));
+    end
 
-                rsq_vals = nan(numel(src_range), 1);
-                re_vals  = nan(numel(src_range), 1);
+    for ax = 1:n_axes
 
-                for si = 1:numel(src_range)
-                    s    = src_range(si);
-                    vecA = lf.(all_keys{i}).(ori){ax, s}(1:n_trunc);
-                    vecB = lf.(all_keys{j}).(ori){ax, s}(1:n_trunc);
-                    tmp  = corrcoef(vecA, vecB);
-                    rsq_vals(si) = tmp(1,2)^2;
-                    re_vals(si)  = norm(vecB-vecA,1) / (norm(vecA,1)+norm(vecB,1));
-                end
-
-                rsq_mat(i,j) = median(rsq_vals, 'omitnan');
-                re_mat(i,j)  = median(re_vals,  'omitnan');
+        % Build concatenated [LR;RC;VD] per model
+        L = cell(1, n_geom_keys);
+        for k = 1:n_geom_keys
+            key     = geom_keys{k};
+            n_src   = lf.(key).n_sources;
+            n_trunc = min(min_sensors, numel(lf.(key).LR{ax,1}));
+            M       = zeros(n_trunc*3, n_src);
+            for s = 1:n_src
+                M(:,s) = [lf.(key).LR{ax,s}(1:n_trunc); ...
+                          lf.(key).RC{ax,s}(1:n_trunc); ...
+                          lf.(key).VD{ax,s}(1:n_trunc)];
             end
+            L{k} = M;
         end
 
-        % Plot r² heatmap
-        for metric = 1:2
-            if metric == 1
-                data      = rsq_mat;
-                clim_vals = [0, 1];
-                cmap      = flipud(hot);
-                cb_label  = 'Median r²';
-                fname_tag = 'rsq';
-                fmt       = '%.3f';
-            else
-                data      = re_mat * 100;
-                clim_vals = [0, max(data(:))];
-                cmap      = hot;
-                cb_label  = 'Median RE (%)';
-                fname_tag = 're';
-                fmt       = '%.1f%%';
+        [re_mat, cc_mat] = compare_results(L);
+
+        fig = figure('Color', 'w', 'Units', 'inches', ...
+            'Position', [1, 1, 7+n_geom_keys*0.6, 3.5+n_geom_keys*0.3]);
+
+        % RE heatmap
+        subplot(1, 2, 1);
+        re_pct = re_mat * 100;
+        imagesc(re_pct, [0, max(re_pct(:))]);
+        colormap(gca, cool);
+        cb = colorbar;
+        cb.Label.String   = 'Median RE (%)';
+        cb.Label.FontSize = 11;
+        for r = 1:n_geom_keys
+            for c = 1:n_geom_keys
+                text(c, r, sprintf('%.1f', re_pct(r,c)), ...
+                    'HorizontalAlignment', 'center', ...
+                    'FontSize', 8, 'FontWeight', 'bold', 'Color', 'k');
             end
-
-            fig = figure('Color', 'w', ...
-                'Position', [100, 100, 200 + n_all*60, 180 + n_all*50]);
-            imagesc(data, clim_vals);
-            colormap(cmap);
-            cb = colorbar;
-            cb.Label.String   = cb_label;
-            cb.Label.FontSize = 12;
-
-            % Annotate cells
-            for i = 1:n_all
-                for j = 1:n_all
-                    val = data(i,j);
-                    if metric == 1
-                        txt = sprintf('%.3f', val);
-                    else
-                        txt = sprintf('%.1f%%', val);
-                    end
-                    % White text on dark cells, black on light
-                    brightness = (val - clim_vals(1)) / ...
-                                 (clim_vals(2) - clim_vals(1));
-                    if metric == 1
-                        txt_col = [brightness < 0.5, brightness < 0.5, brightness < 0.5];
-                    else
-                        txt_col = [brightness > 0.5, brightness > 0.5, brightness > 0.5];
-                    end
-                    text(j, i, txt, 'HorizontalAlignment', 'center', ...
-                        'FontSize', 8, 'Color', double(txt_col));
-                end
-            end
-
-            set(gca, 'XTick', 1:n_all, 'XTickLabel', all_labels, ...
-                'YTick', 1:n_all, 'YTickLabel', all_labels, ...
-                'XTickLabelRotation', 45, 'FontSize', 9, ...
-                'TickLabelInterpreter', 'none');
-            title(sprintf('%s — %s — Sensor axis %d — %s array', ...
-                cb_label, ori_titles.(ori), ax, array_to_use), ...
-                'FontSize', 12, 'FontWeight', 'bold');
-            axis square;
-
-            fname = sprintf('heatmap_%s_%s_axis%d_%s', ...
-                fname_tag, array_to_use, ax, ori);
-            exportgraphics(fig, fullfile(save_heatmap_dir, [fname '.png']), ...
-                'Resolution', 600);
-            saveas(fig, fullfile(save_heatmap_dir, [fname '.fig']));
-            close(fig);
-            fprintf('  Saved: %s\n', fname);
         end
+        set(gca, 'XTick', 1:n_geom_keys, 'XTickLabel', geom_labels, ...
+            'YTick', 1:n_geom_keys, 'YTickLabel', geom_labels, ...
+            'XTickLabelRotation', 45, 'FontSize', 8, ...
+            'TickLabelInterpreter', 'none');
+        title(sprintf('Relative Error (%%) — Axis %d', ax), ...
+            'FontSize', 11, 'FontWeight', 'bold');
+        axis square;
+
+        % r² heatmap
+        subplot(1, 2, 2);
+        cc_pct = cc_mat * 100;
+        imagesc(cc_pct, [min(cc_pct(:)), 100]);
+        colormap(gca, flipud(cool));
+        cb = colorbar;
+        cb.Label.String   = 'Median r² (%)';
+        cb.Label.FontSize = 11;
+        for r = 1:n_geom_keys
+            for c = 1:n_geom_keys
+                text(c, r, sprintf('%.1f', cc_pct(r,c)), ...
+                    'HorizontalAlignment', 'center', ...
+                    'FontSize', 8, 'FontWeight', 'bold', 'Color', 'k');
+            end
+        end
+        set(gca, 'XTick', 1:n_geom_keys, 'XTickLabel', geom_labels, ...
+            'YTick', 1:n_geom_keys, 'YTickLabel', geom_labels, ...
+            'XTickLabelRotation', 45, 'FontSize', 8, ...
+            'TickLabelInterpreter', 'none');
+        title(sprintf('r² (%%) — Axis %d', ax), ...
+            'FontSize', 11, 'FontWeight', 'bold');
+        axis square;
+
+        sgtitle(sprintf('%s — Sensor axis %d — Ground truth: %s', ...
+            geom_label, ax, ground_truth_label), ...
+            'FontSize', 12, 'FontWeight', 'bold');
+
+        fname = sprintf('heatmap_%s_%s_axis%d', geom, arr_tag, ax);
+        exportgraphics(fig, fullfile(save_heatmap_dir, [fname '.png']), ...
+            'Resolution', 600);
+        saveas(fig, fullfile(save_heatmap_dir, [fname '.fig']));
+        close(fig);
+        fprintf('    Saved: %s\n', fname);
     end
 end
 
-% =========================================================================
-%% STEP 2: Within-Biot-Savart sanity check heatmap
-% All BS variants vs each other — should show r²≈1, RE≈0
-% =========================================================================
-fprintf('\nGenerating within-Biot-Savart sanity check heatmaps...\n');
+%% STEP 2: Within-Biot-Savart sanity check
+% Compare Biot-Savart across all geometry variants — should be identical
+% since bone geometry has no effect in infinite homogeneous space.
+% Only runs if Biot-Savart is available and n_geometries > 1.
 
-bs_valid  = cellfun(@(k) isfield(lf, k), bslaw_keys);
-bs_keys_v = bslaw_keys(bs_valid);
-bs_labs_v = bone_display(bs_valid);
-n_bs      = numel(bs_keys_v);
+if have_bslaw && n_geometries > 1
 
-for ax = 1:n_axes
-    for ori_idx = 1:numel(orientation_labels)
-        ori = orientation_labels{ori_idx};
+    fprintf('\n  Generating within-Biot-Savart sanity check...\n');
 
-        rsq_bs = nan(n_bs, n_bs);
-        re_bs  = nan(n_bs, n_bs);
+    % Collect one BS key per geometry (first matching key)
+    bs_keys_sanity   = {};
+    bs_labels_sanity = {};
 
-        for i = 1:n_bs
-            for j = 1:n_bs
-                if i == j
-                    rsq_bs(i,j) = 1;
-                    re_bs(i,j)  = 0;
-                    continue;
-                end
+    for g = 1:n_geometries
+        gfield = strrep(geometry_names{g}, '.', '_');
+        if ~isfield(model_keys, 'bslaw') || ...
+           ~isfield(model_keys.bslaw, gfield) || ...
+           isempty(model_keys.bslaw.(gfield))
+            continue;
+        end
+        bs_keys_sanity{end+1}   = model_keys.bslaw.(gfield){1};
+        bs_labels_sanity{end+1} = geometry_display{g};
+    end
 
-                n_trunc = min(min_sensors, ...
-                    min(numel(lf.(bs_keys_v{i}).(ori){ax,1}), ...
-                        numel(lf.(bs_keys_v{j}).(ori){ax,1})));
+    n_bs = numel(bs_keys_sanity);
 
-                rsq_v = nan(numel(src_range), 1);
-                re_v  = nan(numel(src_range), 1);
-                for si = 1:numel(src_range)
-                    s    = src_range(si);
-                    vecA = lf.(bs_keys_v{i}).(ori){ax, s}(1:n_trunc);
-                    vecB = lf.(bs_keys_v{j}).(ori){ax, s}(1:n_trunc);
-                    tmp  = corrcoef(vecA, vecB);
-                    rsq_v(si) = tmp(1,2)^2;
-                    re_v(si)  = norm(vecB-vecA,1) / (norm(vecA,1)+norm(vecB,1));
-                end
-                rsq_bs(i,j) = median(rsq_v, 'omitnan');
-                re_bs(i,j)  = median(re_v,  'omitnan');
-            end
+    if n_bs >= 2
+
+        ref_key   = bs_keys_sanity{1};
+        n_axes    = lf.(ref_key).n_sensor_axes;
+        n_src_ref = lf.(ref_key).n_sources;
+
+        min_sensors = inf;
+        for k = 1:n_bs
+            min_sensors = min(min_sensors, ...
+                numel(lf.(bs_keys_sanity{k}).(orientation_labels{1}){1,1}));
         end
 
-        for metric = 1:2
-            if metric == 1
-                data      = rsq_bs;
-                clim_vals = [min(0.99, min(data(:))-0.001), 1];
-                cmap      = flipud(hot);
-                cb_label  = 'Median r²';
-                fname_tag = 'rsq';
-            else
-                data      = re_bs * 100;
-                clim_vals = [0, max(max(data(:)), 0.1)];
-                cmap      = hot;
-                cb_label  = 'Median RE (%)';
-                fname_tag = 're';
+        arr_tag = regexprep(ref_key, '^bslaw_[^_]+_', '');
+
+        for ax = 1:n_axes
+
+            L_bs = cell(1, n_bs);
+            for k = 1:n_bs
+                key     = bs_keys_sanity{k};
+                n_src   = lf.(key).n_sources;
+                n_trunc = min(min_sensors, numel(lf.(key).LR{ax,1}));
+                M       = zeros(n_trunc*3, n_src);
+                for s = 1:n_src
+                    M(:,s) = [lf.(key).LR{ax,s}(1:n_trunc); ...
+                              lf.(key).RC{ax,s}(1:n_trunc); ...
+                              lf.(key).VD{ax,s}(1:n_trunc)];
+                end
+                L_bs{k} = M;
             end
 
-            fig = figure('Color', 'w', ...
-                'Position', [100, 100, 200 + n_bs*80, 180 + n_bs*70]);
-            imagesc(data, clim_vals);
-            colormap(cmap);
-            cb = colorbar;
-            cb.Label.String   = cb_label;
-            cb.Label.FontSize = 12;
+            [re_bs, cc_bs] = compare_results(L_bs);
 
-            for i = 1:n_bs
-                for j = 1:n_bs
-                    if metric == 1
-                        txt = sprintf('%.4f', data(i,j));
-                    else
-                        txt = sprintf('%.2f%%', data(i,j));
-                    end
-                    brightness = (data(i,j) - clim_vals(1)) / ...
-                                 max(clim_vals(2) - clim_vals(1), 1e-6);
-                    if metric == 1
-                        txt_col = double([brightness < 0.5, brightness < 0.5, brightness < 0.5]);
-                    else
-                        txt_col = double([brightness > 0.5, brightness > 0.5, brightness > 0.5]);
-                    end
-                    text(j, i, txt, 'HorizontalAlignment', 'center', ...
-                        'FontSize', 10, 'Color', txt_col);
+            fig = figure('Color', 'w', 'Units', 'inches', ...
+                'Position', [1, 1, 5+n_bs*0.8, 3+n_bs*0.6]);
+
+            subplot(1, 2, 1);
+            re_pct = re_bs * 100;
+            imagesc(re_pct, [0, max(max(re_pct(:)), 0.01)]);
+            colormap(gca, cool);
+            cb = colorbar;
+            cb.Label.String = 'Median RE (%)';
+            cb.Label.FontSize = 11;
+            for r = 1:n_bs
+                for c = 1:n_bs
+                    text(c, r, sprintf('%.3f', re_pct(r,c)), ...
+                        'HorizontalAlignment', 'center', ...
+                        'FontSize', 10, 'FontWeight', 'bold', 'Color', 'k');
                 end
             end
-
-            set(gca, 'XTick', 1:n_bs, 'XTickLabel', bs_labs_v, ...
-                'YTick', 1:n_bs, 'YTickLabel', bs_labs_v, ...
+            set(gca, 'XTick', 1:n_bs, 'XTickLabel', bs_labels_sanity, ...
+                'YTick', 1:n_bs, 'YTickLabel', bs_labels_sanity, ...
                 'XTickLabelRotation', 45, 'FontSize', 11, ...
                 'TickLabelInterpreter', 'none');
-            title(sprintf(['Within Biot-Savart Sanity Check — %s\n' ...
-                           '%s — Sensor axis %d — %s array\n' ...
-                           '(r²≈1 and RE≈0 expected if correctly implemented)'], ...
-                cb_label, ori_titles.(ori), ax, array_to_use), ...
-                'FontSize', 12, 'FontWeight', 'bold');
+            title('RE (%) — Within Biot-Savart', 'FontSize', 11, 'FontWeight', 'bold');
             axis square;
 
-            fname = sprintf('heatmap_bslaw_sanity_%s_%s_axis%d_%s', ...
-                fname_tag, array_to_use, ax, ori);
+            subplot(1, 2, 2);
+            cc_pct = cc_bs * 100;
+            cc_lo  = min(cc_pct(:));
+            if cc_lo >= 100; cc_lo = 99; end
+            imagesc(cc_pct, [cc_lo, 100]);
+            colormap(gca, flipud(cool));
+            cb = colorbar;
+            cb.Label.String = 'Median r² (%)';
+            cb.Label.FontSize = 11;
+            for r = 1:n_bs
+                for c = 1:n_bs
+                    text(c, r, sprintf('%.4f', cc_pct(r,c)), ...
+                        'HorizontalAlignment', 'center', ...
+                        'FontSize', 10, 'FontWeight', 'bold', 'Color', 'k');
+                end
+            end
+            set(gca, 'XTick', 1:n_bs, 'XTickLabel', bs_labels_sanity, ...
+                'YTick', 1:n_bs, 'YTickLabel', bs_labels_sanity, ...
+                'XTickLabelRotation', 45, 'FontSize', 11, ...
+                'TickLabelInterpreter', 'none');
+            title('r² (%) — Within Biot-Savart', 'FontSize', 11, 'FontWeight', 'bold');
+            axis square;
+
+            sgtitle(sprintf(['Within Biot-Savart Sanity Check — Axis %d\n' ...
+                             'Bone geometry irrelevant in infinite space:' ...
+                             ' expect RE≈0%%, r²≈100%%'], ax), ...
+                'FontSize', 11, 'FontWeight', 'bold');
+
+            fname = sprintf('heatmap_bslaw_sanity_%s_axis%d', arr_tag, ax);
             exportgraphics(fig, fullfile(save_heatmap_dir, [fname '.png']), ...
                 'Resolution', 600);
             saveas(fig, fullfile(save_heatmap_dir, [fname '.fig']));
             close(fig);
-            fprintf('  Saved: %s\n', fname);
+            fprintf('    Saved: %s\n', fname);
         end
+    else
+        fprintf('  Skipping within-BS sanity check — need >1 geometry with BS loaded.\n');
+    end
+else
+    if ~have_bslaw
+        fprintf('  Skipping within-BS sanity check — Biot-Savart not available.\n');
+    else
+        fprintf('  Skipping within-BS sanity check — only one geometry variant.\n');
     end
 end
 

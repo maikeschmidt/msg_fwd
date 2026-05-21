@@ -1,21 +1,18 @@
 % config_simpler_models - Configuration for simpler forward model comparisons
 %
-% Defines all paths, model keys, display labels, colours, and settings
-% for comparing BEM and FEM leadfields against simpler forward models
-% (Biot-Savart infinite space, and later sphere models).
+% Define your geometry files and the path to each method's leadfield folder.
+% The presence or absence of a path determines which methods are compared.
+% Ground truth is FEM if fem_fields_base is defined, otherwise BEM.
 %
 % USAGE:
-%   Run as a script at the top of each simpler_models analysis script:
-%     config_simpler_models;
+%   config_simpler_models;
+%   (called at the top of each simpler_models analysis script)
 %
-% NOTES:
-%   - Paths here are independent of config_models.m in the main pipeline
-%   - BEM and FEM leadfields are loaded from leadfields_organised.mat
-%     produced by the main pipeline
-%   - Biot-Savart leadfields are loaded from a separate folder produced
-%     by run_biot_savart_leadfields.m
-%   - To add experimental data: add new geometry variants to
-%     bone_variants and update display labels accordingly
+% ADDING A NEW METHOD (e.g. sphere):
+%   1. Add a path variable: sphere_fields_base = '...'
+%   2. Add 'sphere' to methods_available detection block below
+%   3. Run the sphere leadfield script to populate the folder
+%   Everything else updates automatically.
 %
 % REPOSITORY:
 %   https://github.com/maikeschmidt/msg_fwd/simpler_models
@@ -26,119 +23,195 @@
 % Author: Maike Schmidt — maike.schmidt.23@ucl.ac.uk
 % -------------------------------------------------------------------------
 
-% =========================================================================
-% PATHS — update before running
-% =========================================================================
-main_fields_base = 'D:\Simulations\Paper_1\but_actualy\forward_fields_test';   % SET THIS: path to leadfields_organised.mat
-                         %           (same as forward_fields_base in config_models)
-bslaw_fields_base = 'D:\Simulations\Paper_1\but_actualy\biot_sav_fields';  % SET THIS: path to Biot-Savart leadfield .mat files
-                         %           (same as save_base in run_biot_savart_leadfields)
-geoms_path        = 'D:\Simulations\Paper_1\but_actualy\geometries';  % SET THIS: path to geometry .mat files from msg_coreg
-save_base_dir     = 'D:\Simulations\Paper_1\but_actualy\figures\new\biot_sav_comp';  % SET THIS: base path for saving all figures
-                         %           (subfolder figures/ will be created here)
+% GEOMETRY FILES
+% List the base names of your geometry files exactly as they appear on disk
+% (without 'geometries_' prefix and without .mat extension).
+% One entry per geometry variant — add as many as you have.
 
-% =========================================================================
-% ARRAY SELECTION
-% =========================================================================
-% 'back'  — posterior array (default)
-% 'front' — anterior array
-% 'both'  — run analysis for both arrays independently
-array_to_use = 'back';   % SET THIS
-
-% =========================================================================
-% BONE MODEL VARIANTS
-% =========================================================================
-% Geometry variant names (without method prefix or array suffix).
-% Must match geometry file names produced by msg_coreg.
-% Add experimental variants here when available.
-bone_variants = { ...
-    'anatom_full_cont', ...
-    'anatom_full_homo', ...
-    'anatom_full_inhomo', ...
-    'anatom_full_realistic', ...
+geometry_names = { ...
+    'experimental', ...       % SET THIS: e.g. 'experimental', 'anatom_full_realistic'
 };
 
-% Display labels for figures — one per bone variant
-bone_display = { ...
-    'Continuous', ...
-    'Homogeneous', ...
-    'Inhomogeneous', ...
-    'Realistic', ...
+% Display labels for figures — one per geometry name
+geometry_display = { ...
+    'Experimental', ...       % SET THIS
 };
 
-% Short single-letter labels for heatmap annotation
-bone_short = {'C', 'H', 'I', 'R'};
+% Short labels for heatmap annotation — one per geometry name
+geometry_short = { ...
+    'Exp', ...                % SET THIS
+};
 
-n_variants = numel(bone_variants);
+% PATH TO GEOMETRY .mat FILES
 
-% =========================================================================
-% MODEL KEYS
-% Constructed from bone_variants and array_to_use.
-% These must match keys in leadfields_organised.mat and the Biot-Savart
-% output filenames.
-% =========================================================================
-bem_keys  = cellfun(@(v) ['bem_'  v '_' array_to_use], bone_variants, ...
-    'UniformOutput', false);
-fem_keys  = cellfun(@(v) ['fem_'  v '_' array_to_use], bone_variants, ...
-    'UniformOutput', false);
-bslaw_keys = cellfun(@(v) ['bslaw_' v '_' array_to_use], bone_variants, ...
-    'UniformOutput', false);
+geoms_path = 'D:\Simulations\for_meaghan\geoms_biot';   % SET THIS: path to folder containing geometries_*.mat files
 
-% =========================================================================
-% METHOD DISPLAY LABELS AND COLOURS
-% =========================================================================
-method_names   = {'BEM', 'FEM', 'Biot-Savart (infinite space)'};
-method_short   = {'BEM', 'FEM', 'Biot-Savart'};
-method_colors  = [
-    0.00, 0.45, 0.70;   % BEM   — blue
-    0.80, 0.20, 0.20;   % FEM   — red
-    0.00, 0.62, 0.45;   % BS    — bluish-green
-];
-method_styles  = {'-', '--', ':'};
-method_markers = {'o', 's', '^'};
+% LEADFIELD FOLDER PATHS
+% Define a path for each method you have computed.
+% Leave as '' (empty string) or comment out if not available.
+% The analysis scripts detect which methods are available from these paths.
+%
+% BEM:   leadfield files produced by run_bem_leadfields.m
+%        Expected filename pattern: leadfield_<geometry>_bem_<array>.mat
+%        Files saved inside subfolders: <bem_fields_base>/<geometry_name>/
+%
+% FEM:   leadfield files produced by batch_fem_forward_all_models.m
+%        Expected filename pattern: cord_leadfield_<geometry>_fem_<array>.mat
+%        Files saved inside subfolders: <fem_fields_base>/<geometry_name>/
+%
+% Biot-Savart: leadfield files produced by run_biot_savart_leadfields.m
+%        Expected filename pattern: leadfield_<geometry>_bslaw_<array>.mat
+%        All files in a single flat folder (no subfolders)
+%
+% Sphere: leadfield files produced by run_sphere_leadfields.m (TBC)
+%        Expected filename pattern: leadfield_<geometry>_sphere_<array>.mat
+%        All files in a single flat folder (no subfolders)
 
-% =========================================================================
-% BONE MODEL COLOURS (colour-blind safe, one per variant)
-% =========================================================================
-variant_colors = [
-    0.00, 0.45, 0.70;   % Continuous    — blue
-    0.90, 0.62, 0.00;   % Homogeneous   — orange
-    0.00, 0.62, 0.45;   % Inhomogeneous — bluish-green
-    0.80, 0.47, 0.65;   % Realistic     — reddish-purple
-];
+bem_fields_base    = '';   % SET THIS — always required
+fem_fields_base    = '';   % SET THIS — leave '' if FEM not available
+bslaw_fields_base  = '';   % SET THIS — leave '' if Biot-Savart not computed
+sphere_fields_base = '';   % SET THIS — leave '' until sphere is implemented
 
-% =========================================================================
-% REFERENCE MODEL FOR ABSMAX AND TOPOPLOT FIGURES
-% =========================================================================
-% Bone variant used for single-model overlay figures (absmax, topoplot).
-% Can be changed to any entry in bone_variants.
-ref_variant       = 'anatom_full_realistic';   % SET THIS if desired
-ref_variant_label = 'Realistic';
+% OUTPUT PATH
+save_base_dir  = '';   % SET THIS: base path for saving all figures
 
-% =========================================================================
-% TOPOPLOT SETTINGS
-% =========================================================================
+% TOPOPLOT SOURCE INDEX
 topoplot_source_idx = 55;   % SET THIS: source index for topoplot figures
 
-% =========================================================================
-% ORIENTATION AND SOURCE SPACING
-% =========================================================================
+% DERIVED CONFIGURATION — computed automatically, do not edit below
+
+n_geometries = numel(geometry_names);
+
+% Detect which methods are available
+% A method is available if its path is defined and non-empty
+have_bem    = ~isempty(bem_fields_base);
+have_fem    = ~isempty(fem_fields_base);
+have_bslaw  = ~isempty(bslaw_fields_base);
+have_sphere = ~isempty(sphere_fields_base);
+
+if ~have_bem
+    error('bem_fields_base must be set — BEM is always required.');
+end
+
+% Ground truth selection
+if have_fem
+    ground_truth_method = 'FEM';
+    ground_truth_label  = 'FEM (ground truth)';
+else
+    ground_truth_method = 'BEM';
+    ground_truth_label  = 'BEM (ground truth)';
+end
+
+% Methods to compare against ground truth
+% BEM is always compared if FEM is ground truth
+% All other available methods are compared against ground truth
+comparison_methods  = {};   % method tags
+comparison_labels   = {};   % display labels for legends
+
+if have_fem
+    % Compare BEM against FEM
+    comparison_methods{end+1} = 'bem';
+    comparison_labels{end+1}  = 'BEM';
+end
+if have_bslaw
+    comparison_methods{end+1} = 'bslaw';
+    comparison_labels{end+1}  = 'Biot-Savart (infinite space)';
+end
+if have_sphere
+    comparison_methods{end+1} = 'sphere';
+    comparison_labels{end+1}  = 'Sphere model';
+end
+n_comparisons = numel(comparison_methods);
+
+% All methods including ground truth (for heatmaps and absmax)
+all_methods  = {};
+all_labels   = {};
+if have_bem;    all_methods{end+1} = 'bem';    all_labels{end+1} = 'BEM';                      end
+if have_fem;    all_methods{end+1} = 'fem';    all_labels{end+1} = 'FEM';                      end
+if have_bslaw;  all_methods{end+1} = 'bslaw';  all_labels{end+1} = 'Biot-Savart (∞ space)';   end
+if have_sphere; all_methods{end+1} = 'sphere'; all_labels{end+1} = 'Sphere model';             end
+n_methods_all = numel(all_methods);
+
+% Colours per method 
+method_color_map = struct( ...
+    'bem',    [0.00, 0.45, 0.70], ...   % blue
+    'fem',    [0.80, 0.20, 0.20], ...   % red
+    'bslaw',  [0.00, 0.62, 0.45], ...   % bluish-green
+    'sphere', [0.90, 0.62, 0.00]);      % orange
+
+method_style_map = struct( ...
+    'bem',    '-', ...
+    'fem',    '--', ...
+    'bslaw',  ':', ...
+    'sphere', '-.');
+
+method_marker_map = struct( ...
+    'bem',    'o', ...
+    'fem',    's', ...
+    'bslaw',  '^', ...
+    'sphere', 'd');
+
+% Build colour/style/marker arrays in method order for plotting
+all_method_colors  = zeros(n_methods_all, 3);
+all_method_styles  = cell(1, n_methods_all);
+all_method_markers = cell(1, n_methods_all);
+for m = 1:n_methods_all
+    tag = all_methods{m};
+    all_method_colors(m, :)  = method_color_map.(tag);
+    all_method_styles{m}     = method_style_map.(tag);
+    all_method_markers{m}    = method_marker_map.(tag);
+end
+
+comp_colors  = zeros(n_comparisons, 3);
+comp_styles  = cell(1, n_comparisons);
+comp_markers = cell(1, n_comparisons);
+for c = 1:n_comparisons
+    tag = comparison_methods{c};
+    comp_colors(c, :) = method_color_map.(tag);
+    comp_styles{c}    = method_style_map.(tag);
+    comp_markers{c}   = method_marker_map.(tag);
+end
+
+% Geometry colours (one per geometry variant)
+geometry_color_palette = [
+    0.00, 0.45, 0.70;
+    0.90, 0.62, 0.00;
+    0.00, 0.62, 0.45;
+    0.80, 0.47, 0.65;
+    0.34, 0.71, 0.91;
+    0.64, 0.08, 0.18;
+];
+if n_geometries > size(geometry_color_palette, 1)
+    geometry_color_palette = repmat(geometry_color_palette, ...
+        ceil(n_geometries / size(geometry_color_palette,1)), 1);
+end
+geometry_colors = geometry_color_palette(1:n_geometries, :);
+
+% Orientation labels 
 orientation_labels  = {'VD',             'RC',             'LR'         };
 orientation_display = {'Ventral-Dorsal', 'Rostral-Caudal', 'Left-Right' };
-ori_titles = struct('VD', 'Ventral-Dorsal', 'RC', 'Rostral-Caudal', 'LR', 'Left-Right');
+ori_titles = struct('VD','Ventral-Dorsal','RC','Rostral-Caudal','LR','Left-Right');
 src_spacing_mm = 5;
 
-% =========================================================================
-% PUBLICATION STYLING
-% =========================================================================
+% Publication styling
 pub_line_width  = 2.0;
 pub_marker_size = 7;
 
-% =========================================================================
-% OUTPUT DIRECTORIES
-% Will be created if they do not exist.
-% =========================================================================
-save_absmax_dir    = fullfile(save_base_dir, 'figures', 'absmax');
-save_rsq_re_dir    = fullfile(save_base_dir, 'figures', 'per_source_rsq_re');
-save_heatmap_dir   = fullfile(save_base_dir, 'figures', 'heatmaps');
-save_topoplot_dir  = fullfile(save_base_dir, 'figures', 'topoplots');
+% Output directories 
+save_absmax_dir   = fullfile(save_base_dir, 'figures', 'absmax');
+save_rsq_re_dir   = fullfile(save_base_dir, 'figures', 'per_source_rsq_re');
+save_heatmap_dir  = fullfile(save_base_dir, 'figures', 'heatmaps');
+save_topoplot_dir = fullfile(save_base_dir, 'figures', 'topoplots');
+
+% Print summary
+fprintf(' Simpler Models Configuration \n');
+fprintf('  Geometry files   : %d\n', n_geometries);
+for g = 1:n_geometries
+    fprintf('    %d. %s\n', g, geometry_names{g});
+end
+fprintf('  Methods available: ');
+fprintf('%s  ', all_methods{:});
+fprintf('\n');
+fprintf('  Ground truth     : %s\n', ground_truth_label);
+fprintf('  Comparisons      : ');
+fprintf('%s  ', comparison_methods{:});
