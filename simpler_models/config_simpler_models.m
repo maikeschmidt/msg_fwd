@@ -70,7 +70,7 @@ geoms_path = 'D:\Simulations\for_meaghan\geoms_biot';   % SET THIS: path to fold
 bem_fields_base    = '';   % SET THIS — always required
 fem_fields_base    = '';   % SET THIS — leave '' if FEM not available
 bslaw_fields_base  = '';   % SET THIS — leave '' if Biot-Savart not computed
-sphere_fields_base = '';   % SET THIS — leave '' until sphere is implemented
+sphere_fields_base = '';   % SET THIS — flat folder with sphere leadfield .mat files
 
 % OUTPUT PATH
 save_base_dir  = '';   % SET THIS: base path for saving all figures
@@ -119,7 +119,7 @@ if have_bslaw
 end
 if have_sphere
     comparison_methods{end+1} = 'sphere';
-    comparison_labels{end+1}  = 'Sphere model';
+    comparison_labels{end+1}  = 'Single sphere';
 end
 n_comparisons = numel(comparison_methods);
 
@@ -129,7 +129,7 @@ all_labels   = {};
 if have_bem;    all_methods{end+1} = 'bem';    all_labels{end+1} = 'BEM';                      end
 if have_fem;    all_methods{end+1} = 'fem';    all_labels{end+1} = 'FEM';                      end
 if have_bslaw;  all_methods{end+1} = 'bslaw';  all_labels{end+1} = 'Biot-Savart (∞ space)';   end
-if have_sphere; all_methods{end+1} = 'sphere'; all_labels{end+1} = 'Sphere model';             end
+if have_sphere; all_methods{end+1} = 'sphere'; all_labels{end+1} = 'Single sphere';             end
 n_methods_all = numel(all_methods);
 
 % Colours per method 

@@ -18,7 +18,7 @@ volume conductor geometry:
 | **BEM** | Five-compartment realistic volume conductor | Helsinki BEM Framework via SPM/FieldTrip |
 | **FEM** | Five-compartment tetrahedral FEM | DUNEuro + ISO2Mesh |
 | **Biot-Savart (infinite space)** | Current dipole in homogeneous infinite space — no body geometry at all | None (pure MATLAB) |
-| **Sphere model** *(planned)* | Spherically symmetric conductor | TBC |
+| **Single sphere (giant sphere)** | Analytical Sarvas solution for a single homogeneous sphere. Sphere centre and radius are fit automatically to the torso mesh surface from each geometry file. For MEG/OPM the solution is conductivity-independent. | SPM/FieldTrip (`ft_prepare_leadfield`) |
 
 **Ground truth selection:** FEM is used as ground truth if FEM leadfields 
 are provided. Otherwise BEM is used. All other available methods are 
@@ -37,7 +37,8 @@ simpler_models/
 ├── run_simpler_models_analysis.m  — master script: runs full pipeline
 ├── config_simpler_models.m        — paths, geometry names, method detection
 ├── load_simpler_models.m          — loads all method leadfields into one struct
-├── run_biot_savart_leadfields.m   — computes Biot-Savart leadfields (no toolbox)
+├── run_biot_savart_leadfields.m   — computes Biot-Savart leadfields (pure MATLAB, no toolbox)
+├── run_sphere_leadfields.m        — computes single-sphere leadfields (requires SPM/FieldTrip)
 ├── plot_sm_absmax.m               — peak amplitude vs cord distance, all methods
 ├── plot_sm_per_source_rsq_re.m    — per-source r² and RE vs ground truth
 ├── plot_sm_heatmaps.m             — pairwise r²/RE heatmaps + sanity check
@@ -97,7 +98,32 @@ leadfield_<geometry>_bslaw_<array>.mat
 
 Saved in a flat folder (no subfolders).
 
-### Step 3 — Configure paths
+### Step 3 — Compute single-sphere leadfields *(optional)*
+
+Open `run_sphere_leadfields.m` and set:
+
+```matlab
+filenames  = { 'your_geometry_name', ... };
+geom_path  = '';   % path to your geometries_*.mat files
+save_base  = '';   % path to save sphere leadfield .mat files
+```
+
+Then run (SPM/FieldTrip must be on the MATLAB path):
+
+```matlab
+run_sphere_leadfields
+```
+
+The script fits a sphere to the torso mesh automatically — no manual 
+sphere parameters needed. Output files:
+
+```
+leadfield_<geometry>_sphere_<array>.mat
+```
+
+Saved in a flat folder (no subfolders), same as Biot-Savart.
+
+### Step 4 — Configure paths
 
 Open `config_simpler_models.m` and set:
 
@@ -106,11 +132,12 @@ geometry_names    = { 'your_geometry_name', ... };
 geometry_display  = { 'Display Label', ... };
 geometry_short    = { 'Short', ... };
 
-geoms_path        = '';   % path to geometries_*.mat files
-bem_fields_base   = '';   % path to folder containing BEM geometry subfolders
-fem_fields_base   = '';   % leave '' if FEM not available
-bslaw_fields_base = '';   % path to flat folder with Biot-Savart .mat files
-save_base_dir     = '';   % where to save figures
+geoms_path         = '';   % path to geometries_*.mat files
+bem_fields_base    = '';   % path to folder containing BEM geometry subfolders
+fem_fields_base    = '';   % leave '' if FEM not available
+bslaw_fields_base  = '';   % path to flat folder with Biot-Savart .mat files
+sphere_fields_base = '';   % path to flat folder with sphere .mat files (leave '' to skip)
+save_base_dir      = '';   % where to save figures
 
 topoplot_source_idx = 55; % source index for topoplot figures
 ```
@@ -191,6 +218,13 @@ figures/
 - Variable: `leadfield_bs`
 - Units: fT/nAm (no scaling needed)
 
+### Single sphere (from `run_sphere_leadfields.m`)
+- Location: flat folder at `<sphere_fields_base>/`
+- Filename: `leadfield_<geom>_sphere_<array>.mat`
+- Variable: `leadfield_sphere`
+- Units: fT/nAm (no scaling needed)
+- Sphere centre and radius stored as `leadfield_sphere.sphere_centre_m` and `leadfield_sphere.sphere_radius_m`
+
 ---
 
 ## Model keys
@@ -202,24 +236,23 @@ following the pattern `<method>_<geometry>_<array>`:
 bem_experimental_experimental
 fem_experimental_experimental
 bslaw_experimental_experimental
+sphere_experimental_experimental
 ```
 
 ---
 
 ## Adding a new method
 
-To add a new forward model (e.g. a sphere model):
+To add an entirely new forward model beyond those already implemented:
 
 1. Add a path variable in `config_simpler_models.m`:
    ```matlab
-   sphere_fields_base = 'path/to/sphere/leadfields';
+   mymethod_fields_base = 'path/to/mymethod/leadfields';
    ```
-2. Add `'sphere'` to the method detection block (the `have_sphere` / `all_methods` logic).
-3. Write a leadfield computation script (e.g. `run_sphere_leadfields.m`) 
-   that saves files named `leadfield_<geom>_sphere_<array>.mat` with a 
-   variable `leadfield_sphere` in fT/nAm.
-4. Add a loading block in `load_simpler_models.m` following the same 
-   pattern as the Biot-Savart block.
+2. Add a `have_mymethod` detection flag, a `comparison_methods` entry, and an `all_methods` entry (follow the `have_sphere` block as a template).
+3. Write a leadfield computation script that saves files named  
+   `leadfield_<geom>_mymethod_<array>.mat` with a variable `leadfield_mymethod` in fT/nAm.
+4. Add a loading block in `load_simpler_models.m` following the Biot-Savart or sphere pattern.
 
 Everything else (plotting, heatmaps, topoplots) updates automatically.
 
