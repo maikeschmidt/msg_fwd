@@ -102,8 +102,13 @@ for g = 1:n_geometries
             continue;
         end
 
-        % Resolve sensor array field for this array suffix
+        % Resolve sensor array field for this array suffix.
+        % exp_front / exp_back are both drawn from experimental_sensors —
+        % the leadfield vectors in lf are already sensor-masked at load
+        % time; we only need to apply the same mask to chanpos here.
         if strcmp(arr_tag, 'experimental')
+            grad_field = 'experimental_sensors';
+        elseif strcmp(arr_tag, 'exp_front') || strcmp(arr_tag, 'exp_back')
             grad_field = 'experimental_sensors';
         elseif strcmp(arr_tag, 'front')
             if     isfield(geom_data, 'front_coils_3axis'); grad_field = 'front_coils_3axis';
@@ -124,15 +129,43 @@ for g = 1:n_geometries
         end
         grad_struct = geom_data.(grad_field);
 
-        fprintf('    Array: %s  (%d rows)\n', arr_tag, n_rows);
+        % For exp_front/exp_back: pre-compute the sensor mask so chanpos
+        % can be masked to match the already-masked lf vectors.
+        exp_sensor_mask = [];
+        if strcmp(arr_tag, 'exp_front') || strcmp(arr_tag, 'exp_back')
+            [front_m, back_m] = get_experimental_split(grad_struct);
+            if strcmp(arr_tag, 'exp_front')
+                exp_sensor_mask = front_m;
+            else
+                exp_sensor_mask = back_m;
+            end
+        end
+
+        % Display label: map arr_tag to a human-readable side name
+        switch arr_tag
+            case 'exp_front'; arr_display = 'anterior (experimental)';
+            case 'exp_back';  arr_display = 'posterior (experimental)';
+            otherwise;        arr_display = arr_tag;
+        end
+
+        fprintf('    Array: %s  (%d rows)\n', arr_display, n_rows);
 
         % PRODUCE ONE FIGURE PER SENSOR AXIS
         for ax = 1:n_axes
 
+            % Extract sensor positions for this axis from chanpos.
+            % For exp_front/exp_back: use the full per-axis count from
+            % chanpos, then apply the side mask. The lf vectors are already
+            % the same (masked) length, so no further masking is needed there.
             n_channels_total = size(grad_struct.chanpos, 1);
-            n_per_axis       = n_channels_total / n_axes;
-            sens_pos         = grad_struct.chanpos( ...
-                (ax-1)*n_per_axis+1 : ax*n_per_axis, :);
+            n_full_per_axis  = n_channels_total / n_axes;
+            full_sens_pos    = grad_struct.chanpos( ...
+                (ax-1)*n_full_per_axis+1 : ax*n_full_per_axis, :);
+            if ~isempty(exp_sensor_mask)
+                sens_pos = full_sens_pos(exp_sensor_mask, :);
+            else
+                sens_pos = full_sens_pos;
+            end
 
             % Shared colour limits per orientation column
             clim_per_ori = zeros(numel(orientation_labels), 2);
@@ -165,8 +198,13 @@ for g = 1:n_geometries
                                'Rows = forward model  |  Columns = dipole orientation\n' ...
                                'Colour limits shared within each column  |  ' ...
                                'Ground truth: %s'], ...
-                geom_label, arr_tag, src_idx, ax, n_axes, ground_truth_label), ...
+                geom_label, arr_display, src_idx, ax, n_axes, ground_truth_label), ...
                 'FontSize', 11, 'FontWeight', 'bold');
+
+            % Store first-column axes handles so we can place row labels
+            % via figure annotations after layout is rendered (ylabel is
+            % unreliable inside tiledlayout and often hidden/clipped).
+            first_col_axes = gobjects(n_rows, 1);
 
             for m = 1:n_rows
                 key = plot_keys{m};
@@ -174,6 +212,10 @@ for g = 1:n_geometries
                     ori_label = orientation_labels{ori_idx};
                     tile_idx  = (m-1)*n_ori + ori_idx;
                     ax_panel  = nexttile(tl, tile_idx);
+
+                    if ori_idx == 1
+                        first_col_axes(m) = ax_panel;
+                    end
 
                     if src_idx > lf.(key).n_sources
                         axis(ax_panel, 'off');
@@ -190,16 +232,25 @@ for g = 1:n_geometries
                         title(ax_panel, orientation_display{ori_idx}, ...
                             'FontSize', 12, 'FontWeight', 'bold');
                     end
-
-                    % Row label (method name) — first column only, bold and larger
-                    if ori_idx == 1
-                        ylabel(ax_panel, plot_labels{m}, ...
-                            'FontSize', 11, 'FontWeight', 'bold', ...
-                            'Rotation', 90, ...
-                            'VerticalAlignment', 'middle', ...
-                            'HorizontalAlignment', 'center');
-                    end
                 end
+            end
+
+            % Row labels — placed as figure annotations to the left of the
+            % first column. drawnow flushes layout so OuterPosition is valid.
+            drawnow;
+            for m = 1:n_rows
+                pos    = first_col_axes(m).OuterPosition;   % [left bottom width height]
+                x_left = max(0, pos(1) - 0.045);
+                annotation(fig, 'textbox', ...
+                    [x_left, pos(2), 0.04, pos(4)], ...
+                    'String',              plot_labels{m}, ...
+                    'Rotation',            90, ...
+                    'HorizontalAlignment', 'center', ...
+                    'VerticalAlignment',   'middle', ...
+                    'FontSize',            11, ...
+                    'FontWeight',          'bold', ...
+                    'EdgeColor',           'none', ...
+                    'FitBoxToText',        'off');
             end
 
             fname = sprintf('topoplot_%s_%s_source%d_axis%d', ...

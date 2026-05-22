@@ -187,6 +187,33 @@ for f = 1:numel(filenames)
         sphere_centre_m = x(1:3)';
         sphere_radius_m = sqrt(max(0, x(4) + sum(sphere_centre_m.^2)));
 
+        % SIGMA-CLIPPING REFIT (front/back arrays only)
+        % Sensors at the top of the front array (near neck/face) or bottom of
+        % the back array sit on a different curvature and can bias the
+        % least-squares fit. Remove any sensor whose distance to the initial
+        % sphere surface deviates by more than 2σ from the mean deviation,
+        % then refit with the inlier sensors.
+        if ~strcmp(arr_label, 'experimental')
+            sensor_dists_init = sqrt(sum((coilpos_m - sphere_centre_m).^2, 2));
+            deviations        = sensor_dists_init - sphere_radius_m;
+            dev_mean          = mean(deviations);
+            dev_std           = std(deviations);
+            keep_mask         = abs(deviations - dev_mean) <= 2 * dev_std;
+            n_clipped         = sum(~keep_mask);
+
+            if n_clipped > 0 && sum(keep_mask) >= 4
+                fprintf('  Sigma-clipping: removed %d outlier sensor(s) before refit\n', ...
+                    n_clipped);
+                coilpos_fit = coilpos_m(keep_mask, :);
+                n_fit       = size(coilpos_fit, 1);
+                A2 = [2 * coilpos_fit, ones(n_fit, 1)];
+                b2 = sum(coilpos_fit.^2, 2);
+                x2 = A2 \ b2;
+                sphere_centre_m = x2(1:3)';
+                sphere_radius_m = sqrt(max(0, x2(4) + sum(sphere_centre_m.^2)));
+            end
+        end
+
         if strcmp(arr_label, 'experimental')
             fprintf('  NOTE: experimental array — sphere fit is a starting\n');
             fprintf('        estimate only. A single sphere is a poor model\n');

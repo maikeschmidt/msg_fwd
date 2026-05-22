@@ -91,15 +91,27 @@ for m = 1:n_models
         continue;
     end
 
-    % Detect array side from model key
-    if endsWith(model, '_front')
-        array_side = 'front';
+    % Detect array side from model key.
+    % Check exp_front / exp_back BEFORE front / back — 'exp_front' ends in
+    % 'front' so the order of checks matters.
+    if endsWith(model, '_exp_front')
+        array_side   = 'exp_front';
+        is_exp_split = true;
+    elseif endsWith(model, '_exp_back')
+        array_side   = 'exp_back';
+        is_exp_split = true;
+    elseif endsWith(model, '_front')
+        array_side   = 'front';
+        is_exp_split = false;
     else
-        array_side = 'back';
+        array_side   = 'back';
+        is_exp_split = false;
     end
 
-    % Strip method prefix and array suffix to get base geometry name
+    % Strip method prefix and array suffix to get base geometry name.
+    % Two-pass: remove _exp_front/_exp_back first, then _front/_back.
     base_model = regexprep(model, '^(bem_|fem_)', '');
+    base_model = regexprep(base_model, '_(exp_front|exp_back)$', '');
     base_model = regexprep(base_model, '_(front|back)$', '');
     geom_file  = fullfile(geoms_path_geom, ['geometries_' base_model '.mat']);
 
@@ -111,22 +123,52 @@ for m = 1:n_models
 
     is_meg = leadfields.(model).is_meg;
 
-    % Load sensor positions split by axis
+    % Load sensor positions split by axis.
+    % For exp_front / exp_back: load from experimental_sensors and apply
+    % the anterior/posterior mask. The leadfield vectors in leadfields.(model)
+    % are already sensor-masked (from load_and_organise_leadfields), so only
+    % chanpos needs the same mask applied here.
     if is_meg
-        coil_field = [array_side '_coils_3axis'];
-        if ~isfield(geom_data, coil_field)
-            warning('Field %s not found for model %s', coil_field, model);
-            continue;
+        if is_exp_split
+            if ~isfield(geom_data, 'experimental_sensors')
+                warning('No experimental_sensors field for model %s — skipping.', model);
+                continue;
+            end
+            grad           = geom_data.experimental_sensors;
+            n_total        = size(grad.chanpos, 1);
+            n_full_per_ax  = n_total / 3;
+
+            [front_m, back_m] = get_experimental_split(grad);
+            if strcmp(array_side, 'exp_front')
+                exp_mask = front_m;
+            else
+                exp_mask = back_m;
+            end
+
+            % Build per-axis positions then apply side mask
+            sensor_pos_by_axis = { ...
+                grad.chanpos(1:n_full_per_ax,                   :), ...
+                grad.chanpos(n_full_per_ax+1   : 2*n_full_per_ax, :), ...
+                grad.chanpos(2*n_full_per_ax+1 : end,            :) };
+            sensor_pos_by_axis = cellfun(@(p) p(exp_mask, :), ...
+                sensor_pos_by_axis, 'UniformOutput', false);
+            n_axes_tp = 3;
+        else
+            coil_field = [array_side '_coils_3axis'];
+            if ~isfield(geom_data, coil_field)
+                warning('Field %s not found for model %s', coil_field, model);
+                continue;
+            end
+            grad               = geom_data.(coil_field);
+            n_total            = size(grad.chanpos, 1);
+            n_per_axis         = n_total / 3;
+            sensor_pos_by_axis = {
+                grad.chanpos(1:n_per_axis, :), ...
+                grad.chanpos(n_per_axis+1:2*n_per_axis, :), ...
+                grad.chanpos(2*n_per_axis+1:end, :)
+            };
+            n_axes_tp = 3;
         end
-        grad               = geom_data.(coil_field);
-        n_total            = size(grad.chanpos, 1);
-        n_per_axis         = n_total / 3;
-        sensor_pos_by_axis = {
-            grad.chanpos(1:n_per_axis, :), ...
-            grad.chanpos(n_per_axis+1:2*n_per_axis, :), ...
-            grad.chanpos(2*n_per_axis+1:end, :)
-        };
-        n_axes_tp = 3;
     else
         elec_field = [array_side '_coils_2axis'];
         if ~isfield(geom_data, elec_field)

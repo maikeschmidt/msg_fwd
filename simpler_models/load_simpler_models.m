@@ -126,6 +126,14 @@ for g = 1:n_geometries
 end
 
 
+% SPLIT EXPERIMENTAL ARRAYS INTO ANTERIOR / POSTERIOR SUB-ENTRIES
+% For any key ending in '_experimental', detect front (z > 0) and back
+% (z < 0) sensors from the geometry file and create '*_exp_front' /
+% '*_exp_back' virtual sub-keys. The combined key is removed so all
+% downstream plotting scripts automatically receive properly split arrays.
+[lf, abs_max] = split_experimental_lf(lf, abs_max, geoms_path, orientation_labels);
+
+
 % BUILD KEY LOOKUP TABLES
 % Per geometry, per method — the keys that were successfully loaded
 % model_keys.(method).(geom) = key string (or '' if not loaded)
