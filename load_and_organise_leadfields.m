@@ -278,6 +278,23 @@ end
 fprintf('Absolute maximum values computed.\n');
 
 
+%% STEP 3.5: Split experimental arrays into anterior / posterior sub-entries
+%
+% For any key ending in '_experimental' (e.g. bem_anatom_full_realistic_experimental),
+% detect front (z > 0) and back (z < 0) sensors using the geometry file,
+% create '*_exp_front' / '*_exp_back' sub-entries in both leadfields and
+% abs_max_per_source, and remove the combined key. All downstream scripts
+% then receive cleanly separated anterior/posterior arrays automatically.
+
+fprintf('\nSplitting experimental arrays into anterior/posterior sub-entries...\n');
+[leadfields, abs_max_per_source] = split_experimental_lf( ...
+    leadfields, abs_max_per_source, geoms_path, orientation_labels);
+
+% Rebuild loaded_models so it reflects the final set of keys
+loaded_models = fieldnames(leadfields);
+fprintf('Models after experimental split: %d\n', numel(loaded_models));
+
+
 %% STEP 4: Save organised output
 
 outfile = fullfile(forward_fields_base, 'leadfields_organised.mat');
