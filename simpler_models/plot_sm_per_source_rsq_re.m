@@ -38,12 +38,24 @@ for g = 1:n_geometries
 
     fprintf('  Geometry: %s\n', geom_label);
 
-    % Ground truth key for this geometry
-    gt_key = gt_keys{g};
-    if isempty(gt_key) || ~isfield(lf, gt_key)
+    % Collect all ground truth keys for this geometry (one per array)
+    gt_tag      = lower(ground_truth_method);
+    gt_tag_field = strrep(gt_tag, '-', '_');
+    if ~isfield(model_keys, gt_tag_field) || ~isfield(model_keys.(gt_tag_field), gfield) || ...
+       isempty(model_keys.(gt_tag_field).(gfield))
         warning('Ground truth not loaded for geometry: %s — skipping.', geom);
         continue;
     end
+    all_gt_keys = model_keys.(gt_tag_field).(gfield);
+
+    % Process each array separately
+    for arr_idx = 1:numel(all_gt_keys)
+        gt_key = all_gt_keys{arr_idx};
+        if ~isfield(lf, gt_key); continue; end
+
+        % Infer array suffix from gt_key for filenames and matching
+        arr_tag = regexprep(gt_key, ['^' gt_tag_field '_' geom '_'], '');
+        fprintf('    Array: %s\n', arr_tag);
 
     % Dimensions from ground truth
     n_axes    = lf.(gt_key).n_sensor_axes;
@@ -52,38 +64,34 @@ for g = 1:n_geometries
     distances = src_range * src_spacing_mm;
     marker_idx = 1:5:numel(distances);
 
-    % Infer array suffix from gt_key for filenames
-    arr_tag = regexprep(gt_key, ['^' lower(ground_truth_method) '_' geom '_'], '');
-
-    % Minimum sensor count across all loaded models for this geometry
+    % Minimum sensor count — only keys for this array
     min_sensors = inf;
     for k = 1:numel(loaded_keys)
         key = loaded_keys{k};
-        if contains(key, ['_' geom '_'])
+        if endsWith_arr(key, geom, arr_tag)
             min_sensors = min(min_sensors, ...
                 numel(lf.(key).(orientation_labels{1}){1, 1}));
         end
     end
 
-    % Build comparison key list — one key per comparison method
-    % Use the first matching array for each comparison method
-    comp_keys = cell(1, n_comparisons);
+    % Build comparison key list — match same array suffix
+    comp_keys  = cell(1, n_comparisons);
     comp_valid = true(1, n_comparisons);
     for c = 1:n_comparisons
         tag = comparison_methods{c};
         if ~isfield(model_keys, tag) || ~isfield(model_keys.(tag), gfield) || ...
            isempty(model_keys.(tag).(gfield))
-            warning('Comparison method %s not found for geometry: %s', tag, geom);
             comp_valid(c) = false;
             continue;
         end
-        % Match same array as ground truth where possible
-        keys_c = model_keys.(tag).(gfield);
+        keys_c  = model_keys.(tag).(gfield);
         matched = keys_c(contains(keys_c, ['_' arr_tag]));
         if ~isempty(matched)
             comp_keys{c} = matched{1};
         else
-            comp_keys{c} = keys_c{1};
+            % No matching array for this method — skip for this array
+            comp_valid(c) = false;
+            continue;
         end
         if ~isfield(lf, comp_keys{c})
             comp_valid(c) = false;
@@ -94,7 +102,7 @@ for g = 1:n_geometries
     n_active       = numel(active_comp);
 
     if n_active == 0
-        warning('No valid comparison methods for geometry: %s', geom);
+        fprintf('      No comparison methods available for %s array — skipping.\n', arr_tag);
         continue;
     end
 
@@ -200,7 +208,7 @@ for g = 1:n_geometries
                 'Resolution', 600);
             saveas(fig, fullfile(save_rsq_re_dir, [fname '.fig']));
             close(fig);
-            fprintf('    Saved: %s\n', fname);
+            fprintf('      Saved: %s\n', fname);
         end
     end
 
@@ -326,14 +334,23 @@ for g = 1:n_geometries
             'Resolution', 600);
         saveas(fig, fullfile(save_rsq_re_dir, [fname '.fig']));
         close(fig);
-        fprintf('    Saved: %s\n', fname);
+        fprintf('      Saved: %s\n', fname);
     end
-end
+
+    end   % end array loop
+end   % end geometry loop
 
 fprintf('\nPer-source r² and RE figures saved to: %s\n', save_rsq_re_dir);
 
 
-% LOCAL FUNCTION
+% LOCAL FUNCTIONS
+
+function tf = endsWith_arr(key, geom, arr_tag)
+% Return true if key belongs to the given geometry AND array suffix.
+    tf = contains(key, ['_' geom '_']) && ...
+         strcmp(regexprep(key, ['^.*_' geom '_'], ''), arr_tag);
+end
+
 function [cc_vec, re_vec] = compute_metrics_sm(lf, key_A, key_B, ori, ...
     ax, src_range, min_sensors)
     n_si    = numel(src_range);

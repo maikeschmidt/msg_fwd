@@ -1,20 +1,32 @@
 % run_sphere_leadfields - Compute MSG leadfields using FieldTrip's
 %                         singlesphere (giant sphere) head model
 %
-% Implements the analytical single-sphere MEG forward solution via
-% FieldTrip. A sphere is fitted to the torso mesh surface from each
-% geometry file: the centre is the centroid of the torso vertices and the
-% radius is set to the maximum vertex distance from that centroid plus a
-% 2 % margin, ensuring all spinal cord sources lie well inside the sphere.
+% The sphere is fitted independently for each sensor array to the sensor
+% coil positions, so the sphere surface aligns with the curvature of the
+% array rather than the torso. This is the standard approach used in MEG
+% head modelling and mirrors the strategy in study-spinevol (O'Neill 2024).
 %
-% This "giant sphere" approach is the same concept used in:
-%   George O'Neill — study-spinevol (sv_make_lead_fields_central.m)
-%   where vol.r = 1.1012 m, vol.o = [0.8104 -1.7138 0.1324] m were
-%   hardcoded for that specific dataset. Here the sphere is derived
-%   automatically from each geometry file.
+% Array-specific fitting:
+%   back  array — sphere surface sits at the posterior sensor plane;
+%                 centre displaced anteriorly (inside the body)
+%   front array — sphere surface sits at the anterior sensor plane;
+%                 centre displaced posteriorly (inside the body)
+%   experimental (fully surrounding) — least-squares fit to sensor
+%                 positions is used as a starting estimate; a warning is
+%                 printed because a single sphere is an imperfect model
+%                 for a fully surrounding array. Implementation TBC.
+%
+% The sphere is fit using an algebraic least-squares method (no external
+% toolbox required). At most 10% of sensors should lie inside the sphere;
+% a warning is printed if this threshold is exceeded. All spinal cord
+% sources must lie inside the sphere; if any fall outside, the radius is
+% expanded and a warning is printed.
 %
 % Unlike run_biot_savart_leadfields.m, this script requires SPM/FieldTrip
 % to be on the MATLAB path for ft_prepare_leadfield.
+%
+% Based on the singlesphere approach in study-spinevol by George O'Neill
+% (2024), UCL Wellcome Centre for Human Neuroimaging.
 %
 % SENSOR ARRAY DETECTION (matches run_bem_leadfields priority order):
 %   1. experimental_sensors  — single experimental array (arbitrary layout)
@@ -42,8 +54,6 @@
 % Date:   May 2026
 %
 % This file is part of the MSG Forward Modelling Toolbox (msg_fwd).
-% Based on the singlesphere approach used in study-spinevol by
-% George O'Neill (2024), UCL Wellcome Centre for Human Neuroimaging.
 
 clearvars
 close all
@@ -67,6 +77,7 @@ compute_back  = true;
 % INITIALISE
 
 fprintf(' Single-Sphere (Giant Sphere) Leadfield Computation \n');
+fprintf(' Sphere fitted per array to sensor coil positions\n');
 fprintf(' Requires SPM/FieldTrip on path\n\n');
 
 if ~exist(save_base, 'dir'); mkdir(save_base); end
@@ -98,50 +109,6 @@ for f = 1:numel(filenames)
     sources.unit         = 'mm';
     sources              = ft_convert_units(sources, 'm');
     fprintf('  Sources: %d\n', size(src_pos_mm, 1));
-
-
-    % SPHERE FIT FROM TORSO MESH
-    % Centre = centroid of torso surface vertices.
-    % Radius = max distance from centroid to any vertex, with 2 % margin,
-    % ensuring all spinal cord sources lie inside the sphere.
-
-    if ~isfield(geom, 'mesh_torso') || ~isfield(geom.mesh_torso, 'vertices')
-        warning('No mesh_torso.vertices in geometry: %s — skipping.', model);
-        continue;
-    end
-
-    torso_verts_mm = geom.mesh_torso.vertices;          % [N x 3] in mm
-    torso_verts_m  = torso_verts_mm * 1e-3;             % convert to metres
-
-    sphere_centre_m = mean(torso_verts_m, 1);           % centroid
-    dists_m         = sqrt(sum((torso_verts_m - sphere_centre_m).^2, 2));
-    sphere_radius_m = max(dists_m) * 1.02;              % max + 2 % margin
-
-    fprintf('  Sphere centre (m): [%.4f  %.4f  %.4f]\n', sphere_centre_m);
-    fprintf('  Sphere radius (m): %.4f\n', sphere_radius_m);
-
-    % Verify all sources are inside
-    src_dists = sqrt(sum((sources.pos - sphere_centre_m).^2, 2));
-    if any(src_dists >= sphere_radius_m)
-        n_out = sum(src_dists >= sphere_radius_m);
-        warning('%d source(s) outside fitted sphere in %s — increasing radius.', ...
-            n_out, model);
-        sphere_radius_m = max(src_dists) * 1.05;
-        fprintf('  Sphere radius adjusted to: %.4f m\n', sphere_radius_m);
-    end
-
-
-    % HEAD MODEL
-    % singlesphere: analytical MEG forward solution for a single sphere.
-    % Conductivity does not affect MEG (Sarvas formula is conductivity-
-    % independent for a homogeneous sphere), but the field is required.
-
-    vol        = struct();
-    vol.r      = sphere_radius_m;
-    vol.o      = sphere_centre_m;
-    vol.cond   = 0.33;            % torso conductivity in S/m (irrelevant for MEG)
-    vol.type   = 'singlesphere';
-    vol.unit   = 'm';
 
 
     % SENSOR ARRAY DETECTION
@@ -187,6 +154,7 @@ for f = 1:numel(filenames)
 
 
     % LEADFIELD COMPUTATION PER ARRAY
+    % Sphere is fitted independently for each array.
 
     for a = 1:numel(arrays)
         arr_label = arrays{a}.label;
@@ -196,6 +164,76 @@ for f = 1:numel(filenames)
         n_channels = size(grad.tra, 1);
         fprintf('  Array: %-14s | %d coils | %d channels\n', ...
             arr_label, n_coils, n_channels);
+
+
+        % SPHERE FIT TO SENSOR POSITIONS
+        % For back/front arrays: fit sphere whose surface aligns with the
+        % curvature of the sensor array. The centre lands inside the body.
+        % For the experimental (surrounding) array: same algebraic fit but
+        % the result is less physically interpretable — a warning is printed.
+        %
+        % Algebraic least-squares sphere fit:
+        %   ||p - c||² = r²
+        %   ||p||²     = 2p·c + (r² - ||c||²)
+        %   Let d = r² - ||c||²
+        %   Solve: [2p, 1] * [c; d]' = ||p||²
+
+        coilpos_m = grad.coilpos;   % already in metres
+
+        A = [2 * coilpos_m, ones(n_coils, 1)];
+        b = sum(coilpos_m.^2, 2);
+        x = A \ b;
+
+        sphere_centre_m = x(1:3)';
+        sphere_radius_m = sqrt(max(0, x(4) + sum(sphere_centre_m.^2)));
+
+        if strcmp(arr_label, 'experimental')
+            fprintf('  NOTE: experimental array — sphere fit is a starting\n');
+            fprintf('        estimate only. A single sphere is a poor model\n');
+            fprintf('        for a fully surrounding array. Implementation TBC.\n');
+        end
+
+        fprintf('  Sphere centre (m): [%.4f  %.4f  %.4f]\n', sphere_centre_m);
+        fprintf('  Sphere radius (m): %.4f\n', sphere_radius_m);
+
+
+        % SENSOR CONTAINMENT CHECK (max 10% of sensors inside sphere)
+        sensor_dists    = sqrt(sum((coilpos_m - sphere_centre_m).^2, 2));
+        pct_sensors_in  = 100 * mean(sensor_dists < sphere_radius_m);
+        fprintf('  Sensors inside sphere: %.1f %%', pct_sensors_in);
+        if pct_sensors_in > 10
+            fprintf('  [WARNING: >10%% sensors inside sphere]\n');
+        else
+            fprintf('\n');
+        end
+
+
+        % SOURCE CONTAINMENT CHECK (all sources must be inside)
+        src_dists_m = sqrt(sum((sources.pos - sphere_centre_m).^2, 2));
+        if any(src_dists_m >= sphere_radius_m)
+            n_out = sum(src_dists_m >= sphere_radius_m);
+            fprintf('  WARNING: %d source(s) outside sphere — expanding radius.\n', ...
+                n_out);
+            sphere_radius_m = max(src_dists_m) * 1.05;
+            pct_sensors_in  = 100 * mean(sensor_dists < sphere_radius_m);
+            fprintf('  Adjusted radius: %.4f m  (%.1f%% sensors inside)\n', ...
+                sphere_radius_m, pct_sensors_in);
+        end
+
+        src_margin_mm = (sphere_radius_m - max(src_dists_m)) * 1e3;
+        fprintf('  Source margin: %.1f mm clearance to sphere wall\n', src_margin_mm);
+
+
+        % HEAD MODEL
+        vol        = struct();
+        vol.r      = sphere_radius_m;
+        vol.o      = sphere_centre_m;
+        vol.cond   = 0.33;           % torso conductivity S/m (irrelevant for MEG)
+        vol.type   = 'singlesphere';
+        vol.unit   = 'm';
+
+
+        % LEADFIELD COMPUTATION
 
         cfg                 = [];
         cfg.sourcemodel     = sources;
@@ -209,15 +247,14 @@ for f = 1:numel(filenames)
         %   add: leadfieldopt = ft_setopt(leadfieldopt, 'dipoleunit',
         %        ft_getopt(cfg,'dipoleunit'));
         % at line 211 of ft_prepare_leadfield. Without the patch the
-        % output is in T/(A*m); scale below adjusts for both cases.
+        % output is T/(A*m); change scale to 1e6 if using unpatched FT.
 
         lf_ft = ft_prepare_leadfield(cfg);
 
-        % Unit scaling to fT/nAm
-        % With dipoleunit patch:  FieldTrip returns T/nAm  → scale 1e15
-        % Without dipoleunit:     FieldTrip returns T/(A*m) → scale 1e6
-        % The patch is present in the SPM-bundled FieldTrip version used
-        % with msg_fwd. Scale of 1e15 is used here (same as BEM pipeline).
+
+        % UNIT SCALING: T/nAm → fT/nAm
+        % With dipoleunit patch (SPM-bundled FT): scale = 1e15
+        % Without patch (unpatched FT):           scale = 1e6
         scale = 1e15;
 
         for s = 1:numel(lf_ft.leadfield)
@@ -226,10 +263,10 @@ for f = 1:numel(filenames)
             end
         end
 
-        lf_ft.units_out      = 'fT/nAm';
-        lf_ft.model          = 'singlesphere';
-        lf_ft.geometry       = model;
-        lf_ft.array          = arr_label;
+        lf_ft.units_out       = 'fT/nAm';
+        lf_ft.model           = 'singlesphere';
+        lf_ft.geometry        = model;
+        lf_ft.array           = arr_label;
         lf_ft.sphere_centre_m = sphere_centre_m;
         lf_ft.sphere_radius_m = sphere_radius_m;
 
