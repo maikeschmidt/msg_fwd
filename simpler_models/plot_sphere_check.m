@@ -181,12 +181,8 @@ for g = 1:n_geometries
             view(ax, views{v});
             axis(ax, 'equal');
             axis(ax, 'tight');
-            grid(ax, 'on');
-            xlabel(ax, 'X (m)', 'FontSize', 11);
-            ylabel(ax, 'Y (m)', 'FontSize', 11);
-            zlabel(ax, 'Z (m)', 'FontSize', 11);
+            axis(ax, 'off');
             title(ax, view_labels{v}, 'FontSize', 12, 'FontWeight', 'normal');
-            set(ax, 'FontSize', 11, 'TickDir', 'out');
 
             % Lighting
             camlight(ax, 'headlight');

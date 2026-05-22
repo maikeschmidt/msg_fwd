@@ -168,12 +168,21 @@ for g = 1:n_geometries
                 geom_label, arr_tag, src_idx, ax, n_axes, ground_truth_label), ...
                 'FontSize', 11, 'FontWeight', 'bold');
 
+            % Store first-column axes handles so we can place row labels
+            % via figure annotations after layout is rendered (ylabel is
+            % unreliable inside tiledlayout and often hidden/clipped).
+            first_col_axes = gobjects(n_rows, 1);
+
             for m = 1:n_rows
                 key = plot_keys{m};
                 for ori_idx = 1:n_ori
                     ori_label = orientation_labels{ori_idx};
                     tile_idx  = (m-1)*n_ori + ori_idx;
                     ax_panel  = nexttile(tl, tile_idx);
+
+                    if ori_idx == 1
+                        first_col_axes(m) = ax_panel;
+                    end
 
                     if src_idx > lf.(key).n_sources
                         axis(ax_panel, 'off');
@@ -190,16 +199,25 @@ for g = 1:n_geometries
                         title(ax_panel, orientation_display{ori_idx}, ...
                             'FontSize', 12, 'FontWeight', 'bold');
                     end
-
-                    % Row label (method name) — first column only, bold and larger
-                    if ori_idx == 1
-                        ylabel(ax_panel, plot_labels{m}, ...
-                            'FontSize', 11, 'FontWeight', 'bold', ...
-                            'Rotation', 90, ...
-                            'VerticalAlignment', 'middle', ...
-                            'HorizontalAlignment', 'center');
-                    end
                 end
+            end
+
+            % Row labels — placed as figure annotations to the left of the
+            % first column. drawnow flushes layout so OuterPosition is valid.
+            drawnow;
+            for m = 1:n_rows
+                pos    = first_col_axes(m).OuterPosition;   % [left bottom width height]
+                x_left = max(0, pos(1) - 0.045);
+                annotation(fig, 'textbox', ...
+                    [x_left, pos(2), 0.04, pos(4)], ...
+                    'String',              plot_labels{m}, ...
+                    'Rotation',            90, ...
+                    'HorizontalAlignment', 'center', ...
+                    'VerticalAlignment',   'middle', ...
+                    'FontSize',            11, ...
+                    'FontWeight',          'bold', ...
+                    'EdgeColor',           'none', ...
+                    'FitBoxToText',        'off');
             end
 
             fname = sprintf('topoplot_%s_%s_source%d_axis%d', ...
