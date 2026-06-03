@@ -213,8 +213,6 @@ for g = 1:n_geometries
 
             hold(ax, 'off');
         end
-
-        fprintf('    Figure created — use rotate3d for interactive inspection.\n');
     end
     fprintf('\n');
 end
