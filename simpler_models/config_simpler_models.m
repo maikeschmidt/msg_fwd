@@ -72,6 +72,11 @@ fem_fields_base    = '';   % SET THIS — leave '' if FEM not available
 bslaw_fields_base  = '';   % SET THIS — leave '' if Biot-Savart not computed
 sphere_fields_base = '';   % SET THIS — flat folder with sphere leadfield .mat files
 
+% Biot-Savart sensitivity leadfields — produced by run_biot_savart_sensitivity.m
+% Flat folder containing sensor_original and sensor_bundle<b>_shift<s> files.
+% Leave '' if sensitivity analysis not needed.
+bslaw_sensitivity_fields_base = '';   % SET THIS — leave '' to skip sensitivity analysis
+
 % OUTPUT PATH
 save_base_dir  = '';   % SET THIS: base path for saving all figures
 
@@ -197,7 +202,59 @@ src_spacing_mm = 5;
 pub_line_width  = 2.0;
 pub_marker_size = 7;
 
-% Output directories 
+
+% SENSOR ARRAY SENSITIVITY CONFIGURATION
+% Matches the bundle structure used in the BEM sensitivity analysis.
+% Paste sensor_shift_vectors from config_models.m (they are shared).
+% Each cell is one bundle; each row is one shift [dx dy dz] in mm.
+% Leave sensor_shift_vectors as {} if values are not yet known.
+%
+% Bundle 1 — small  (~2mm):  U(1,3)  mm per axis + random sign
+% Bundle 2 — medium (~5mm):  U(3,7)  mm per axis + random sign
+% Bundle 3 — large  (~10mm): U(7,13) mm per axis + random sign
+
+sensor_bundle_names   = {'small_2mm', 'medium_5mm', 'large_10mm'};
+sensor_bundle_display = {'~2 mm (small)', '~5 mm (medium)', '~10 mm (large)'};
+sensor_bundle_colors  = [
+    0.34, 0.71, 0.91;   % Bundle 1 — sky blue
+    0.00, 0.45, 0.70;   % Bundle 2 — blue
+    0.13, 0.13, 0.54;   % Bundle 3 — dark blue
+];
+n_sensor_bundles = 3;
+
+% SET THIS: paste the same [dx dy dz] vectors from config_models.m
+sensor_shift_vectors = {
+    % Bundle 1 — small (~2mm): [dx dy dz] per shift in mm
+    [+1.75, -2.90, -2.46;
+     +1.12, -2.73, +2.20;
+     -2.66, -1.42, +1.36;
+     -1.86, -1.58, -2.22;
+     +1.91, +2.57, -1.40;
+     +2.22, +1.34, +1.13;
+     -1.61, -1.20, -2.37;
+     +1.07, -2.82, +1.52], ...
+    % Bundle 2 — medium (~5mm): [dx dy dz] per shift in mm
+    [+5.19, +3.74, +6.88;
+     -5.39, -6.69, -3.35;
+     -4.55, -4.09, +6.31;
+     +3.56, +6.21, -3.30;
+     +3.02, +6.26, -5.83;
+     +4.43, -3.46, -6.45;
+     +4.24, +4.30, -5.92;
+     +3.48, +5.85, -6.04], ...
+    % Bundle 3 — large (~10mm): [dx dy dz] per shift in mm
+    [-10.14,  -9.57,  +7.15;
+      -8.89, -10.05, +12.45;
+      -8.37,  +7.46,  +8.74;
+     -10.80, +12.23, +11.82;
+     -11.84, -12.38,  -8.91;
+     -12.16,  -7.04, -10.06;
+      +9.03, +12.66,  -8.94;
+     -12.83, -12.77,  -8.51], ...
+};
+
+
+% Output directories
 save_absmax_dir   = fullfile(save_base_dir, 'figures', 'absmax');
 save_rsq_re_dir   = fullfile(save_base_dir, 'figures', 'per_source_rsq_re');
 save_heatmap_dir  = fullfile(save_base_dir, 'figures', 'heatmaps');
