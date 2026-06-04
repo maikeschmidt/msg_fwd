@@ -1,24 +1,24 @@
-% plot_sm_sensitivity_displacement - Median displacement vs r² for
-%                                    Biot-Savart sensor sensitivity
+% plot_sm_sensitivity_displacement - Summary displacement vs r² figure for
+%                                    Biot-Savart sensor sensitivity analysis
 %
-% For selected source points along the cord, plots r² against the median
-% absolute sensor displacement per shift realisation.
+% Produces ONE summary figure per geometry × array combination.
 %
-% X-axis: median(abs([dx, dy, dz])) — summary displacement per shift
-% Y-axis: r² vs original at a specific source point
+% Layout: rows = dipole orientations (VD, RC, LR)
+%         columns = sensor axes
 %
-% Individual figures: one per source point, 3×3 grid
-%   rows    = sensor axes (1, 2, 3)
-%   columns = dipole orientations (VD, RC, LR)
-%   points  = all shift realisations, coloured by bundle
+% Each panel shows:
+%   - All shift realisations as scatter points, coloured by bundle
+%   - One linear line of best fit per bundle (not per source point)
+%   - X-axis: median(|dx|, |dy|, |dz|) — summary displacement per shift
+%   - Y-axis: median r² across selected source points (cord centre)
+%   - Bundle shading regions in background
 %
-% Combined figures: one per sensor axis
-%   panels  = dipole orientations (VD, RC, LR)
-%   lines   = one per source point with linear line of best fit
-%   shading = three bundle regions
+% Using median r² across source points (rather than showing separate lines
+% per source) keeps the figure compact while still capturing the trend.
 %
-% This is the simpler-models equivalent of plot_sensitivity_displacement.m
-% (main branch).
+% SETTINGS
+%   target_min_mm / target_max_mm — cord range used to compute median r²
+%   (sources outside this range are excluded)
 %
 % USAGE:
 %   plot_sm_sensitivity_displacement
@@ -27,9 +27,9 @@
 %   config_simpler_models
 %   sm_sensitivity_sensor_rsq.mat  — produced by compute_sm_sensitivity_rsq
 %
-% OUTPUTS (saved to <save_base_dir>/sensitivity_analysis/<geom>_<array>/):
-%   sm_sensor_disp_vs_rsq_source<N>mm.png/.fig
-%   sm_sensor_disp_vs_rsq_combined_sensorax<N>.png/.fig
+% OUTPUTS (one file per geometry × array, saved to
+%          <save_base_dir>/sensitivity_analysis/<geom>_<array>/):
+%   sm_sensor_displacement_summary.png/.fig
 %
 % REPOSITORY:
 %   https://github.com/maikeschmidt/msg_fwd/simpler_models
@@ -45,8 +45,8 @@ clc
 
 % SETTINGS
 
-target_min_mm = 40;   % SET THIS: lower bound of source selection (mm)
-target_max_mm = 85;   % SET THIS: upper bound of source selection (mm)
+target_min_mm = 40;   % SET THIS: lower bound of source range for median r²
+target_max_mm = 85;   % SET THIS: upper bound of source range for median r²
 
 % INITIALISE
 
@@ -59,7 +59,14 @@ if ~isfile(rsq_file)
 end
 load(rsq_file);
 
-fprintf(' Biot-Savart Sensor Sensitivity — Displacement vs r² \n');
+fprintf(' Biot-Savart Sensor Sensitivity — Displacement Summary Figures \n');
+
+% Bundle shading (light tints of bundle colours)
+bundle_shade_colors = [
+    0.85, 0.93, 0.97;   % Bundle 1 — very light sky blue
+    0.75, 0.87, 0.95;   % Bundle 2 — light blue
+    0.65, 0.78, 0.90;   % Bundle 3 — light dark blue
+];
 
 result_keys = fieldnames(all_results);
 
@@ -85,7 +92,6 @@ for rk = 1:numel(result_keys)
     % Compute median displacement per shift realisation
     n_valid              = numel(valid_labels);
     median_displacements = nan(1, n_valid);
-
     for i = 1:n_valid
         b   = valid_bundle_idx(i);
         s   = valid_shift_idx(i);
@@ -93,246 +99,150 @@ for rk = 1:numel(result_keys)
         median_displacements(i) = median(abs(vec));
     end
 
-    x_label_disp = 'Median sensor displacement (mm)';
-    x_max        = max(median_displacements) * 1.2;
+    x_max = max(median_displacements) * 1.2;
 
-    % Bundle shading regions
-    bundle_shade_colors = [
-        0.85, 0.93, 0.97;
-        0.75, 0.87, 0.95;
-        0.65, 0.78, 0.90;
-    ];
-
-    bundle_x_ranges = zeros(n_sensor_bundles, 2);
-    for b = 1:n_sensor_bundles
-        vals = median_displacements(valid_bundle_idx == b);
-        bundle_x_ranges(b, :) = [min(vals)*0.85, max(vals)*1.15];
-    end
-
-    % Source selection
+    % Source selection — compute median r² across these cord positions
     cord_positions_mm = res.src_range * src_spacing_mm;
     source_sel_mask   = cord_positions_mm >= target_min_mm & ...
                         cord_positions_mm <= target_max_mm;
     source_sel_idx    = find(source_sel_mask);
-    source_sel_mm     = cord_positions_mm(source_sel_idx);
-    n_sources_sel     = numel(source_sel_idx);
 
-    if n_sources_sel == 0
-        warning('No sources between %d and %d mm for %s %s — skipping displacement plots.', ...
+    if isempty(source_sel_idx)
+        warning('No sources between %d and %d mm for %s %s — skipping.', ...
             target_min_mm, target_max_mm, geom_tag, arr_tag);
         continue;
     end
+    fprintf('    Source range: %d–%d mm (%d positions)\n', ...
+        target_min_mm, target_max_mm, numel(source_sel_idx));
 
-    fprintf('    Source selection: %d-%d mm — %d points\n', ...
-        target_min_mm, target_max_mm, n_sources_sel);
-
-    src_cmap = parula(n_sources_sel);
-
-    [sorted_disp, sort_idx] = sort(median_displacements);
-
-    %% INDIVIDUAL SOURCE FIGURES
-
-    fprintf('    Generating individual source figures...\n');
-
-    for src_sel = 1:n_sources_sel
-        src_plot_idx = source_sel_idx(src_sel);
-        src_mm       = source_sel_mm(src_sel);
-
-        fig = figure('Color', 'w', 'Position', [100, 100, 1400, 1050]);
-        tl  = tiledlayout(n_axes, numel(orientation_labels), ...
-            'TileSpacing', 'compact', 'Padding', 'loose');
-
-        title(tl, sprintf(['Biot-Savart — Sensor Array Position Sensitivity\n' ...
-                           'Geometry: %s  |  Array: %s\n' ...
-                           'Source at %d mm along spinal cord\n' ...
-                           'X-axis: median(|dx|,|dy|,|dz|)  |  Y-axis: r² vs original'], ...
-            geom_tag, arr_tag, src_mm), ...
-            'FontSize', 13, 'FontWeight', 'bold');
-
-        leg_h_bundles = gobjects(n_sensor_bundles, 1);
-
-        for sens_ax = 1:n_axes
-            for ori_idx = 1:numel(orientation_labels)
-                ori_label = orientation_labels{ori_idx};
-
-                ax_panel = nexttile(tl);
-                hold(ax_panel, 'on');
-
-                % Bundle shading
-                for b = 1:n_sensor_bundles
-                    xr = bundle_x_ranges(b, :);
-                    patch(ax_panel, ...
-                        [xr(1) xr(2) xr(2) xr(1)], [0 0 1.05 1.05], ...
-                        bundle_shade_colors(b,:), 'EdgeColor', 'none', 'FaceAlpha', 0.5);
-                end
-
-                % Scatter coloured by bundle
-                for b = 1:n_sensor_bundles
-                    bundle_mask = valid_bundle_idx == b;
-                    bund_rows   = find(bundle_mask);
-                    col         = sensor_bundle_colors(b, :);
-
-                    x_vals = median_displacements(bund_rows);
-                    y_vals = squeeze(rsq_store.(ori_label)( ...
-                        bund_rows, src_plot_idx, sens_ax))';
-
-                    leg_h_bundles(b) = scatter(ax_panel, x_vals, y_vals, 60, ...
-                        'MarkerFaceColor', col, 'MarkerEdgeColor', 'w', ...
-                        'LineWidth', 0.8, 'DisplayName', sensor_bundle_display{b});
-                end
-
-                yline(ax_panel, 1.00, '--k', 'LineWidth', 1.0, 'Alpha', 0.4);
-                yline(ax_panel, 0.99, ':', 'LineWidth', 1.0, 'Alpha', 0.4, 'Color', [0.4 0.4 0.4]);
-                yline(ax_panel, 0.95, ':', 'LineWidth', 1.0, 'Alpha', 0.4, 'Color', [0.6 0.6 0.6]);
-
-                if sens_ax == 1
-                    title(ax_panel, orientation_display{ori_idx}, 'FontSize', 12, 'FontWeight', 'bold');
-                end
-                if ori_idx == 1
-                    ylabel(ax_panel, sprintf('Sensor axis %d\nr²', sens_ax), 'FontSize', 11);
-                end
-                if sens_ax == n_axes
-                    xlabel(ax_panel, x_label_disp, 'FontSize', 11);
-                end
-
-                xlim(ax_panel, [0, x_max]);
-                ylim(ax_panel, [0, 1.05]);
-                grid(ax_panel, 'on');
-                set(ax_panel, 'FontSize', 11, 'LineWidth', 1.2, 'TickDir', 'out');
-                hold(ax_panel, 'off');
-            end
+    % Bundle x-axis shading regions
+    bundle_x_ranges = zeros(n_sensor_bundles, 2);
+    for b = 1:n_sensor_bundles
+        vals = median_displacements(valid_bundle_idx == b);
+        if ~isempty(vals)
+            bundle_x_ranges(b, :) = [min(vals)*0.85, max(vals)*1.15];
         end
-
-        lgd = legend(leg_h_bundles, sensor_bundle_display, ...
-            'Orientation', 'horizontal', 'FontSize', 11, 'Box', 'off');
-        lgd.Layout.Tile = 'south';
-
-        fname = sprintf('sm_sensor_disp_vs_rsq_source%dmm', src_mm);
-        exportgraphics(fig, fullfile(save_dir, [fname '.png']), 'Resolution', 600);
-        saveas(fig, fullfile(save_dir, [fname '.fig']));
-        close(fig);
-        fprintf('      Saved: %s\n', fname);
     end
 
-    %% COMBINED FIGURES — one per sensor axis
+    n_ori = numel(orientation_labels);
+    fig_w = 420 * n_axes + 200;
+    fig_h = 380 * n_ori + 200;
 
-    fprintf('    Generating combined figures...\n');
+    fig = figure('Color', 'w', 'Position', [50, 50, fig_w, fig_h]);
+    tl  = tiledlayout(n_ori, n_axes, ...
+        'TileSpacing', 'compact', 'Padding', 'loose');
 
-    for sens_ax = 1:n_axes
+    title(tl, sprintf(['Biot-Savart — Sensor Array Displacement vs r²\n' ...
+                       'Geometry: %s  |  Array: %s\n' ...
+                       'Y-axis: median r² across %d–%d mm of cord  |  ' ...
+                       'Points coloured by registration error bundle'], ...
+        geom_tag, arr_tag, target_min_mm, target_max_mm), ...
+        'FontSize', 13, 'FontWeight', 'bold');
 
-        fig = figure('Color', 'w', 'Position', [100, 100, 1800, 650]);
-        tl  = tiledlayout(1, numel(orientation_labels), ...
-            'TileSpacing', 'compact', 'Padding', 'loose');
+    leg_h_bundles = gobjects(n_sensor_bundles, 1);
 
-        title(tl, sprintf(['Biot-Savart — Sensor Array Sensitivity  |  Sensor axis %d of %d\n' ...
-                           'Geometry: %s  |  Array: %s\n' ...
-                           'Source points %d–%d mm  |  Lines = linear fit per source  |  Shading = error bundle'], ...
-            sens_ax, n_axes, geom_tag, arr_tag, target_min_mm, target_max_mm), ...
-            'FontSize', 13, 'FontWeight', 'bold');
+    for ori_idx = 1:n_ori
+        ori_label = orientation_labels{ori_idx};
 
-        ax_handles = gobjects(1, numel(orientation_labels));
+        for ax_idx = 1:n_axes
 
-        for ori_idx = 1:numel(orientation_labels)
-            ori_label = orientation_labels{ori_idx};
+            % Compute median r² across selected sources for each shift
+            med_rsq = nan(1, n_valid);
+            for i = 1:n_valid
+                rsq_src = squeeze(rsq_store.(ori_label)(i, source_sel_idx, ax_idx));
+                med_rsq(i) = median(rsq_src, 'omitnan');
+            end
 
-            ax_panel = nexttile(tl);
-            ax_handles(ori_idx) = ax_panel;
-            hold(ax_panel, 'on');
+            ax = nexttile(tl);
+            hold(ax, 'on');
 
-            % Bundle shading with labels
+            % Bundle shading
             for b = 1:n_sensor_bundles
                 xr = bundle_x_ranges(b, :);
-                patch(ax_panel, ...
-                    [xr(1) xr(2) xr(2) xr(1)], [0 0 1.05 1.05], ...
+                if any(isnan(xr)); continue; end
+                patch(ax, [xr(1) xr(2) xr(2) xr(1)], [0 0 1.05 1.05], ...
                     bundle_shade_colors(b,:), 'EdgeColor', 'none', 'FaceAlpha', 0.5);
-                text(ax_panel, mean(xr), 1.03, sensor_bundle_display{b}, ...
-                    'HorizontalAlignment', 'center', 'FontSize', 9, ...
+                text(ax, mean(xr), 1.03, sensor_bundle_display{b}, ...
+                    'HorizontalAlignment', 'center', 'FontSize', 8, ...
                     'Color', sensor_bundle_colors(b,:), 'FontWeight', 'bold');
             end
 
-            leg_h = gobjects(n_sources_sel, 1);
+            % Scatter + fit per bundle
+            for b = 1:n_sensor_bundles
+                bundle_mask = valid_bundle_idx == b;
+                bund_rows   = find(bundle_mask);
+                col         = sensor_bundle_colors(b, :);
 
-            for src_sel = 1:n_sources_sel
-                src_plot_idx = source_sel_idx(src_sel);
-                src_mm       = source_sel_mm(src_sel);
-                col          = src_cmap(src_sel, :);
+                x_vals = median_displacements(bund_rows);
+                y_vals = med_rsq(bund_rows);
 
-                rsq_vals_sorted = squeeze( ...
-                    rsq_store.(ori_label)(sort_idx, src_plot_idx, sens_ax));
-
-                % Scatter (semi-transparent)
-                scatter(ax_panel, sorted_disp, rsq_vals_sorted, 35, ...
+                leg_h_bundles(b) = scatter(ax, x_vals, y_vals, 65, ...
                     'MarkerFaceColor', col, 'MarkerEdgeColor', 'w', ...
-                    'LineWidth', 0.5, 'MarkerFaceAlpha', 0.6);
+                    'LineWidth', 0.8, 'DisplayName', sensor_bundle_display{b});
 
-                % Linear line of best fit
-                valid_pts = ~isnan(sorted_disp) & ~isnan(rsq_vals_sorted');
+                % Linear fit across this bundle
+                valid_pts = ~isnan(x_vals) & ~isnan(y_vals);
                 if sum(valid_pts) >= 2
-                    p     = polyfit(sorted_disp(valid_pts), rsq_vals_sorted(valid_pts), 1);
-                    x_fit = linspace(min(sorted_disp), max(sorted_disp), 200);
+                    p     = polyfit(x_vals(valid_pts), y_vals(valid_pts), 1);
+                    x_fit = linspace(min(x_vals(valid_pts)), max(x_vals(valid_pts)), 100);
                     y_fit = polyval(p, x_fit);
+                    plot(ax, x_fit, y_fit, '-', 'Color', col, 'LineWidth', 1.8);
 
-                    leg_h(src_sel) = plot(ax_panel, x_fit, y_fit, ...
-                        '-', 'Color', col, 'LineWidth', 2.0, ...
-                        'DisplayName', sprintf('%d mm', src_mm));
-
-                    % Pearson r annotation
-                    r_val = corr(sorted_disp(valid_pts)', rsq_vals_sorted(valid_pts), ...
-                        'Type', 'Pearson');
-                    y_ann = 0.06 + (src_sel - 1) * 0.065;
-                    text(ax_panel, x_max * 0.02, y_ann, ...
-                        sprintf('%d mm: r=%.2f', src_mm, r_val), ...
-                        'FontSize', 8, 'Color', col, 'FontWeight', 'bold');
-                else
-                    leg_h(src_sel) = plot(ax_panel, NaN, NaN, '-', ...
-                        'Color', col, 'LineWidth', 2.0, ...
-                        'DisplayName', sprintf('%d mm', src_mm));
+                    % Pearson r
+                    r_val = corr(x_vals(valid_pts)', y_vals(valid_pts)', 'Type', 'Pearson');
+                    text(ax, mean(x_vals(valid_pts)), min(y_vals(valid_pts)) - 0.03, ...
+                        sprintf('r=%.2f', r_val), ...
+                        'FontSize', 8, 'Color', col, 'FontWeight', 'bold', ...
+                        'HorizontalAlignment', 'center');
                 end
             end
 
-            yline(ax_panel, 1.00, '--k', 'LineWidth', 1.0, 'Alpha', 0.4, ...
-                'Label', 'r²=1.00', 'LabelHorizontalAlignment', 'left', 'FontSize', 9);
-            yline(ax_panel, 0.99, ':', 'LineWidth', 1.0, 'Alpha', 0.4, ...
-                'Color', [0.4 0.4 0.4], 'Label', 'r²=0.99', ...
-                'LabelHorizontalAlignment', 'left', 'FontSize', 9);
-            yline(ax_panel, 0.95, ':', 'LineWidth', 1.0, 'Alpha', 0.4, ...
-                'Color', [0.6 0.6 0.6], 'Label', 'r²=0.95', ...
-                'LabelHorizontalAlignment', 'left', 'FontSize', 9);
+            yline(ax, 1.00, '--k', 'LineWidth', 1.0, 'Alpha', 0.4);
+            yline(ax, 0.99, ':', 'LineWidth', 1.0, 'Alpha', 0.4, 'Color', [0.4 0.4 0.4]);
+            yline(ax, 0.95, ':', 'LineWidth', 1.0, 'Alpha', 0.4, 'Color', [0.6 0.6 0.6]);
 
-            title(ax_panel, orientation_display{ori_idx}, 'FontSize', 13, 'FontWeight', 'bold');
-            xlabel(ax_panel, x_label_disp, 'FontSize', 13);
+            % Column header on top row
             if ori_idx == 1
-                ylabel(ax_panel, ...
-                    {'r²  vs original leadfield'; '(1.0 = no effect of sensor shift)'}, ...
-                    'FontSize', 12);
+                title(ax, sprintf('Sensor axis %d', ax_idx), ...
+                    'FontSize', 12, 'FontWeight', 'bold');
             end
 
-            xlim(ax_panel, [0, x_max]);
-            ylim(ax_panel, [0, 1.05]);
-            grid(ax_panel, 'on');
-            set(ax_panel, 'FontSize', 12, 'LineWidth', 1.2, 'TickDir', 'out');
+            % Row label on left column
+            if ax_idx == 1
+                ylabel(ax, {orientation_display{ori_idx}; 'Median r²'}, 'FontSize', 11);
+            end
 
-            lgd = legend(ax_panel, leg_h, ...
-                arrayfun(@(mm) sprintf('%d mm along cord', mm), ...
-                    source_sel_mm, 'UniformOutput', false), ...
-                'Location', 'eastoutside', 'FontSize', 11);
-            lgd.Box  = 'off';
-            title(lgd, 'Source position');
-            lgd.Title.FontSize = 10;
+            % x-label on bottom row
+            if ori_idx == n_ori
+                xlabel(ax, 'Median sensor displacement (mm)', 'FontSize', 11);
+            end
 
-            hold(ax_panel, 'off');
+            xlim(ax, [0, x_max]);
+            ylim(ax, [0, 1.05]);
+            grid(ax, 'on');
+            set(ax, 'FontSize', 11, 'LineWidth', 1.2, 'TickDir', 'out');
+            hold(ax, 'off');
         end
-
-        for ori_idx = 1:numel(orientation_labels)
-            ylim(ax_handles(ori_idx), [0, 1.05]);
-        end
-
-        fname = sprintf('sm_sensor_disp_vs_rsq_combined_sensorax%d', sens_ax);
-        exportgraphics(fig, fullfile(save_dir, [fname '.png']), 'Resolution', 600);
-        saveas(fig, fullfile(save_dir, [fname '.fig']));
-        close(fig);
-        fprintf('      Saved: %s\n', fname);
     end
+
+    % Shared legend for bundles
+    lgd = legend(leg_h_bundles, sensor_bundle_display, ...
+        'Orientation', 'horizontal', 'FontSize', 11, 'Box', 'off');
+    lgd.Layout.Tile = 'south';
+
+    annotation(fig, 'textbox', [0.01, 0.00, 0.99, 0.025], ...
+        'String', sprintf(['Each point = one shift realisation  |  ' ...
+                           'Y = median r² over %d–%d mm of cord  |  ' ...
+                           'Line = linear fit per bundle'], ...
+            target_min_mm, target_max_mm), ...
+        'EdgeColor', 'none', 'FontSize', 9, 'Color', [0.4 0.4 0.4], ...
+        'HorizontalAlignment', 'center');
+
+    fname = 'sm_sensor_displacement_summary';
+    exportgraphics(fig, fullfile(save_dir, [fname '.png']), 'Resolution', 300);
+    saveas(fig, fullfile(save_dir, [fname '.fig']));
+    close(fig);
+    fprintf('    Saved: %s\n', fname);
 end
 
 fprintf('\n plot_sm_sensitivity_displacement complete \n');
