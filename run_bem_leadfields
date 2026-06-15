@@ -97,7 +97,10 @@ clc
 
 % USER CONFIGURATION — set these paths before running
 
-geoms_path = '';    % SET THIS: path to folder containing geometry .mat files
+geoms_path  = '';   % SET THIS: path to folder containing geometry .mat files
+lf_save_path = '';  % SET THIS: path to folder where leadfield .mat files will be saved
+                    %           (can be different from geoms_path; subfolders are
+                    %            created automatically per geometry variant)
 
 cd('D:\');          % SET THIS: update to your working directory
 Metadata;           % SET THIS: script defining subject/study metadata and paths
@@ -347,7 +350,7 @@ for fIdx = 1:numel(filenames)
         model_name = regexprep(filenames{fIdx}, '^geometries[_-]?', '');
         model_name = [model_name '_bem'];
 
-        outdir  = fullfile(geoms_path, filenames{fIdx});
+        outdir  = fullfile(lf_save_path, filenames{fIdx});
         if ~exist(outdir, 'dir'), mkdir(outdir); end
 
         outfile = fullfile(outdir, ['leadfield_' model_name '_' array_name '.mat']);
