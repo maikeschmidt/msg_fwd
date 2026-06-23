@@ -1,0 +1,16 @@
+# ── User-edited configuration scripts ────────────────────────────────────────
+config_models.m
+simpler_models/config_simpler_models.m
+
+# ── Computation scripts (frequently edited per study) ─────────────────────────
+run_bem_leadfields.m
+run_fem_leadfields.m
+simpler_models/run_biot_savart_leadfields.m
+simpler_models/run_sphere_leadfields.m
+
+# ── MATLAB compiled files ─────────────────────────────────────────────────────
+*.asv
+*.m~
+
+# ── macOS ─────────────────────────────────────────────────────────────────────
+.DS_Store
