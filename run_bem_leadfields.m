@@ -279,7 +279,7 @@ for fIdx = 1:numel(filenames)
                 filenames{fIdx});
         end
 
-        fprintf('  Detected: standard front/back sensor arrays\n');
+        fprintf('  Detected: simulated front/back sensor arrays\n');
 
         front_sens = ft_convert_units(front_sens, 'm');
         back_sens  = ft_convert_units(back_sens,  'm');

@@ -279,7 +279,7 @@ for fIdx = 1:numel(filenames)
                 filenames{fIdx});
         end
 
-        fprintf('  Detected: standard front/back sensor arrays\n');
+        fprintf('  Detected: simulated front/back sensor arrays\n');
 
         front_sens = ft_convert_units(front_sens, 'm');
         back_sens  = ft_convert_units(back_sens,  'm');
@@ -328,7 +328,7 @@ for fIdx = 1:numel(filenames)
     % innermost compartment (spinal cord).
     
     cfg_hm              = [];
-    cfg_hm.method       = 'bem_hbf';       % change to 'bem_hbf' if needed
+    cfg_hm.method       = 'hbf';       % change to 'bem_hbf' if needed
     cfg_hm.conductivity = [ci_cord; co_cord];
     cfg_hm.checkmesh    = 'false';
     % cfg_hm.isolatedsource = 1;       % uncomment for isolated source approach
