@@ -14,3 +14,6 @@ simpler_models/run_sphere_leadfields.m
 
 # ── macOS ─────────────────────────────────────────────────────────────────────
 .DS_Store
+simpler_models/config_simpler_models.m
+run_fem_leadfields.m
+run_bem_leadfields.m
