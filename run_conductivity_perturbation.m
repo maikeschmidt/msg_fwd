@@ -5,33 +5,37 @@
 % bundles. This quantifies sensitivity of the BEM forward model to
 % uncertainty in tissue electrical properties.
 %
+% The geometry processing (mesh assembly, sensor detection, source model) is
+% identical to run_bem_leadfields.m. The BEM head model is built ONCE from
+% the nominal conductivities, then conductivities are updated per perturbation
+% before computing each leadfield.
+%
 % Each compartment's conductivity is scaled independently upward:
-%   σ_perturbed = σ_nominal × (1 + δ),  δ ~ U(0, +pct)
+%   sigma_perturbed = sigma_nominal * (1 + delta),   delta ~ U(0, +pct)
 %
 % Bundle definitions:
 %   Bundle 1 — small  (up to +5%):  pct = 0.05
 %   Bundle 2 — medium (up to +10%): pct = 0.10
 %   Bundle 3 — large  (up to +50%): pct = 0.50
 %
-% Uses the same geometry file and sensor arrays as run_bem_leadfields.m.
-% Only the vol.cond values change between runs.
-%
-% OUTPUTS (saved to save_base/<geom_short>/):
+% OUTPUTS (saved to lf_save_path/<filename>/):
 %   leadfield_<geom_short>_bem_cond_bundle<B>_shift<S>_<array>.mat
-%     Variable: leadfield_cord (scale: fT/nAm, compatible with pt_load_leadfields)
+%     Variable: leadfield_cord (compatible with pt_load_leadfields)
 %
 % ALSO PRINTS:
-%   Realised σ values for each perturbation (for traceability).
+%   Exact % increase per compartment for every perturbation (for traceability).
 %
 % DEPENDENCIES:
-%   run_bem_leadfields logic — requires HBF on path (via msg_coreg)
-%   FieldTrip / SPM for ft_convert_units
+%   Same as run_bem_leadfields.m: FieldTrip, HBF via cr_add_functions
 %
 % -------------------------------------------------------------------------
 % Copyright (c) 2026 University College London
 % Department of Imaging Neuroscience
-% Author: Maike Schmidt — maike.schmidt.23@ucl.ac.uk
+%
+% Author: Maike Schmidt
+% Email:  maike.schmidt.23@ucl.ac.uk
 
+%% run_conductivity_perturbation
 clearvars
 close all
 clc
@@ -39,206 +43,288 @@ clc
 fprintf('=== BEM Conductivity Perturbation ===\n\n');
 
 
-% =========================================================================
-% CONFIGURATION
-% =========================================================================
+% USER CONFIGURATION — set these before running
 
-geom_path  = 'D:\Simulations\Pertubations\geometries';   % SET THIS
-save_base  = 'D:\Simulations\Pertubations\fields\bem_cond';  % SET THIS
+geoms_path   = 'D:\Simulations\Pertubations\geometries';          % SET THIS
+lf_save_path = 'D:\Simulations\Pertubations\fields\bem_cond';     % SET THIS
 
-% Geometry file stem (without 'geometries_' prefix and without '.mat')
-geom_name  = 'original_source_original';   % SET THIS: always the unshifted original
+% Single geometry file to process (always the unshifted original)
+filename = 'geometries_original_source_original';   % SET THIS
 
-% Nominal tissue conductivities (S/m) — must match the order of compartments
-% in the BEM volume conductor. Edit to match your geometry's compartment order.
-% Common spine model: [CSF, bone, soft_tissue, cord]
-%   Reference values from literature (Gabriel et al., 1996; Andreuccetti, 1997)
-nominal_cond = [1.79, 0.02, 0.43, 0.30];   % SET THIS: one value per BEM compartment
-compartment_names = {'CSF', 'Bone', 'Soft tissue', 'Cord'};   % for logging only
+cd('D:\');          % SET THIS: update to your working directory
+Metadata;           % SET THIS: script defining subject/study metadata and paths
+cr_add_functions;   % initialise MSG toolbox and HBF library paths
 
-% Random seed (different from source/sensor shifts)
+% Nominal conductivities (S/m) — compartment order must match ordering_cord below
+% Common spine model ordering (innermost → outermost):
+%   [wm/cord, bone, heart, lungs, torso]
+%   Reference: Gabriel et al. (1996), Andreuccetti (1997)
+cratio  = 40;
+ci_cord = [0.33,  0.33/cratio,  0.62,  0.05,  0.23];
+co_cord = [0.23,  0.23,         0.23,  0.23,  0.00];
+
+% Labels for printing only — must match ordering_cord
+compartment_names = {'Cord (WM)', 'Bone', 'Heart', 'Lungs', 'Torso'};
+
+% Random seed (different from source/sensor shift seeds)
 seed = 99;
 
 % Bundle perturbation fractions
-n_bundles   = 3;
-n_shifts    = 8;
-bundle_pct  = [0.05, 0.10, 0.50];   % fractional range per bundle
+n_bundles    = 3;
+n_shifts     = 8;
+bundle_pct   = [0.05, 0.10, 0.50];
 bundle_names = {'up to +5% (small)', 'up to +10% (medium)', 'up to +50% (large)'};
 
-% Arrays to compute (set false to skip)
-compute_front = true;
-compute_back  = true;
-
 
 % =========================================================================
-% INITIALISE
+% LOAD GEOMETRY
 % =========================================================================
 
-if ~exist(save_base, 'dir'); mkdir(save_base); end
+fprintf('Processing geometry: %s\n\n', filename);
 
-% Load geometry
-geom_file = fullfile(geom_path, ['geometries_' geom_name '.mat']);
+geom_file = fullfile(geoms_path, [filename '.mat']);
 if ~isfile(geom_file)
     error('Geometry file not found: %s', geom_file);
 end
-geom = load(geom_file);
-fprintf('Loaded geometry: %s\n', geom_name);
-
-% Detect sensor arrays (same logic as run_bem_leadfields)
-arrays = {};
-if isfield(geom, 'experimental_sensors')
-    arrays{end+1} = struct('grad', geom.experimental_sensors, 'label', 'experimental');
-else
-    if compute_front
-        if isfield(geom, 'front_coils_3axis')
-            arrays{end+1} = struct('grad', geom.front_coils_3axis, 'label', 'front');
-        elseif isfield(geom, 'front_coils_2axis')
-            arrays{end+1} = struct('grad', geom.front_coils_2axis, 'label', 'front');
-        elseif isfield(geom, 'front_sensors_2axis')
-            arrays{end+1} = struct('grad', geom.front_sensors_2axis, 'label', 'front');
-        else
-            warning('No front sensor array found in: %s', geom_name);
-        end
-    end
-    if compute_back
-        if isfield(geom, 'back_coils_3axis')
-            arrays{end+1} = struct('grad', geom.back_coils_3axis, 'label', 'back');
-        elseif isfield(geom, 'back_coils_2axis')
-            arrays{end+1} = struct('grad', geom.back_coils_2axis, 'label', 'back');
-        elseif isfield(geom, 'back_sensors_2axis')
-            arrays{end+1} = struct('grad', geom.back_sensors_2axis, 'label', 'back');
-        else
-            warning('No back sensor array found in: %s', geom_name);
-        end
-    end
-end
-
-if isempty(arrays)
-    error('No sensor arrays detected in geometry: %s', geom_name);
-end
-fprintf('Detected %d sensor array(s): ', numel(arrays));
-for a = 1:numel(arrays); fprintf('%s  ', arrays{a}.label); end
-fprintf('\n\n');
-
-% Source model
-if ~isfield(geom, 'sources_cent') || ~isfield(geom.sources_cent, 'pos')
-    error('No sources_cent.pos in geometry: %s', geom_name);
-end
-src_pos_mm     = geom.sources_cent.pos;
-sources        = struct();
-sources.pos    = src_pos_mm;
-sources.inside = true(size(src_pos_mm, 1), 1);
-sources.unit   = 'mm';
-sources        = ft_convert_units(sources, 'm');
-fprintf('Sources: %d positions\n', size(src_pos_mm, 1));
-
-% BEM mesh — assumes geom contains hbf-compatible mesh fields
-% Adjust field names to match your geometry convention.
-if isfield(geom, 'vol')
-    vol_base = geom.vol;
-else
-    error(['No vol field found in geometry. ' ...
-           'Run run_bem_leadfields.m first to confirm BEM meshes are correct.']);
-end
-
-% Output subfolder
-geom_short  = regexprep(geom_name, '^geometries[_-]?', '');
-save_subdir = fullfile(save_base, ['geometries_' geom_short]);
-if ~exist(save_subdir, 'dir'); mkdir(save_subdir); end
-
-n_compartments = numel(nominal_cond);
-fprintf('Compartments: %d  [%s]\n', n_compartments, ...
-    strjoin(compartment_names, ', '));
-fprintf('Nominal σ (S/m): [%s]\n\n', ...
-    strjoin(arrayfun(@(x) sprintf('%.4f', x), nominal_cond, 'UniformOutput', false), ', '));
+geoms = load(geom_file);
 
 
 % =========================================================================
-% GENERATE SHIFT VECTORS (conductivity scale factors)
+% STEP 1: Build and orient BEM boundary meshes
+% =========================================================================
+% Identical to run_bem_leadfields.m — innermost to outermost, mm → m,
+% torso downsampled by 50%.
+
+ordering_cord   = {'wm', 'bone', 'heart', 'lungs', 'torso'};
+reduction_torso = 0.5;
+
+clear bnd_cord
+for ii = 1:numel(ordering_cord)
+    field    = ['mesh_' ordering_cord{ii}];
+    mesh_tmp = geoms.(field);
+
+    pos = mesh_tmp.vertices;
+    tri = mesh_tmp.faces;
+
+    if ii == 5   % torso only
+        patch_in.vertices = pos;
+        patch_in.faces    = tri;
+        patch_out = reducepatch(patch_in, reduction_torso);
+        pos = patch_out.vertices;
+        tri = patch_out.faces;
+    end
+
+    bnd_cord(ii).pos  = pos;
+    bnd_cord(ii).tri  = tri;
+    bnd_cord(ii).unit = 'mm';
+
+    orient = hbf_CheckTriangleOrientation(bnd_cord(ii).pos, bnd_cord(ii).tri);
+    if orient == 2
+        bnd_cord(ii).tri = bnd_cord(ii).tri(:, [1 3 2]);
+    end
+
+    bnd_cord(ii) = ft_convert_units(bnd_cord(ii), 'm');
+end
+
+
+% =========================================================================
+% STEP 2: Detect sensor arrays
+% =========================================================================
+% Identical detection logic to run_bem_leadfields.m.
+
+if isfield(geoms, 'experimental_sensors')
+    fprintf('  Detected: experimental sensor array\n');
+    exp_sens       = ft_convert_units(geoms.experimental_sensors, 'm');
+    sensor_arrays  = {'experimental'};
+    sensor_structs = {exp_sens};
+else
+    if isfield(geoms, 'front_coils_3axis')
+        front_sens = geoms.front_coils_3axis;
+    elseif isfield(geoms, 'front_coils_2axis')
+        front_sens = geoms.front_coils_2axis;
+    elseif isfield(geoms, 'front_sensors')
+        front_sens = geoms.front_sensors;
+    else
+        error('No front sensor structure found in: %s', filename);
+    end
+
+    if isfield(geoms, 'back_coils_3axis')
+        back_sens = geoms.back_coils_3axis;
+    elseif isfield(geoms, 'back_coils_2axis')
+        back_sens = geoms.back_coils_2axis;
+    elseif isfield(geoms, 'back_sensors')
+        back_sens = geoms.back_sensors;
+    else
+        error('No back sensor structure found in: %s', filename);
+    end
+
+    fprintf('  Detected: front/back sensor arrays\n');
+
+    front_sens = ft_convert_units(front_sens, 'm');
+    back_sens  = ft_convert_units(back_sens,  'm');
+
+    sensor_arrays  = {'front', 'back'};
+    sensor_structs = {front_sens, back_sens};
+end
+
+
+% =========================================================================
+% STEP 3: Load spinal cord source model
+% =========================================================================
+
+sources_spine        = [];
+sources_spine.pos    = geoms.sources_cent.pos;
+sources_spine.inside = true(size(sources_spine.pos, 1), 1);
+sources_spine.unit   = 'mm';
+sources_spine        = ft_convert_units(sources_spine, 'm');
+
+fprintf('  Sources: %d positions\n', size(geoms.sources_cent.pos, 1));
+
+
+% =========================================================================
+% STEP 4: Detect sensor modality (MEG/OPM or EEG)
+% =========================================================================
+
+test_sens = sensor_structs{1};
+isElec    = (isfield(test_sens, 'elecpos') || isfield(test_sens, 'chanpos')) ...
+             && ~isfield(test_sens, 'coilpos');
+
+if isElec
+    fprintf('  Sensor type: EEG\n\n');
+else
+    fprintf('  Sensor type: MEG/OPM\n\n');
+end
+
+
+% =========================================================================
+% GENERATE CONDUCTIVITY PERTURBATIONS
 % =========================================================================
 
 rng(seed);
-cond_shifts = cell(n_bundles, 1);   % each: [n_shifts × n_compartments] delta matrix
+cond_deltas = cell(n_bundles, 1);   % [n_shifts × n_compartments] fractional deltas
 
-fprintf('Generated conductivity perturbations:\n');
+n_compartments = numel(ci_cord);
+
+fprintf('Nominal conductivities (S/m):\n');
+for c = 1:n_compartments
+    fprintf('  %s: ci = %.4f  co = %.4f\n', ...
+        compartment_names{c}, ci_cord(c), co_cord(c));
+end
+fprintf('\n');
+
+fprintf('Generating conductivity perturbations (seed=%d):\n', seed);
 for b = 1:n_bundles
-    pct = bundle_pct(b);
-    deltas = rand(n_shifts, n_compartments) * pct;   % U(0, +pct)
-    cond_shifts{b} = deltas;
-    fprintf('  Bundle %d (%s): δ range [%.3f, %.3f]\n', ...
-        b, bundle_names{b}, min(deltas(:)), max(deltas(:)));
+    pct              = bundle_pct(b);
+    deltas           = rand(n_shifts, n_compartments) * pct;   % U(0, +pct)
+    cond_deltas{b}   = deltas;
+    fprintf('  Bundle %d (%s): delta range [%.3f%%, %.3f%%]\n', ...
+        b, bundle_names{b}, min(deltas(:))*100, max(deltas(:))*100);
 end
 fprintf('\n');
 
 
 % =========================================================================
-% COMPUTE LEADFIELDS
+% STEP 5: Build nominal BEM head model (once)
 % =========================================================================
+
+fprintf('Building nominal BEM head model...\n');
+
+cfg_hm              = [];
+cfg_hm.method       = 'hbf';       % change to 'bem_hbf' if needed
+cfg_hm.conductivity = [ci_cord; co_cord];
+cfg_hm.checkmesh    = 'false';
+
+vol_nominal = ft_prepare_headmodel(cfg_hm, bnd_cord);
+fprintf('  Done.\n\n');
+
+
+% =========================================================================
+% STEP 6: Compute leadfields for each conductivity perturbation
+% =========================================================================
+
+geom_short  = regexprep(filename, '^geometries[_-]?', '');
+outdir      = fullfile(lf_save_path, filename);
+if ~exist(outdir, 'dir'); mkdir(outdir); end
 
 for b = 1:n_bundles
     for s = 1:n_shifts
 
-        perturbed_cond = nominal_cond .* (1 + cond_shifts{b}(s, :));
-        perturbed_cond = max(perturbed_cond, 1e-4);   % clamp to avoid near-zero σ
+        % Perturbed conductivities
+        delta_row      = cond_deltas{b}(s, :);
+        ci_pert        = ci_cord .* (1 + delta_row);
+        ci_pert        = max(ci_pert, 1e-4);   % clamp to avoid near-zero
 
-        fprintf('[Bundle %d  Shift %d]  σ = [%s] S/m\n', b, s, ...
-            strjoin(arrayfun(@(x) sprintf('%.4f', x), perturbed_cond, ...
-                'UniformOutput', false), ', '));
+        % Print exact perturbation for traceability
+        fprintf('[Bundle %d  Shift %d]\n', b, s);
+        for c = 1:n_compartments
+            fprintf('  %s: %.4f -> %.4f S/m  (+%.2f%%)\n', ...
+                compartment_names{c}, ci_cord(c), ci_pert(c), delta_row(c)*100);
+        end
 
-        % Build volume conductor with perturbed conductivities
-        vol_pert      = vol_base;
-        vol_pert.cond = perturbed_cond;
+        % Update volume conductor conductivities
+        vol_pert              = vol_nominal;
+        vol_pert.conductivity = [ci_pert; co_cord];
 
-        for a = 1:numel(arrays)
-            arr_label = arrays{a}.label;
-            grad      = ft_convert_units(arrays{a}.grad, 'm');
+        for a = 1:numel(sensor_arrays)
+            array_name = sensor_arrays{a};
+            sens_curr  = sensor_structs{a};
 
-            outfile = fullfile(save_subdir, sprintf( ...
+            outfile = fullfile(outdir, sprintf( ...
                 'leadfield_%s_bem_cond_bundle%d_shift%d_%s.mat', ...
-                geom_short, b, s, arr_label));
+                geom_short, b, s, array_name));
 
             if isfile(outfile)
                 fprintf('  Already exists: bundle%d_shift%d_%s — skipping.\n', ...
-                    b, s, arr_label);
+                    b, s, array_name);
                 continue
             end
 
-            % Compute BEM leadfield using HBF
+            fprintf('  Computing: %s array...\n', array_name);
+
             cfg             = [];
-            cfg.sourcemodel = sources;
+            cfg.sourcemodel = sources_spine;
             cfg.headmodel   = vol_pert;
-            cfg.grad        = grad;
             cfg.reducerank  = 'no';
             cfg.channel     = 'all';
             cfg.normalize   = 'no';
+            cfg.dipoleunit  = 'nA*m';   % requires patch to ft_prepare_leadfield
+                                        % see run_bem_leadfields.m for details
 
-            lf_ft = ft_prepare_leadfield(cfg);
+            if isElec
+                cfg.elec = sens_curr;
+            else
+                cfg.grad = sens_curr;
+            end
 
-            % Scale T/nAm → fT/nAm (patch-dependent — see run_bem_leadfields.m)
-            scale = 1e15;
-            for src_i = 1:numel(lf_ft.leadfield)
-                if ~isempty(lf_ft.leadfield{src_i})
-                    lf_ft.leadfield{src_i} = lf_ft.leadfield{src_i} * scale;
+            leadfield_cord = ft_prepare_leadfield(cfg);
+
+            % Scale T/nAm → fT/nAm
+            for src_i = 1:numel(leadfield_cord.leadfield)
+                if ~isempty(leadfield_cord.leadfield{src_i})
+                    leadfield_cord.leadfield{src_i} = ...
+                        leadfield_cord.leadfield{src_i} * 1e15;
                 end
             end
 
-            lf_ft.units_out         = 'fT/nAm';
-            lf_ft.model             = 'bem_cond';
-            lf_ft.geometry          = geom_name;
-            lf_ft.array             = arr_label;
-            lf_ft.cond_bundle       = b;
-            lf_ft.cond_shift        = s;
-            lf_ft.nominal_cond      = nominal_cond;
-            lf_ft.perturbed_cond    = perturbed_cond;
-            lf_ft.cond_delta        = cond_shifts{b}(s, :);
+            leadfield_cord.units_out      = 'fT/nAm';
+            leadfield_cord.model          = 'bem_cond';
+            leadfield_cord.geometry       = filename;
+            leadfield_cord.array          = array_name;
+            leadfield_cord.cond_bundle    = b;
+            leadfield_cord.cond_shift     = s;
+            leadfield_cord.nominal_ci     = ci_cord;
+            leadfield_cord.nominal_co     = co_cord;
+            leadfield_cord.perturbed_ci   = ci_pert;
+            leadfield_cord.cond_delta_pct = delta_row * 100;   % % increase per compartment
 
-            leadfield_cord = lf_ft;
             save(outfile, 'leadfield_cord', '-v7.3');
             fprintf('  Saved: %s\n', outfile);
         end
+
+        fprintf('\n');
     end
 end
 
-fprintf('\n=== run_conductivity_perturbation complete ===\n');
-fprintf('Output: %s\n', save_subdir);
-fprintf('Next: set have_bem_cond = true in pt_load_leadfields.m\n');
+fprintf('=== run_conductivity_perturbation complete ===\n');
+fprintf('Output: %s\n', outdir);
+fprintf('Next: set have_bem_cond = true and bem_cond_path in pt_load_leadfields.m\n');
