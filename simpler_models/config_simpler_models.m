@@ -29,22 +29,22 @@
 % One entry per geometry variant — add as many as you have.
 
 geometry_names = { ...
-    'experimental', ...       % SET THIS: e.g. 'experimental', 'anatom_full_realistic'
+    'original_source_Z_p6mm', ...       % SET THIS: e.g. 'experimental', 'anatom_full_realistic'
 };
 
 % Display labels for figures — one per geometry name
 geometry_display = { ...
-    'Experimental', ...       % SET THIS
+    'Z-p6mm', ...       % SET THIS
 };
 
 % Short labels for heatmap annotation — one per geometry name
 geometry_short = { ...
-    'Exp', ...                % SET THIS
+    'Z-p6mm', ...                % SET THIS
 };
 
 % PATH TO GEOMETRY .mat FILES
 
-geoms_path = 'D:\Simulations\for_meaghan\geoms_biot';   % SET THIS: path to folder containing geometries_*.mat files
+geoms_path = 'D:\Simulations\Pertubations\geometries';   % SET THIS: path to folder containing geometries_*.mat files
 
 % LEADFIELD FOLDER PATHS
 % Define a path for each method you have computed.
@@ -67,10 +67,10 @@ geoms_path = 'D:\Simulations\for_meaghan\geoms_biot';   % SET THIS: path to fold
 %        Expected filename pattern: leadfield_<geometry>_sphere_<array>.mat
 %        All files in a single flat folder (no subfolders)
 
-bem_fields_base    = '';   % SET THIS — always required
+bem_fields_base    = 'D:\Simulations\Pertubations\fields\bem';   % SET THIS — always required
 fem_fields_base    = '';   % SET THIS — leave '' if FEM not available
 bslaw_fields_base  = '';   % SET THIS — leave '' if Biot-Savart not computed
-sphere_fields_base = '';   % SET THIS — flat folder with sphere leadfield .mat files
+sphere_fields_base = 'D:\Simulations\Pertubations\fields\single_sphere';   % SET THIS — flat folder with sphere leadfield .mat files
 
 % Biot-Savart sensitivity leadfields — produced by run_biot_savart_sensitivity.m
 % Flat folder containing sensor_original and sensor_bundle<b>_shift<s> files.
@@ -78,7 +78,7 @@ sphere_fields_base = '';   % SET THIS — flat folder with sphere leadfield .mat
 bslaw_sensitivity_fields_base = '';   % SET THIS — leave '' to skip sensitivity analysis
 
 % OUTPUT PATH
-save_base_dir  = '';   % SET THIS: base path for saving all figures
+save_base_dir  = 'D:\Simulations\Pertubations\results';   % SET THIS: base path for saving all figures
 
 % TOPOPLOT SOURCE INDEX
 topoplot_source_idx = 55;   % SET THIS: source index for topoplot figures
