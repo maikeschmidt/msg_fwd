@@ -224,23 +224,10 @@ fprintf('\n');
 
 
 % =========================================================================
-% STEP 5: Build nominal BEM head model (once)
+% STEP 5: Compute leadfields for each conductivity perturbation
 % =========================================================================
-
-fprintf('Building nominal BEM head model...\n');
-
-cfg_hm              = [];
-cfg_hm.method       = 'hbf';       % change to 'bem_hbf' if needed
-cfg_hm.conductivity = [ci_cord; co_cord];
-cfg_hm.checkmesh    = 'false';
-
-vol_nominal = ft_prepare_headmodel(cfg_hm, bnd_cord);
-fprintf('  Done.\n\n');
-
-
-% =========================================================================
-% STEP 6: Compute leadfields for each conductivity perturbation
-% =========================================================================
+% NOTE: ft_prepare_headmodel (HBF) bakes conductivity into the BEM transfer
+% matrices — it must be called separately for every perturbation.
 
 geom_short  = regexprep(filename, '^geometries[_-]?', '');
 outdir      = fullfile(lf_save_path, filename);
@@ -256,9 +243,9 @@ for b = 1:n_bundles
 
         % co of each compartment = ci of the torso (outermost), except
         % torso itself whose co is always 0.
-        torso_ci_pert         = ci_pert(end);
-        co_pert               = repmat(torso_ci_pert, 1, n_compartments);
-        co_pert(end)          = 0;   % torso outer boundary always 0
+        torso_ci_pert = ci_pert(end);
+        co_pert       = repmat(torso_ci_pert, 1, n_compartments);
+        co_pert(end)  = 0;   % torso outer boundary always 0
 
         % Print exact perturbation for traceability
         fprintf('[Bundle %d  Shift %d]\n', b, s);
@@ -268,9 +255,15 @@ for b = 1:n_bundles
                 co_cord(c), co_pert(c));
         end
 
-        % Update volume conductor conductivities
-        vol_pert              = vol_nominal;
-        vol_pert.conductivity = [ci_pert; co_pert];
+        % Build BEM head model with perturbed conductivities.
+        % Must be called per perturbation — conductivity is baked into
+        % the HBF transfer matrices during ft_prepare_headmodel.
+        fprintf('  Building BEM (bundle%d_shift%d)...\n', b, s);
+        cfg_hm              = [];
+        cfg_hm.method       = 'hbf';       % change to 'bem_hbf' if needed
+        cfg_hm.conductivity = [ci_pert; co_pert];
+        cfg_hm.checkmesh    = 'false';
+        vol_pert = ft_prepare_headmodel(cfg_hm, bnd_cord);
 
         for a = 1:numel(sensor_arrays)
             array_name = sensor_arrays{a};
