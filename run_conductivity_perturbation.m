@@ -250,20 +250,27 @@ for b = 1:n_bundles
     for s = 1:n_shifts
 
         % Perturbed conductivities
-        delta_row      = cond_deltas{b}(s, :);
-        ci_pert        = ci_cord .* (1 + delta_row);
-        ci_pert        = max(ci_pert, 1e-4);   % clamp to avoid near-zero
+        delta_row = cond_deltas{b}(s, :);
+        ci_pert   = ci_cord .* (1 + delta_row);
+        ci_pert   = max(ci_pert, 1e-4);   % clamp to avoid near-zero
+
+        % co of each compartment = ci of the torso (outermost), except
+        % torso itself whose co is always 0.
+        torso_ci_pert         = ci_pert(end);
+        co_pert               = repmat(torso_ci_pert, 1, n_compartments);
+        co_pert(end)          = 0;   % torso outer boundary always 0
 
         % Print exact perturbation for traceability
         fprintf('[Bundle %d  Shift %d]\n', b, s);
         for c = 1:n_compartments
-            fprintf('  %s: %.4f -> %.4f S/m  (+%.2f%%)\n', ...
-                compartment_names{c}, ci_cord(c), ci_pert(c), delta_row(c)*100);
+            fprintf('  %s: ci %.4f -> %.4f S/m  (+%.2f%%)   co %.4f -> %.4f S/m\n', ...
+                compartment_names{c}, ci_cord(c), ci_pert(c), delta_row(c)*100, ...
+                co_cord(c), co_pert(c));
         end
 
         % Update volume conductor conductivities
         vol_pert              = vol_nominal;
-        vol_pert.conductivity = [ci_pert; co_cord];
+        vol_pert.conductivity = [ci_pert; co_pert];
 
         for a = 1:numel(sensor_arrays)
             array_name = sensor_arrays{a};
@@ -315,6 +322,7 @@ for b = 1:n_bundles
             leadfield_cord.nominal_ci     = ci_cord;
             leadfield_cord.nominal_co     = co_cord;
             leadfield_cord.perturbed_ci   = ci_pert;
+            leadfield_cord.perturbed_co   = co_pert;
             leadfield_cord.cond_delta_pct = delta_row * 100;   % % increase per compartment
 
             save(outfile, 'leadfield_cord', '-v7.3');
