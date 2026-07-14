@@ -1,5 +1,13 @@
-function plot_topoplot_eeg(electrode_pos, values)
+function plot_topoplot_eeg(electrode_pos, values, clim)
     % Create interpolated topoplot for EEG data on the back of torso
+    %
+    % clim is optional. plot_topoplot_publication has always passed it, but the
+    % signature only declared two inputs, so every EEG topoplot failed with
+    % "Too many input arguments" — the EEG path had simply never been exercised.
+
+    if nargin < 3 || isempty(clim)
+        clim = [];
+    end
 
     n_electrodes = size(electrode_pos, 1);
     n_values = numel(values);
@@ -30,9 +38,16 @@ function plot_topoplot_eeg(electrode_pos, values)
     axis equal tight;
     % after plotting and before hold off
     set(gca, 'XTick', [], 'YTick', []);  % remove numbers along X and Y
-    % xlabel('X (m)', 'FontSize', 10);  % removed
-    % ylabel('Y (m)', 'FontSize', 10);  % removed
-    colormap(jet);
+
+    % Scope the colourmap to THIS axes. A bare colormap(jet) sets it on the
+    % whole figure, so in a mixed figure (MSG rows + an ESG row) it would
+    % repaint the MEG panels' diverging map with jet too.
+    colormap(gca, jet);
+
+    if ~isempty(clim) && clim(1) < clim(2)
+        caxis(gca, clim);
+    end
+
     cb = colorbar;
     cb.Label.String = 'Leadfield (uV)';
     set(gca, 'FontSize', 10);
