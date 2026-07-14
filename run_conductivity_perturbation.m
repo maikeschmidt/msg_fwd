@@ -45,8 +45,8 @@ fprintf('=== BEM Conductivity Perturbation ===\n\n');
 
 % USER CONFIGURATION — set these before running
 
-geoms_path   = 'D:\Simulations\Pertubations\geometries';          % SET THIS
-lf_save_path = 'D:\Simulations\Pertubations\fields\bem_cond_msg';     % SET THIS
+geoms_path   = 'D:\Simulations\Pertubations\geoms_elec';          % SET THIS
+lf_save_path = 'D:\Simulations\Pertubations\fields\bem_cond_esg';     % SET THIS
 
 % Single geometry file to process (always the unshifted original)
 filename = 'geometries_original_source_original';   % SET THIS
