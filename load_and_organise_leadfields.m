@@ -186,13 +186,32 @@ for m = 1:numel(loaded_models)
         error('Expected 3 orientations, got %d for model: %s', n_ori, model_key);
     end
 
-    % Detect sensor modality — EEG keys end in 'elec_back' or 'elec_front'
+    % Detect sensor modality from the model KEY, never from the channel count.
+    % EEG keys end in 'elec_back' or 'elec_front'.
+    %
+    % Deliberately not inferred from divisibility: an ESG array of 342
+    % electrodes is 2 axes x 171, but 342 also divides by 3, so a divisibility
+    % test would read it as 3 axes x 114 and silently slice every leadfield at
+    % the wrong boundaries. The key tells us the modality unambiguously.
     if endsWith(model_key, 'elec_back') || endsWith(model_key, 'elec_front')
-        n_sensor_axes = 2;
+        n_sensor_axes = 2;      % ESG: tangential + radial electrode sets
         is_meg        = false;
     else
-        n_sensor_axes = 3;
+        n_sensor_axes = 3;      % MSG: triaxial magnetometer array
         is_meg        = true;
+    end
+
+    % The channel count must agree with the modality implied by the key. If it
+    % does not, the key and the file disagree about what this array is.
+    if mod(n_channels_total, n_sensor_axes) ~= 0
+        if is_meg
+            implied = 'MSG (3 axes)';
+        else
+            implied = 'ESG (2 axes)';
+        end
+        error(['%s: %d channels do not divide into %d sensor axes.\n' ...
+               'The model key implies %s, but the leadfield does not match.'], ...
+               model_key, n_channels_total, n_sensor_axes, implied);
     end
 
     n_sensors_per_axis = n_channels_total / n_sensor_axes;
