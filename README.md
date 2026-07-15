@@ -68,6 +68,8 @@ msg_fwd/
 ├── load_and_organise_leadfields.m   — step 1: load and reshape all leadfields
 ├── run_bem_leadfields.m             — BEM leadfield computation (all models)
 ├── run_fem_leadfields.m             — FEM leadfield computation (all models)
+├── run_conductivity_perturbation.m  — BEM leadfields with perturbed tissue
+│                                      conductivities (used by msg_pert)
 │
 ├── plot_absmax_curves.m             — peak amplitude vs distance plots
 ├── plot_pairwise_heatmaps.m         — RE and r² heatmaps (all model pairs)
@@ -96,8 +98,14 @@ msg_fwd/
 │
 ├── functions/
 │   ├── compare_results.m            — pairwise RE and r² computation
+│   ├── compute_metrics.m            — RE / r² metric helpers
 │   ├── organise_leadfield.m         — reshape raw leadfield into orientation struct
-│   ├── plot_topoplot_publication.m  — publication-style sensor topoplot
+│   ├── plot_topoplot_publication.m  — publication-style sensor topoplot (dispatcher)
+│   ├── plot_topoplot_meg.m          — MEG/OPM topoplot renderer
+│   ├── plot_topoplot_eeg.m          — EEG/ESG topoplot renderer
+│   ├── ft_headmodel_hbf.m           — FieldTrip ↔ HBF BEM head model wrapper
+│   ├── get_experimental_split.m     — anterior/posterior split of an experimental array
+│   ├── split_experimental_lf.m      — split an experimental leadfield into front/back
 │   ├── getfield_safe.m              — safe struct field access with default
 │   └── convert_duneuro_to_fieldtrip.m — DUNEuro → FieldTrip conversion
 │
@@ -155,7 +163,7 @@ Also update `model_names` and `model_types` to match your geometry variants.
 
 ```matlab
 run_bem_leadfields           % BEM (all models, front + back arrays)
-batch_fem_forward_all_models % FEM (requires DUNEuro + ISO2Mesh)
+run_fem_leadfields           % FEM (requires DUNEuro + ISO2Mesh)
 ```
 
 For the simpler reference models:
@@ -201,7 +209,7 @@ Sensor array detection is automatic (priority order):
 | 2 | `front/back_coils_3axis` | Standard triaxial OPM arrays |
 | 3 | `front/back_coils_2axis` | Standard biaxial arrays |
 
-**FEM** (`batch_fem_forward_all_models.m`) uses DUNEuro via `fem_calc_fwds`.
+**FEM** (`run_fem_leadfields.m`) uses DUNEuro via `fem_calc_fwds`.
 The pipeline generates tetrahedral volume meshes with TetGen via ISO2Mesh
 and applies the Sarvas primary field correction. FEM output is scaled to
 fT/nAm for consistency with BEM.
@@ -261,6 +269,12 @@ msg_pert generates shifted geometry files
     → user runs BEM/FEM/Biot-Savart/sphere scripts here
     → user returns to msg_pert for analysis
 ```
+
+Tissue-conductivity perturbation is generated here by
+`run_conductivity_perturbation.m`, which mirrors `run_bem_leadfields.m` but
+randomly scales each compartment's conductivity per realisation (rebuilding the
+HBF head model each time, since conductivity is baked into the BEM transfer
+matrices). Its output feeds the conductivity mode of the msg_pert analysis.
 
 See https://github.com/maikeschmidt/msg_pert for setup and usage.
 
