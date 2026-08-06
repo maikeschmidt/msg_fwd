@@ -200,7 +200,9 @@ fprintf(fcsv, ['reference_model,comparison_model,orientation,n_sources,' ...
     're_median,re_ci_lo,re_ci_hi,re_iqr_lo,re_iqr_hi,re_min,re_max,re_max_pos_mm,' ...
     'resym_median,' ...
     'r2_median,r2_ci_lo,r2_ci_hi,r2_iqr_lo,r2_iqr_hi,r2_min,r2_max,r2_min_pos_mm,' ...
-    'rdm_median,lnmag_median\n']);
+    'rdm_median,rdm_ci_lo,rdm_ci_hi,' ...
+    'lnmag_median,lnmag_ci_lo,lnmag_ci_hi,' ...
+    'gain_pct,gain_pct_lo,gain_pct_hi,re_predicted_from_gain_rdm\n']);
 
 divider = repmat('-', 1, 100);
 
@@ -251,6 +253,17 @@ for ii = 1:n_tbl
 
             re_s  = summarise(re_vec,  n_boot, ci_level);
             r2_s  = summarise(r2_vec,  n_boot, ci_level);
+            rdm_s = summarise(rdm_vec, n_boot, ci_level);
+            lnm_s = summarise(lnm_vec, n_boot, ci_level);
+
+            % Gain factor implied by lnMAG, which is what actually gets
+            % quoted in prose: exp(lnMAG) = ||L2|| / ||L1||, so
+            % (exp(lnMAG) - 1) * 100 is the percentage amplitude change.
+            % This is the number to compare against statements such as
+            % "segmented models increase LR amplitude by 35-72%".
+            gain_pct    = (exp(lnm_s.med)   - 1) * 100;
+            gain_pct_lo = (exp(lnm_s.ci(1)) - 1) * 100;
+            gain_pct_hi = (exp(lnm_s.ci(2)) - 1) * 100;
 
             [~, re_max_idx] = max(re_vec, [], 'omitnan');
             [~, r2_min_idx] = min(r2_vec, [], 'omitnan');
@@ -266,8 +279,26 @@ for ii = 1:n_tbl
             fprintf(fid, '    r2       median %7.4f   95%% CI [%7.4f, %7.4f]   IQR [%7.4f, %7.4f]   range [%7.4f, %7.4f]   min at %d mm\n', ...
                 r2_s.med, r2_s.ci(1), r2_s.ci(2), r2_s.iqr(1), r2_s.iqr(2), ...
                 r2_s.min, r2_s.max, r2_min_mm);
-            fprintf(fid, '    RDM      median %7.4f      lnMAG median %+7.4f\n', ...
-                median(rdm_vec, 'omitnan'), median(lnm_vec, 'omitnan'));
+            fprintf(fid, '    RDM      median %7.4f   95%% CI [%7.4f, %7.4f]   (topography only)\n', ...
+                rdm_s.med, rdm_s.ci(1), rdm_s.ci(2));
+            fprintf(fid, '    lnMAG    median %+7.4f   95%% CI [%+7.4f, %+7.4f]   (gain only)\n', ...
+                lnm_s.med, lnm_s.ci(1), lnm_s.ci(2));
+            fprintf(fid, '    -> amplitude change %+7.2f%%   95%% CI [%+7.2f%%, %+7.2f%%]\n', ...
+                gain_pct, gain_pct_lo, gain_pct_hi);
+
+            % Decomposition check. For a difference that is PURE GAIN, RE is
+            % predicted by the gain alone; adding the topography term in
+            % quadrature should recover the observed RE. When these agree,
+            % the difference between the two models is an amplitude
+            % rescaling with essentially unchanged field pattern.
+            re_pred = hypot(abs(gain_pct), rdm_s.med * 100);
+            fprintf(fid, '    -> RE predicted from gain+RDM %7.3f vs observed %7.3f', ...
+                re_pred, re_s.med);
+            if abs(re_pred - re_s.med) < 0.1 * max(re_s.med, eps)
+                fprintf(fid, '   [PURE GAIN: pattern essentially unchanged]\n');
+            else
+                fprintf(fid, '   [topography contributes materially]\n');
+            end
 
             fprintf(fcsv, '%s,%s,%s,%d,', ...
                 valid_names{ii}, valid_names{jj}, ori_label, sum(~isnan(re_vec)));
@@ -278,8 +309,10 @@ for ii = 1:n_tbl
             fprintf(fcsv, '%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%d,', ...
                 r2_s.med, r2_s.ci(1), r2_s.ci(2), r2_s.iqr(1), r2_s.iqr(2), ...
                 r2_s.min, r2_s.max, r2_min_mm);
-            fprintf(fcsv, '%.6f,%.6f\n', ...
-                median(rdm_vec, 'omitnan'), median(lnm_vec, 'omitnan'));
+            fprintf(fcsv, '%.6f,%.6f,%.6f,', rdm_s.med, rdm_s.ci(1), rdm_s.ci(2));
+            fprintf(fcsv, '%.6f,%.6f,%.6f,', lnm_s.med, lnm_s.ci(1), lnm_s.ci(2));
+            fprintf(fcsv, '%.4f,%.4f,%.4f,%.4f\n', ...
+                gain_pct, gain_pct_lo, gain_pct_hi, re_pred);
         end
     end
 end

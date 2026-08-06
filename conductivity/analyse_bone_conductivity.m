@@ -180,6 +180,15 @@ have_meth = {have_bem, have_fem};
 A_re  = nan(2, n_ori, n_vals);
 A_r2  = nan(2, n_ori, n_vals);
 
+% Per-source decomposition store, so the conductivity effect can be shown
+% split into amplitude and topography exactly as for CSF and bone geometry
+A_src = struct('dist', []);
+for mm = 1:2
+    A_src.(methods{mm}) = struct( ...
+        're',   nan(n_ori, 0, n_vals), 'gain', nan(n_ori, 0, n_vals), ...
+        'rdm',  nan(n_ori, 0, n_vals), 'rsq',  nan(n_ori, 0, n_vals));
+end
+
 for m = 1:2
     meth = methods{m};
     hv   = have_meth{m};
@@ -205,6 +214,13 @@ for m = 1:2
             keep = 2:(size(LA,2)-1);
             A_re(m, oi, v) = median(M.re(keep),  'omitnan');
             A_r2(m, oi, v) = median(M.rsq(keep), 'omitnan');
+
+            % Per-source decomposition, kept for the extreme-sigma figure
+            A_src.(meth).re(oi, :, v)   = M.re(keep);
+            A_src.(meth).gain(oi, :, v) = (exp(M.lnmag(keep)) - 1) * 100;
+            A_src.(meth).rdm(oi, :, v)  = M.rdm(keep);
+            A_src.(meth).rsq(oi, :, v)  = M.rsq(keep);
+            A_src.dist                  = keep * src_spacing_mm;
 
             fprintf(fid, '          %8.5f %10.3f %10.5f\n', ...
                 sigma(v), A_re(m,oi,v), A_r2(m,oi,v));
@@ -394,6 +410,47 @@ for oi = 1:n_ori
     axis square; set(gca,'FontSize',9,'TickDir','out');
 end
 save_fig(fig, save_dir, sprintf('bone_cond_cross_matrix_axis%d', target_axis));
+
+
+%% DECOMPOSITION FIGURE — extreme conductivities vs the manuscript value
+% Shows whether changing bone conductivity rescales the field or reshapes
+% it, in the same four-row layout as plot_decomposition.m and
+% analyse_csf_effect.m so all three are directly comparable.
+
+[~, i_lo] = min(sigma);
+[~, i_hi] = max(sigma);
+
+for m = 1:2
+    meth = methods{m};
+    if ~have_meth{m}(ref_idx) || isempty(A_src.dist), continue; end
+    if ~(have_meth{m}(i_lo) && have_meth{m}(i_hi)), continue; end
+
+    D = struct('label', {}, 're', {}, 'gain', {}, 'rdm', {}, 'rsq', {});
+    picks = [i_lo, i_hi];
+    for k = 1:numel(picks)
+        v = picks(k);
+        D(k).label = sprintf('\\sigma = %.4f S/m', sigma(v));
+        D(k).re    = A_src.(meth).re(:, :, v);
+        D(k).gain  = A_src.(meth).gain(:, :, v);
+        D(k).rdm   = A_src.(meth).rdm(:, :, v);
+        D(k).rsq   = A_src.(meth).rsq(:, :, v);
+    end
+
+    popts = struct( ...
+        'dist',               A_src.dist, ...
+        'orientation_labels', {orientation_labels}, ...
+        'ori_titles',         ori_titles, ...
+        'title',              sprintf(['%s: extreme bone conductivities vs ' ...
+                                       'the manuscript value %.5f S/m — axis %d'], ...
+                                       upper(meth), sig_ref, target_axis), ...
+        'colors',             ratio_colors, ...
+        'save_dir',           save_dir, ...
+        'save_name',          sprintf('bone_cond_decomposition_%s_axis%d', ...
+                                      meth, target_axis));
+
+    plot_metric_decomposition(D, popts);
+    fprintf('  Saved: bone_cond_decomposition_%s_axis%d\n', meth, target_axis);
+end
 
 fprintf('\n=== Complete ===\n');
 fprintf('Report : %s\n', rep_file);
