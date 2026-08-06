@@ -62,11 +62,11 @@ fprintf('=== Bone conductivity sensitivity analysis ===\n\n');
 
 % USER CONFIGURATION
 
-bem_dir = 'D:\Simulations\BoneCond\fields\bem\geometries_original_source_original';  % SET THIS
-fem_dir = 'D:\Simulations\BoneCond\fields\fem\geometries_original_source_original';  % SET THIS
+bem_dir = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\bone_cond_change\bem\geometries_anatom_full_realistic';  % SET THIS
+fem_dir = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\bone_cond_change\fem\geometries_anatom_full_realistic';  % SET THIS
 save_dir = fullfile(save_base_dir, 'bone_conductivity');                             % SET THIS
 
-geom_short  = 'original_source_original';   % SET THIS: matches the filenames
+geom_short  = 'anatom_full_realistic';   % SET THIS: matches the filenames
 array_name  = 'back';                       % SET THIS: 'back' | 'front'
 target_axis = 3;                            % radial axis for OPM
 
