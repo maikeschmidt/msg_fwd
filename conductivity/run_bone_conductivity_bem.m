@@ -69,9 +69,18 @@ cd('D:\');          % SET THIS
 Metadata;           % SET THIS
 cr_add_functions;
 
+% Which sensor arrays to compute. MUST include whatever array_name is set
+% to in analyse_bone_conductivity (default 'back'). Ignored when the
+% geometry carries an experimental array.
+sensor_arrays_wanted = {'back'};   % {'back'} or {'front','back'}
+
 % BONE CONDUCTIVITY SWEEP (S/m)
 % Brackets the reviewers' 0.004-0.02 range. Includes the manuscript value
 % 0.00825 and both reviewer endpoints as exact grid points.
+%
+% MUST MATCH run_bone_conductivity_fem.m exactly, or the matched-pair and
+% cross-conductivity analyses cannot be formed. If you shorten one, shorten
+% the other identically.
 bone_cond_values = [0.002, 0.004, 0.006, 0.00825, 0.010, ...
                     0.0125, 0.015, 0.020, 0.025, 0.030, 0.040];
 
@@ -162,8 +171,22 @@ else
     front_sens = ft_convert_units(front_sens, 'm');
     back_sens  = ft_convert_units(back_sens,  'm');
 
-    sensor_arrays  = {'front', 'back'};
-    sensor_structs = {front_sens, back_sens};
+    % Only keep the arrays that will actually be analysed — see
+    % sensor_arrays_wanted. Each extra array is another leadfield
+    % computation per conductivity value.
+    sensor_arrays  = {};
+    sensor_structs = {};
+    if any(strcmp(sensor_arrays_wanted, 'front'))
+        sensor_arrays{end+1}  = 'front';
+        sensor_structs{end+1} = front_sens;
+    end
+    if any(strcmp(sensor_arrays_wanted, 'back'))
+        sensor_arrays{end+1}  = 'back';
+        sensor_structs{end+1} = back_sens;
+    end
+    if isempty(sensor_arrays)
+        error('sensor_arrays_wanted matched no available array.');
+    end
 end
 
 

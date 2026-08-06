@@ -85,7 +85,12 @@ target_axis = 3;                            % radial axis for OPM
 
 n_sensor_axes = 3;
 is_meg        = true;
-unit_scale    = 1;
+
+% NOTE: unit scaling is NOT a single constant. BEM and FEM leadfields are
+% saved in different units depending on which script produced them, so the
+% factor is resolved per file by lf_unit_scale. Hardcoding 1 here made the
+% BEM leadfield 1e15x too small, which produced an Eq 13 relative error of
+% exactly 100% flat across every source while leaving r2 looking healthy.
 
 n_boot   = 10000;
 ci_level = 0.95;
@@ -107,8 +112,10 @@ for v = 1:numel(variants)
                'Run run_fem_leadfields_csf.m first.'], f);
     end
     d = load(f, 'leadfield_ft');
+    [us, why] = lf_unit_scale(d.leadfield_ft, 'fem', is_meg);
+    fprintf('  FEM %-6s unit scale %g  (%s)\n', variants{v}, us, why);
     [lf, am] = organise_leadfield(lf, am, d.leadfield_ft, ...
-        ['fem_' variants{v}], unit_scale, orientation_labels, ...
+        ['fem_' variants{v}], us, orientation_labels, ...
         n_sensor_axes, is_meg);
 end
 
@@ -116,10 +123,12 @@ have_bem = false;
 if ~isempty(bem_file) && isfile(bem_file)
     d  = load(bem_file);
     fn = fieldnames(d);
-    lfv = fn{find(cellfun(@(x) isstruct(d.(x)) && isfield(d.(x),'leadfield'), fn), 1)};
-    if ~isempty(lfv)
-        [lf, am] = organise_leadfield(lf, am, d.(lfv), 'bem', ...
-            unit_scale, orientation_labels, n_sensor_axes, is_meg);
+    vi = find(cellfun(@(x) isstruct(d.(x)) && isfield(d.(x),'leadfield'), fn), 1);
+    if ~isempty(vi)
+        [us, why] = lf_unit_scale(d.(fn{vi}), 'bem', is_meg);
+        fprintf('  BEM        unit scale %g  (%s)\n', us, why);
+        [lf, am] = organise_leadfield(lf, am, d.(fn{vi}), 'bem', ...
+            us, orientation_labels, n_sensor_axes, is_meg);
         have_bem = true;
     end
 end
