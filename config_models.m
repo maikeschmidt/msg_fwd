@@ -106,7 +106,7 @@
 
 forward_fields_base = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\og_fields\';   % SET THIS: path to leadfield .mat files
 geoms_path          = 'D:\Simulations\Paper_1\but_actualy\geometries';   % SET THIS: path to geometry .mat files
-save_base_dir       = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\og_fields_analysis_rerun';   % SET THIS: base path for saving all figures
+save_base_dir       = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\CSF';   % SET THIS: base path for saving all figures
 
 
 % MODEL NAMES AND TYPES
