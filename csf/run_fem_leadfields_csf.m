@@ -70,12 +70,12 @@ cr_add_functions;   % initialise MSG toolbox and HBF library paths
 
 % USER CONFIGURATION
 
-geoms_path  = 'D:\Simulations\Pertubations\geometries';   % SET THIS
-output_base = 'D:\Simulations\CSF\fields\fem';            % SET THIS
+geoms_path  = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\og_geometries';   % SET THIS
+output_base = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\CSF\fields\fem';            % SET THIS
 
 % The CSF analysis runs on the ORIGINAL anatomical model only.
 filenames = { ...
-    'geometries_original_source_original', ...
+    'geometries_anatom_full_realistic', ...
 };
 
 % CSF layer settings
