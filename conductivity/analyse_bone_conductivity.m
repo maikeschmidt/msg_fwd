@@ -181,12 +181,16 @@ A_re  = nan(2, n_ori, n_vals);
 A_r2  = nan(2, n_ori, n_vals);
 
 % Per-source decomposition store, so the conductivity effect can be shown
-% split into amplitude and topography exactly as for CSF and bone geometry
+% split into amplitude and topography exactly as for CSF and bone geometry.
+%
+% Allocated LAZILY, on the first pair actually computed, because the source
+% count is not known until then. Preallocating with zero columns does not
+% work: MATLAB grows a trailing dimension on assignment but will not grow a
+% middle one, so writing a 1-by-n_src row into a 1-by-0 slot errors with
+%   "size of the left side is 1-by-0 and the size of the right side is 1-by-N"
 A_src = struct('dist', []);
 for mm = 1:2
-    A_src.(methods{mm}) = struct( ...
-        're',   nan(n_ori, 0, n_vals), 'gain', nan(n_ori, 0, n_vals), ...
-        'rdm',  nan(n_ori, 0, n_vals), 'rsq',  nan(n_ori, 0, n_vals));
+    A_src.(methods{mm}) = struct('re', [], 'gain', [], 'rdm', [], 'rsq', []);
 end
 
 for m = 1:2
@@ -215,12 +219,25 @@ for m = 1:2
             A_re(m, oi, v) = median(M.re(keep),  'omitnan');
             A_r2(m, oi, v) = median(M.rsq(keep), 'omitnan');
 
-            % Per-source decomposition, kept for the extreme-sigma figure
-            A_src.(meth).re(oi, :, v)   = M.re(keep);
-            A_src.(meth).gain(oi, :, v) = (exp(M.lnmag(keep)) - 1) * 100;
-            A_src.(meth).rdm(oi, :, v)  = M.rdm(keep);
-            A_src.(meth).rsq(oi, :, v)  = M.rsq(keep);
-            A_src.dist                  = keep * src_spacing_mm;
+            % Per-source decomposition, kept for the extreme-sigma figure.
+            % Allocate on first use, now that the source count is known.
+            if isempty(A_src.(meth).re)
+                for f = {'re','gain','rdm','rsq'}
+                    A_src.(meth).(f{1}) = nan(n_ori, numel(keep), n_vals);
+                end
+            end
+
+            if numel(keep) == size(A_src.(meth).re, 2)
+                A_src.(meth).re(oi, :, v)   = M.re(keep);
+                A_src.(meth).gain(oi, :, v) = (exp(M.lnmag(keep)) - 1) * 100;
+                A_src.(meth).rdm(oi, :, v)  = M.rdm(keep);
+                A_src.(meth).rsq(oi, :, v)  = M.rsq(keep);
+                A_src.dist                  = keep * src_spacing_mm;
+            else
+                warning(['[%s] sigma %.5f has %d sources, expected %d — ' ...
+                         'excluded from the decomposition figure.'], ...
+                         meth, sigma(v), numel(keep), size(A_src.(meth).re, 2));
+            end
 
             fprintf(fid, '          %8.5f %10.3f %10.5f\n', ...
                 sigma(v), A_re(m,oi,v), A_r2(m,oi,v));
@@ -423,6 +440,7 @@ save_fig(fig, save_dir, sprintf('bone_cond_cross_matrix_axis%d', target_axis));
 for m = 1:2
     meth = methods{m};
     if ~have_meth{m}(ref_idx) || isempty(A_src.dist), continue; end
+    if isempty(A_src.(meth).re), continue; end   % nothing stored for this solver
     if ~(have_meth{m}(i_lo) && have_meth{m}(i_hi)), continue; end
 
     D = struct('label', {}, 're', {}, 'gain', {}, 'rdm', {}, 'rsq', {});
