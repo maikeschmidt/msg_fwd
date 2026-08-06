@@ -111,14 +111,14 @@ for g = 1:n_geometries
                 L{k} = M;
             end
 
-            [re_mat, cc_mat] = compare_results(L);
+            [re_mat, cc_mat] = compare_results(L, metric_defaults());
 
             fig = figure('Color', 'w', 'Units', 'inches', ...
                 'Position', [1, 1, 7+n_arr_keys*0.6, 3.5+n_arr_keys*0.3]);
 
             % RE heatmap
             subplot(1, 2, 1);
-            re_pct = re_mat * 100;
+            re_pct = re_mat;   % already in percent
             imagesc(re_pct, [0, max(re_pct(:))]);
             colormap(gca, cool);
             cb = colorbar;
@@ -249,13 +249,13 @@ if have_bslaw && n_geometries > 1
                 L_bs{k} = M;
             end
 
-            [re_bs, cc_bs] = compare_results(L_bs);
+            [re_bs, cc_bs] = compare_results(L_bs, metric_defaults());
 
             fig = figure('Color', 'w', 'Units', 'inches', ...
                 'Position', [1, 1, 5+n_bs*0.8, 3+n_bs*0.6]);
 
             subplot(1, 2, 1);
-            re_pct = re_bs * 100;
+            re_pct = re_bs;   % already in percent
             imagesc(re_pct, [0, max(max(re_pct(:)), 0.01)]);
             colormap(gca, cool);
             cb = colorbar;

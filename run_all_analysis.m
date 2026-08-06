@@ -32,6 +32,43 @@
 %   Generate shifted geometry files in msg_pert, then run the relevant
 %   forward model scripts here, then return to msg_pert for analysis.
 %
+% NOTE — REVIEW-RESPONSE ANALYSES:
+%   The analyses added for the peer-review response are NOT part of this
+%   pipeline, because each depends on leadfields that must be computed
+%   first and that take hours to produce. Run them separately:
+%
+%     conductivity/  Bone conductivity sensitivity (Reviewers 1 and 3)
+%       1. run_bone_conductivity_bem
+%       2. run_bone_conductivity_fem
+%       3. analyse_bone_conductivity
+%
+%     convergence/   Mesh convergence (Reviewer 1; Reviewer 2 pts 7 and 3.2)
+%       1. run_fem_convergence        volume h-refinement sweep
+%       2. run_bem_convergence        surface refinement sweep
+%       3. analyse_convergence
+%       Both sweeps are resumable and ordered coarsest first.
+%
+%     csf/           CSF compartment in the FEM (Reviewer 1)
+%       1. run_fem_leadfields_csf     computes with AND without CSF
+%       2. analyse_csf_effect
+%
+%     stats/         Group statistics over replicate geometries (Reviewer 1)
+%       0. msg_coreg/repeatability/cr_repeat_coreg          collect coregs
+%          msg_coreg/repeatability/cr_build_coreg_geometries
+%          msg_coreg/warping/cr_generate_warps              30 warps
+%          msg_coreg/warping/cr_build_warp_geometries
+%       1. run BEM and FEM on every geometry produced above
+%       2. st_collect_replicates
+%       3. st_group_stats
+%
+% NOTE — METRIC DEFINITIONS:
+%   All RE and r² values everywhere in this toolbox now come from
+%   functions/lf_metrics.m, selected by functions/metric_defaults.m.
+%   Defaults are the manuscript definitions: Eq 13 relative error
+%   (L2 norm, normalised by the reference leadfield) and Eq 14 Pearson r².
+%   RE is returned IN PERCENT — plotting code must not rescale it.
+%   Verify with: tests/test_lf_metrics
+%
 % GENERAL NOTES:
 %   - All paths are configured in config_models.m — update that file first
 %   - plot_anatomical_figures does not depend on leadfields_organised.mat

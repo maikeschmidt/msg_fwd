@@ -20,8 +20,11 @@
 %   per_source_cc_re_overview_axis<N>.png/.fig
 %
 % METRIC DEFINITIONS:
-%   RE(s) = norm(B-A,1) / (norm(A,1) + norm(B,1))   [L1, symmetric, 0-0.5]
-%   CC(s) = (Pearson r)^2                             [squared, 0-1]
+%   RE(s) = norm(A-B,2) / norm(A,2) * 100           [manuscript Eq 13]
+%   CC(s) = (Pearson r)^2                           [manuscript Eq 14]
+%   Both are computed by lf_metrics.m and selected by metric_re_mode /
+%   metric_rsq_mode in config_models.m. Never redefine them here.
+%   RE is returned in PERCENT — do not rescale when plotting.
 %   Computed per source position, not as a median across sources.
 %
 % MODEL PAIRS CONFIGURATION:
@@ -148,24 +151,18 @@ for ax = 1:n_axes
         re_per_source = nan(n_pairs, n_src_ref);
 
         for p = 1:n_pairs
-            key_a = model_pairs{p, 1};
-            key_b = model_pairs{p, 2};
+            key_a = model_pairs{p, 1};   % reference (Eq 13 L1)
+            key_b = model_pairs{p, 2};   % comparison (Eq 13 L2)
 
-            n_src   = min(leadfields.(key_a).n_sources, ...
-                          leadfields.(key_b).n_sources);
-            n_trunc = min(min_sensors, ...
-                          min(numel(leadfields.(key_a).(ori){ax, 1}), ...
-                              numel(leadfields.(key_b).(ori){ax, 1})));
+            vopts = struct('vector_mode', 'orientation', ...
+                           'orientation',  ori, ...
+                           'min_sensors',  min_sensors);
 
-            for s = 1:n_src
-                vecA = leadfields.(key_a).(ori){ax, s}(1:n_trunc);
-                vecB = leadfields.(key_b).(ori){ax, s}(1:n_trunc);
+            [LA, LB, vinfo] = lf_pair_vectors(leadfields, key_a, key_b, ax, vopts);
+            M = lf_metrics_series(LA, LB, metric_opts);
 
-                re_per_source(p, s) = norm(vecB - vecA, 1) / ...
-                                      (norm(vecA, 1) + norm(vecB, 1));
-                tmp = corrcoef(vecA, vecB);
-                cc_per_source(p, s) = tmp(1, 2)^2;
-            end
+            re_per_source(p, 1:vinfo.n_src) = M.re;    % already in percent
+            cc_per_source(p, 1:vinfo.n_src) = M.rsq;
         end
 
         % Trim edge sources
@@ -229,7 +226,7 @@ for ax = 1:n_axes
 
         for p = 1:n_pairs
             col     = plot_colors(p, :);
-            h_re(p) = plot(ax_re, distances, re_plot(p, :) * 100, ...
+            h_re(p) = plot(ax_re, distances, re_plot(p, :), ...
                 '-', 'Color', col, 'LineWidth', pair_lw, ...
                 'Marker', plot_markers{p}, 'MarkerIndices', marker_idx, ...
                 'MarkerSize', pair_ms, 'MarkerFaceColor', col, ...
@@ -284,29 +281,23 @@ for ax = 1:n_axes
         re_per_source = nan(n_pairs, n_src_ref);
 
         for p = 1:n_pairs
-            key_a = model_pairs{p, 1};
-            key_b = model_pairs{p, 2};
+            key_a = model_pairs{p, 1};   % reference (Eq 13 L1)
+            key_b = model_pairs{p, 2};   % comparison (Eq 13 L2)
 
-            n_src   = min(leadfields.(key_a).n_sources, ...
-                          leadfields.(key_b).n_sources);
-            n_trunc = min(min_sensors, ...
-                          min(numel(leadfields.(key_a).(ori){ax, 1}), ...
-                              numel(leadfields.(key_b).(ori){ax, 1})));
+            vopts = struct('vector_mode', 'orientation', ...
+                           'orientation',  ori, ...
+                           'min_sensors',  min_sensors);
 
-            for s = 1:n_src
-                vecA = leadfields.(key_a).(ori){ax, s}(1:n_trunc);
-                vecB = leadfields.(key_b).(ori){ax, s}(1:n_trunc);
+            [LA, LB, vinfo] = lf_pair_vectors(leadfields, key_a, key_b, ax, vopts);
+            M = lf_metrics_series(LA, LB, metric_opts);
 
-                re_per_source(p, s) = norm(vecB - vecA, 1) / ...
-                                      (norm(vecA, 1) + norm(vecB, 1));
-                tmp = corrcoef(vecA, vecB);
-                cc_per_source(p, s) = tmp(1, 2)^2;
-            end
+            re_per_source(p, 1:vinfo.n_src) = M.re;    % already in percent
+            cc_per_source(p, 1:vinfo.n_src) = M.rsq;
         end
 
         src_range = 2:(n_src_ref - 1);
         cc_all_panels{ori_idx} = cc_per_source(:, src_range);
-        re_all_panels{ori_idx} = re_per_source(:, src_range) * 100;
+        re_all_panels{ori_idx} = re_per_source(:, src_range);
         distances_all{ori_idx} = src_range * src_spacing_mm;
     end
 

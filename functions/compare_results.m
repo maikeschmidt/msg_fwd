@@ -11,47 +11,64 @@
 % of models and integration with the MSG forward modelling pipeline.
 %
 % USAGE:
-%   [re, cc] = compare_results(L)
+%   [re, cc]        = compare_results(L)
+%   [re, cc, extra] = compare_results(L, opts)
 %
 % INPUT:
 %   L    - {1 x n_models} cell array, each cell containing a
 %           [n_sensors x n_sources] leadfield matrix. Sensors and sources
 %           need not be the same across cells — matrices are truncated to
 %           the minimum size before comparison.
+%   opts - (optional) metric options passed to lf_metrics:
+%             .re_mode   'eq13' (default) | 'symmetric'
+%             .rsq_mode  'pearson' (default) | 'determination'
+%           Pass config_models' metric_opts to stay consistent with the
+%           rest of the pipeline.
 %
 % OUTPUT:
-%   re   - [n_models x n_models] matrix of median relative error values.
-%           re(i,j) is the median RE between models i and j across all
-%           sources. RE(s) = norm(B-A,1) / (norm(A,1) + norm(B,1)).
-%           Symmetric, bounded [0, 0.5]. Diagonal = 0.
+%   re    - [n_models x n_models] median relative error, ALREADY IN PERCENT.
+%           Row i = REFERENCE model, column j = COMPARISON model.
+%           Diagonal = 0.
 %
-%   cc   - [n_models x n_models] matrix of median squared Pearson
-%           correlation values. cc(i,j) is the median R² between models
-%           i and j across all sources. Bounded [0, 1]. Diagonal = 1.
+%   cc    - [n_models x n_models] median squared correlation.
+%           Bounded [0, 1] under 'pearson'. Diagonal = 1.
+%
+%   extra - struct with .rdm and .lnmag, both [n_models x n_models]
+%           medians. RDM is topography-only error; lnMAG is gain-only.
 %
 % METRIC DEFINITIONS:
-%   RE(s) = norm(vecB - vecA, 1) / (norm(vecA,1) + norm(vecB,1))
-%           L1-norm, symmetric denominator. Bounded 0 (identical) to 0.5
-%           (orthogonal). Consistent with Meijs et al. (1989).
+%   See lf_metrics.m — the single source of truth. Under the default
+%   'eq13' mode:
 %
-%   CC(s) = (Pearson r)^2
-%           Squared Pearson correlation between vecA and vecB at source s.
-%           Bounded 0 (uncorrelated) to 1 (perfectly correlated).
+%   RE(s) = norm(vecA - vecB, 2) / norm(vecA, 2) * 100
+%           MANUSCRIPT Eq 13. L2 norm, normalised by the REFERENCE
+%           leadfield alone. Unbounded above.
+%
+%   CC(s) = (Pearson r)^2                      MANUSCRIPT Eq 14.
+%
+% IMPORTANT — ASYMMETRY:
+%   The Eq 13 RE is asymmetric: re(i,j) ~= re(j,i), because the
+%   denominator is the norm of the row model. The returned matrix is
+%   therefore NOT symmetric and heatmaps must be read row-wise, with the
+%   row understood as the reference. This differs from the previous
+%   symmetric L1 metric, which produced a symmetric matrix.
+%
+% IMPORTANT — UNITS:
+%   re is returned in PERCENT, not as a fraction. Do not multiply by 100
+%   again in plotting code. The previous version returned a 0-0.5
+%   fraction.
 %
 % NOTES:
 %   - Truncation to minimum sensors/sources is printed to the command
 %     window; check this output if results seem unexpected
-%   - For per-source curves rather than medians, compute RE and CC
-%     source-by-source directly in the calling script (as done in
-%     plot_per_source_cc_re.m and analyse_normal_angles.m)
+%   - For per-source curves rather than medians, use lf_pair_vectors()
+%     followed by lf_metrics_series()
 %   - The function computes all n² pairs including self-comparisons
-%     (diagonal) and both i,j and j,i directions (symmetric result)
 %
 % EXAMPLE:
 %   L = {leadfield_matrix_1, leadfield_matrix_2, leadfield_matrix_3};
-%   [re, cc] = compare_results(L);
-%   % re(1,2) = median RE between model 1 and model 2
-%   % cc(1,2) = median R² between model 1 and model 2
+%   [re, cc] = compare_results(L, metric_opts);
+%   % re(1,2) = median RE (%) of model 2 measured against reference model 1
 %
 % REPOSITORY:
 %   https://github.com/maikeschmidt/msg_fwd
@@ -72,10 +89,14 @@
 %   https://github.com/maikeschmidt/msg_coreg
 
 
-function [re, cc] = compare_results(L)
+function [re, cc, extra] = compare_results(L, opts)
 
 %COMPARE_RESULTS Compute relative error and correlation between models
-%   Truncates all leadfields to the minimum number of sensors and sources.
+%   Truncates all leadfields to the minimum number of sensors and sources,
+%   then delegates every metric to lf_metrics_series() so that these
+%   matrices are guaranteed to agree with the per-source figures.
+
+if nargin < 2, opts = struct(); end
 
 n_models = numel(L);
 
@@ -93,36 +114,29 @@ for m = 1:n_models
 end
 
 % Initialize output
-re = zeros(n_models, n_models);
-cc = zeros(n_models, n_models);
+re    = zeros(n_models, n_models);
+cc    = zeros(n_models, n_models);
+rdm   = zeros(n_models, n_models);
+lnmag = zeros(n_models, n_models);
 
-% Compute pairwise metrics
+% Compute pairwise metrics. Row index is the REFERENCE model (Eq 13 L1),
+% column index the COMPARISON model (Eq 13 L2). Under the Eq 13 RE this
+% matrix is ASYMMETRIC — re(i,j) ~= re(j,i) — because the denominator is
+% the reference leadfield norm. Read heatmaps row-wise.
 for ii = 1:n_models
     for jj = 1:n_models
-        La = L{ii};
-        Lb = L{jj};
+        M = lf_metrics_series(L{ii}, L{jj}, opts);
 
-        n_sources = size(La,2);
-        e = zeros(1, n_sources);
-        c = zeros(1, n_sources);
-
-        for s = 1:n_sources
-            vecA = La(:,s);
-            vecB = Lb(:,s);
-
-            % Relative error per source (L1 norm)
-            e(s) = norm(vecB - vecA, 1) / (norm(vecA,1) + norm(vecB,1));
-
-            % Squared correlation
-            tmp = corrcoef(vecA, vecB);
-            c(s) = tmp(1,2)^2;
-        end
-
-        % Store median across sources
-        re(ii,jj) = median(e, 'omitnan');
-        cc(ii,jj) = median(c, 'omitnan');
+        re(ii,jj)    = median(M.re,    'omitnan');
+        cc(ii,jj)    = median(M.rsq,   'omitnan');
+        rdm(ii,jj)   = median(M.rdm,   'omitnan');
+        lnmag(ii,jj) = median(M.lnmag, 'omitnan');
     end
 end
+
+extra.rdm   = rdm;
+extra.lnmag = lnmag;
+
 end
 
 

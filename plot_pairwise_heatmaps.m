@@ -19,8 +19,11 @@
 %   One figure per sensor axis
 %
 % METRIC DEFINITIONS (from compare_results):
-%   RE(s)  = norm(B-A,1) / (norm(A,1) + norm(B,1))   [L1, symmetric]
-%   CC(s)  = (Pearson r)^2                             [squared]
+%   RE(s)  = norm(A-B,2) / norm(A,2) * 100             [manuscript Eq 13]
+%   CC(s)  = (Pearson r)^2                             [manuscript Eq 14]
+%   Both are computed by lf_metrics.m and selected by metric_re_mode /
+%   metric_rsq_mode in config_models.m. Never redefine them here.
+%   The RE matrix is ASYMMETRIC (row = reference model).
 %   Reported values are medians across all sources.
 %
 % NOTES:
@@ -140,31 +143,38 @@ for ax = 1:n_axes
         L{m} = M;
     end
 
-    % Compute pairwise RE and CC (medians across sources)
-    [re, cc] = compare_results(L);
+    % Compute pairwise RE and CC (medians across sources).
+    % metric_opts comes from config_models — same definitions as every
+    % other script. re is returned ALREADY IN PERCENT.
+    [re, cc] = compare_results(L, metric_opts);
 
     % Plot
     fig = figure('Color', 'w', 'Units', 'inches', 'Position', [1, 1, 14, 6]);
 
-    % ── Relative Error heatmap 
+    % ── Relative Error heatmap
+    % NOTE: under the manuscript Eq 13 definition this matrix is
+    % ASYMMETRIC — the row model is the reference (denominator ||L1||).
+    % Read row-wise: cell (r,c) is the RE of model c against reference r.
     subplot(1, 2, 1);
-    imagesc(re * 100);
+    imagesc(re);
     colormap(gca, cool);
     cb = colorbar;
     cb.Label.String   = 'RE (%)';
     cb.Label.FontSize = 12;
-    clim([0, max(re(:)) * 100]);
-    title(sprintf('Relative Error (%%) — Axis %d', ax), ...
+    clim([0, max(re(:))]);
+    title(sprintf('Relative Error (%%) — Axis %d\n(row = reference)', ax), ...
         'FontSize', 14, 'FontWeight', 'bold');
     xticks(1:n_models); xticklabels(display_labels); xtickangle(45);
     yticks(1:n_models); yticklabels(display_labels); ytickangle(45);
+    ylabel('Reference model (L_1)', 'FontSize', 12);
+    xlabel('Comparison model (L_2)', 'FontSize', 12);
     axis square;
     set(gca, 'FontSize', 12, 'TickDir', 'out');
 
     % Annotate cells with RE values
     for r = 1:n_models
         for c = 1:n_models
-            text(c, r, sprintf('%.1f', re(r,c) * 100), ...
+            text(c, r, sprintf('%.1f', re(r,c)), ...
                 'HorizontalAlignment', 'center', ...
                 'FontSize', 12, 'FontWeight', 'bold', 'Color', 'k');
         end

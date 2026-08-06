@@ -259,13 +259,19 @@ if has_both
         rsq_normal.(ori_label) = zeros(n_ax_n, n_src_plot_normal);
 
         for ax = 1:n_ax_n
+            % Build matched matrices over the plotted source range, then
+            % delegate to the shared metric implementation so this figure
+            % agrees with the tables. ref_key_n is the reference (Eq 13 L1).
+            LA = zeros(n_sens_use, n_src_plot_normal);
+            LB = zeros(n_sens_use, n_src_plot_normal);
             for si = 1:n_src_plot_normal
                 src_idx_n = src_range_normal(si);
-                vecA = leadfields.(ref_key_n).(ori_label){ax, src_idx_n}(1:n_sens_use);
-                vecB = leadfields.(comp_key_n).(ori_label){ax, src_idx_n}(1:n_sens_use);
-                tmp  = corrcoef(vecA, vecB);
-                rsq_normal.(ori_label)(ax, si) = tmp(1, 2)^2;
+                LA(:, si) = leadfields.(ref_key_n).(ori_label){ax, src_idx_n}(1:n_sens_use);
+                LB(:, si) = leadfields.(comp_key_n).(ori_label){ax, src_idx_n}(1:n_sens_use);
             end
+
+            M = lf_metrics_series(LA, LB, metric_opts);
+            rsq_normal.(ori_label)(ax, :) = M.rsq;
         end
     end
     fprintf('  BEM vs FEM R² computed.\n');

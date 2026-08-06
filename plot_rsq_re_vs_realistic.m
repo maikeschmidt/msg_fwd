@@ -21,8 +21,11 @@
 %   <save_base_dir>/fem/re_vs_realistic/re_vs_realistic_axis<N>_allori.png/.fig
 %
 % METRIC DEFINITIONS:
-%   RE(s) = norm(B-A,1) / (norm(A,1) + norm(B,1))   [L1, symmetric, 0-0.5]
-%   CC(s) = (Pearson r)^2                             [squared, 0-1]
+%   RE(s) = norm(A-B,2) / norm(A,2) * 100           [manuscript Eq 13]
+%   CC(s) = (Pearson r)^2                           [manuscript Eq 14]
+%   Both are computed by lf_metrics.m and selected by metric_re_mode /
+%   metric_rsq_mode in config_models.m. Never redefine them here.
+%   The realistic bone model is the reference (Eq 13 denominator).
 %   Reference model A = realistic bone; comparison model B = variant.
 %
 % CONFIGURATION (set in this script):
@@ -130,17 +133,13 @@ for method_cell = {'bem', 'fem'}
                     L_comp(:, si) = comp_vecs{si};
                 end
 
-                % Per-source RE and CC
-                for si = 1:n_src_plot
-                    vecA = L_ref(1:n_sens_use, si);
-                    vecB = L_comp(1:n_sens_use, si);
+                % Per-source RE and CC — realistic bone is the reference
+                % (Eq 13 L1), so it is the FIRST argument.
+                M = lf_metrics_series(L_ref(1:n_sens_use, :), ...
+                                      L_comp(1:n_sens_use, :), metric_opts);
 
-                    re_all(v, si) = norm(vecB - vecA, 1) / ...
-                                    (norm(vecA, 1) + norm(vecB, 1));
-
-                    tmp = corrcoef(vecA, vecB);
-                    cc_all(v, si) = tmp(1, 2)^2;
-                end
+                re_all(v, :) = M.re;    % already in percent
+                cc_all(v, :) = M.rsq;
             end
 
             re_store.(ori_label) = re_all;
@@ -253,7 +252,7 @@ for method_cell = {'bem', 'fem'}
             title(ori_titles.(ori_label), 'FontSize', 16, 'FontWeight', 'bold');
             xlabel('Distance along spinal cord (mm)', 'FontSize', 16);
             if ori_idx == 1
-                ylabel('Relative Error (vs Realistic)', 'FontSize', 22);
+                ylabel('Relative Error (%) (vs Realistic)', 'FontSize', 22);
             end
 
             xlims = xlim;

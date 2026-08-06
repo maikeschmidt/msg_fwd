@@ -135,7 +135,7 @@ for g = 1:n_geometries
                            min(1.02,max(cc_vals)+cc_pad*0.5)];
                 if cc_ylim(1) >= cc_ylim(2); cc_ylim = [0, 1.02]; end
             end
-            re_vals = re_all(~isnan(re_all)) * 100;
+            re_vals = re_all(~isnan(re_all));   % already in percent
             if isempty(re_vals) || max(re_vals) < 1e-6
                 re_ylim = [0, 1];
             else
@@ -182,7 +182,7 @@ for g = 1:n_geometries
 
             for c = 1:n_active
                 col     = active_colors(c, :);
-                h_re(c) = plot(ax_re, distances, re_all(c, :)*100, ...
+                h_re(c) = plot(ax_re, distances, re_all(c, :), ...
                     active_styles{c}, 'Color', col, ...
                     'LineWidth', pub_line_width, ...
                     'Marker', active_markers{c}, ...
@@ -230,9 +230,9 @@ for g = 1:n_geometries
                     lf, active_keys{c}, gt_key, ori, ax, src_range, min_sensors);
             end
             cc_panels{ori_idx} = cc_mat;
-            re_panels{ori_idx} = re_mat * 100;
+            re_panels{ori_idx} = re_mat;   % already in percent
             cc_v = cc_mat(~isnan(cc_mat));
-            re_v = re_mat(~isnan(re_mat)) * 100;
+            re_v = re_mat(~isnan(re_mat));   % already in percent
             cc_global = [cc_global; cc_v(:)];
             re_global = [re_global; re_v(:)];
         end
@@ -353,18 +353,10 @@ end
 
 function [cc_vec, re_vec] = compute_metrics_sm(lf, key_A, key_B, ori, ...
     ax, src_range, min_sensors)
-    n_si    = numel(src_range);
-    cc_vec  = nan(1, n_si);
-    re_vec  = nan(1, n_si);
-    n_trunc = min(min_sensors, ...
-        min(numel(lf.(key_A).(ori){ax,1}), numel(lf.(key_B).(ori){ax,1})));
-    for si = 1:n_si
-        s    = src_range(si);
-        vecA = lf.(key_A).(ori){ax,s}(1:n_trunc);
-        vecB = lf.(key_B).(ori){ax,s}(1:n_trunc);
-        if norm(vecA)<1e-30 || norm(vecB)<1e-30; continue; end
-        re_vec(si) = norm(vecB-vecA,1)/(norm(vecA,1)+norm(vecB,1));
-        tmp        = corrcoef(vecA, vecB);
-        if numel(tmp)>=4; cc_vec(si) = tmp(1,2)^2; end
-    end
+% Delegates to the shared metric implementation so the simpler-model
+% figures use exactly the same RE and r2 definitions as the main
+% analysis. key_A is the reference (manuscript Eq 13 L1).
+% re_vec is returned in PERCENT.
+    [cc_vec, re_vec] = compute_metrics(lf, key_A, key_B, ori, ax, ...
+        src_range, min_sensors, metric_defaults());
 end
