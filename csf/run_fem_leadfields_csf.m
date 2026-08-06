@@ -73,6 +73,32 @@ cr_add_functions;   % initialise MSG toolbox and HBF library paths
 geoms_path  = 'D:\Simulations\Pertubations\geometries';   % SET THIS
 output_base = 'D:\Simulations\CSF\fields\fem';            % SET THIS
 
+% DUNEuro binary location
+% -------------------------------------------------------------------------
+% MUST be assigned to S.binpath, NOT S.bindir. fem_calc_fwds.m reads
+% S.binpath (line 14: "if ~isfield(S,'binpath'), S.binpath = []; end") and
+% has no knowledge of S.bindir. Setting the wrong field is silently ignored,
+% leaving S.binpath empty, at which point fem_calc_fwds falls back to its own
+% fem_tools\private folder inside the fem_tutorial repository. That fallback
+% is easy to miss because it fails only later, when Windows group policy
+% blocks execution from a non-allowlisted location:
+%     "This program is blocked by group policy."
+%     Error using fem_calc_fwds / unknown snafu with DuNeuro
+%
+% The folder below must contain bst_duneuro_meeg_win64.exe and must be in a
+% location group policy permits executables to run from.
+duneuro_binpath = 'C:\wtcnapps\duneuro';   % SET THIS
+
+% Fail fast: check the binary before meshing, which can take hours.
+duneuro_exe = fullfile(duneuro_binpath, 'bst_duneuro_meeg_win64.exe');
+if ~isfile(duneuro_exe)
+    error(['DUNEuro binary not found:\n  %s\n' ...
+           'Set duneuro_binpath to a folder containing ' ...
+           'bst_duneuro_meeg_win64.exe that group policy allows ' ...
+           'executables to run from.'], duneuro_exe);
+end
+
+
 % The CSF analysis runs on the ORIGINAL anatomical model only.
 filenames = { ...
     'geometries_original_source_original', ...
@@ -337,7 +363,7 @@ for fIdx = 1:numel(filenames)
             S.grad   = grad_curr;
             S.src    = src;
             S.cond   = cond_v;
-            S.bindir = 'C:\wtcnapps\duneuro';   % UPDATE if installed elsewhere
+            S.binpath = duneuro_binpath;         % NOTE: binpath, not bindir
 
             fprintf('  Running FEM: %s — %s — %s\n', ...
                 model_short, variant_name, array_name);
