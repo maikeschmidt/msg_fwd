@@ -83,7 +83,26 @@ end
 
 filename    = 'geometries_original_source_original';      % SET THIS
 
-% MUST MATCH run_bone_conductivity_bem.m exactly
+% Which sensor arrays to solve. MUST include whatever array_name is set to
+% in analyse_bone_conductivity (default 'back'). Every extra array costs a
+% full FEM solve per conductivity value.
+sensor_arrays_wanted = {'back'};   % {'back'} or {'front','back'}
+
+% MUST MATCH run_bone_conductivity_bem.m exactly.
+%
+% COST: conductivity enters the FEM stiffness matrix, so every value needs
+% its own solve — the mesh is reused but the linear system is not. Cost is
+% therefore (number of values) x (number of arrays) solves.
+%
+% The claim being supported is that results are insensitive across the
+% literature range, which does not need fine sampling. If time is short,
+% this reduced set still covers both reviewer endpoints (0.004 and 0.02),
+% the manuscript value (0.00825) and both extremes:
+%
+%   bone_cond_values = [0.002, 0.004, 0.00825, 0.015, 0.020, 0.040];
+%
+% Values can be added later without recomputing: existing leadfields are
+% skipped, so the sweep is incremental.
 bone_cond_values = [0.002, 0.004, 0.006, 0.00825, 0.010, ...
                     0.0125, 0.015, 0.020, 0.025, 0.030, 0.040];
 ref_cond_value   = 0.00825;
@@ -276,9 +295,25 @@ fprintf('  Bone tetrahedra: %d\n\n', sum(tet.tissue == bone_idx));
 
 % STEP 6: Sweep bone conductivity on the fixed mesh
 
-model_short   = regexprep(filename, '^geometries[_-]?', '');
-sensor_arrays = {'front', 'back'};
-grads         = {grad_front, grad_back};
+model_short = regexprep(filename, '^geometries[_-]?', '');
+
+% Only solve the arrays that will actually be analysed. analyse_bone_
+% conductivity reads a single array (default 'back'), so computing both
+% doubles the DUNEuro time for output that is never opened. Each solve is
+% a full FEM solve — see the note at sensor_arrays_wanted.
+sensor_arrays = {};
+grads         = {};
+if any(strcmp(sensor_arrays_wanted, 'front'))
+    sensor_arrays{end+1} = 'front';
+    grads{end+1}         = grad_front;
+end
+if any(strcmp(sensor_arrays_wanted, 'back'))
+    sensor_arrays{end+1} = 'back';
+    grads{end+1}         = grad_back;
+end
+if isempty(sensor_arrays)
+    error('sensor_arrays_wanted matched no available array.');
+end
 
 outdir = fullfile(output_base, filename);
 if ~exist(outdir, 'dir'); mkdir(outdir); end

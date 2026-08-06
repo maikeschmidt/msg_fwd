@@ -72,7 +72,12 @@ target_axis = 3;                            % radial axis for OPM
 
 n_sensor_axes = 3;
 is_meg        = true;
-unit_scale    = 1;
+% NOTE: unit scaling is NOT a single constant. BEM and FEM leadfields are
+% saved in different units depending on which script produced them, so the
+% factor is resolved per file by lf_unit_scale. A hardcoded 1 makes BEM
+% leadfields 1e15x too small, giving an Eq 13 relative error of exactly
+% 100% flat across every source while r2 still looks healthy.
+
 
 if ~exist(save_dir, 'dir'); mkdir(save_dir); end
 
@@ -111,8 +116,9 @@ for v = 1:n_vals
         'leadfield_%s_bem_bonecond%02d_%s.mat', geom_short, v, array_name));
     if isfile(bem_file)
         d = load(bem_file, 'leadfield_cord');
+        us = lf_unit_scale(d.leadfield_cord, 'bem', is_meg);
         [lf, abs_max] = organise_leadfield(lf, abs_max, d.leadfield_cord, ...
-            sprintf('bem_c%02d', v), unit_scale, orientation_labels, ...
+            sprintf('bem_c%02d', v), us, orientation_labels, ...
             n_sensor_axes, is_meg);
     else
         warning('Missing BEM file: %s', bem_file);
@@ -123,8 +129,9 @@ for v = 1:n_vals
         'cord_leadfield_%s_fem_bonecond%02d_%s.mat', geom_short, v, array_name));
     if isfile(fem_file)
         d = load(fem_file, 'leadfield_ft');
+        us = lf_unit_scale(d.leadfield_ft, 'fem', is_meg);
         [lf, abs_max] = organise_leadfield(lf, abs_max, d.leadfield_ft, ...
-            sprintf('fem_c%02d', v), unit_scale, orientation_labels, ...
+            sprintf('fem_c%02d', v), us, orientation_labels, ...
             n_sensor_axes, is_meg);
     else
         warning('Missing FEM file: %s', fem_file);

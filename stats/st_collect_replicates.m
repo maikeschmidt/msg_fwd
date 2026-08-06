@@ -113,7 +113,12 @@ array_name    = 'back';
 target_axis   = 3;
 n_sensor_axes = 3;
 is_meg        = true;
-unit_scale    = 1;
+% NOTE: unit scaling is NOT a single constant. BEM and FEM leadfields are
+% saved in different units depending on which script produced them, so the
+% factor is resolved per file by lf_unit_scale. A hardcoded 1 makes BEM
+% leadfields 1e15x too small, giving an Eq 13 relative error of exactly
+% 100% flat across every source while r2 still looks healthy.
+
 
 if ~exist(save_dir, 'dir'); mkdir(save_dir); end
 
@@ -178,8 +183,9 @@ for r = 1:n_rep
             continue;
         end
 
+        us = lf_unit_scale(d.(fn{vi}), method, is_meg);
         [lf, absmax] = organise_leadfield(lf, absmax, d.(fn{vi}), ...
-            key, unit_scale, orientation_labels, n_sensor_axes, is_meg);
+            key, us, orientation_labels, n_sensor_axes, is_meg);
     end
 
     if ~loaded

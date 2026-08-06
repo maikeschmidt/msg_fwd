@@ -76,7 +76,10 @@ array_name    = 'back';
 target_axis   = 3;
 n_sensor_axes = 3;
 is_meg        = true;
-unit_scale    = 1;
+% Convergence compares levels WITHIN one solver, so a common wrong scale
+% would cancel in the Eq 13 ratio. Resolved properly regardless, so the
+% absolute amplitudes printed alongside are meaningful.
+
 
 % Error below which a mesh is treated as converged for practical purposes
 tol_pct = 1.0;
@@ -125,8 +128,9 @@ if isfile(fem_manifest_file)
             L, array_name));
         if ~isfile(f), continue; end
         d = load(f, 'leadfield_ft');
+        us = lf_unit_scale(d.leadfield_ft, 'fem', is_meg);
         [lf, am] = organise_leadfield(lf, am, d.leadfield_ft, ...
-            sprintf('fem_L%02d', L), unit_scale, orientation_labels, ...
+            sprintf('fem_L%02d', L), us, orientation_labels, ...
             n_sensor_axes, is_meg);
         have(end+1) = L; %#ok<SAGROW>
     end
@@ -194,8 +198,9 @@ if isfile(bem_manifest_file)
             L, array_name));
         if ~isfile(f), continue; end
         d = load(f, 'leadfield_cord');
+        us = lf_unit_scale(d.leadfield_cord, 'bem', is_meg);
         [lf, am] = organise_leadfield(lf, am, d.leadfield_cord, ...
-            sprintf('bem_L%02d', L), unit_scale, orientation_labels, ...
+            sprintf('bem_L%02d', L), us, orientation_labels, ...
             n_sensor_axes, is_meg);
         have(end+1) = L; %#ok<SAGROW>
     end
