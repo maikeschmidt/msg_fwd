@@ -215,9 +215,12 @@ for c = 1:n_cmp
         rdm  = M.rdm(keep);
         lnm  = M.lnmag(keep);
 
-        S.(tag).re(oi, :)  = re;
-        S.(tag).r2(oi, :)  = r2;
-        S.(tag).dist       = keep * src_spacing_mm;
+        S.(tag).re(oi, :)   = re;
+        S.(tag).r2(oi, :)   = r2;
+        S.(tag).rdm(oi, :)  = rdm;
+        % lnMAG -> percentage amplitude change, the form quoted in prose
+        S.(tag).gain(oi, :) = (exp(lnm) - 1) * 100;
+        S.(tag).dist        = keep * src_spacing_mm;
 
         ci_re = st_boot_ci_median(re, n_boot, ci_level);
         ci_r2 = st_boot_ci_median(r2, n_boot, ci_level);
@@ -274,39 +277,32 @@ fclose(fcsv);
 
 % FIGURES
 
-% Per-source curves
-fig = figure('Color','w','Position',[80 80 1400 720]);
-tl  = tiledlayout(2, n_ori, 'TileSpacing','compact','Padding','loose');
-title(tl, 'Effect of including CSF in the FEM (identical mesh, labels only)', ...
-    'FontSize', 14, 'FontWeight','bold');
+% Per-source curves — shared four-row decomposition figure, identical in
+% layout to plot_decomposition.m and analyse_bone_conductivity.m so the
+% three can be read against each other directly.
 
-cols = lines(n_cmp);
-
-for oi = 1:n_ori
-    nexttile(tl, oi); hold on;
-    for c = 1:n_cmp
-        tag = comparisons{c,1};
-        plot(S.(tag).dist, S.(tag).re(oi,:), '-', 'LineWidth', 2, ...
-            'Color', cols(c,:), 'DisplayName', comparisons{c,4});
-    end
-    grid on; title(ori_titles.(orientation_labels{oi}), 'FontSize', 12);
-    if oi == 1, ylabel('RE (%)'); end
-    if oi == n_ori, legend('Location','best','FontSize',8); end
-    set(gca,'FontSize',11,'TickDir','out');
-
-    nexttile(tl, n_ori + oi); hold on;
-    for c = 1:n_cmp
-        tag = comparisons{c,1};
-        plot(S.(tag).dist, S.(tag).r2(oi,:), '-', 'LineWidth', 2, 'Color', cols(c,:));
-    end
-    grid on; xlabel('Distance along cord (mm)');
-    if oi == 1, ylabel('r^2'); end
-    set(gca,'FontSize',11,'TickDir','out');
+D = struct('label', {}, 're', {}, 'gain', {}, 'rdm', {}, 'rsq', {});
+for c = 1:n_cmp
+    tag = comparisons{c, 1};
+    D(c).label = comparisons{c, 4};
+    D(c).re    = S.(tag).re;
+    D(c).gain  = S.(tag).gain;
+    D(c).rdm   = S.(tag).rdm;
+    D(c).rsq   = S.(tag).r2;
 end
 
-exportgraphics(fig, fullfile(save_dir, 'csf_effect_per_source.png'), 'Resolution', 600);
-saveas(fig, fullfile(save_dir, 'csf_effect_per_source.fig'));
-close(fig);
+popts = struct( ...
+    'dist',               S.(comparisons{1,1}).dist, ...
+    'orientation_labels', {orientation_labels}, ...
+    'ori_titles',         ori_titles, ...
+    'title',              sprintf(['Effect of including CSF in the FEM ' ...
+                                   '(identical mesh, tissue labels only) ' ...
+                                   '— axis %d'], target_axis), ...
+    'colors',             lines(max(n_cmp, 3)), ...
+    'save_dir',           save_dir, ...
+    'save_name',          'csf_effect_per_source');
+
+plot_metric_decomposition(D, popts);
 
 % Summary bars
 fig = figure('Color','w','Position',[80 80 900 460]);

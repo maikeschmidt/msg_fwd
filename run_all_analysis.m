@@ -24,6 +24,7 @@
 %   10. analyse_normal_angles          surface normal angle analysis
 %   11. compute_amplitude_diff_table   amplitude % difference text report
 %   12. compute_re_cc_table            RE and r² summary text report
+%   13. plot_decomposition             amplitude vs topography split
 %
 % NOTE — PERTURBATION ANALYSIS:
 %   Systematic perturbations (source-space and sensor-array shifts) are
@@ -105,10 +106,10 @@ fprintf('  Department of Imaging Neuroscience\n');
 % Before running, ensure model_names in config_models.m matches the
 % set of leadfields you want to analyse.
 
-fprintf('[1/12] Loading and organising leadfields...\n');
+fprintf('[1/13] Loading and organising leadfields...\n');
 try
     run('load_and_organise_leadfields.m');
-    fprintf('[1/12] Complete.\n\n');
+    fprintf('[1/13] Complete.\n\n');
 catch err
     fprintf('ERROR: load_and_organise_leadfields failed:\n  %s\n', err.message);
     fprintf('Cannot continue without organised leadfields. Exiting.\n');
@@ -118,29 +119,30 @@ end
 % STEP 2: Anatomical figures
 % Does not depend on leadfields_organised.mat — can be run independently.
 
-fprintf('[2/12] Generating anatomical figures...\n');
+fprintf('[2/13] Generating anatomical figures...\n');
 try
     run('plot_anatomical_figures.m');
-    fprintf('[2/12] Complete.\n\n');
+    fprintf('[2/13] Complete.\n\n');
 catch err
     fprintf('WARNING: plot_anatomical_figures failed:\n  %s\n', err.message);
     fprintf('Continuing with remaining scripts...\n\n');
 end
 
-% STEPS 3-12: Core analysis and figure generation
+% STEPS 3-13: Core analysis and figure generation
 % All scripts load leadfields_organised.mat and config_models independently.
 
 scripts = {
-    'plot_absmax_curves',           '[3/12]  Absolute max amplitude curves';
-    'plot_pairwise_heatmaps',       '[4/12]  Pairwise RE and r² heatmaps';
-    'plot_per_source_cc_re',        '[5/12]  Per-source CC and RE curves';
-    'plot_topoplots',               '[6/12]  Topoplot figures';
-    'plot_distance_vs_amplitude',   '[7/12]  Distance vs amplitude scatter';
-    'plot_front_back_ratio',        '[8/12]  Front/back amplitude ratio';
-    'plot_rsq_re_vs_realistic',     '[9/12]  r² and RE vs realistic bone';
-    'analyse_normal_angles',        '[10/12] Surface normal angle analysis';
-    'compute_amplitude_diff_table', '[11/12] Amplitude % difference table';
-    'compute_re_cc_table',          '[12/12] RE and r² summary table';
+    'plot_absmax_curves',           '[3/13]  Absolute max amplitude curves';
+    'plot_pairwise_heatmaps',       '[4/13]  Pairwise RE and r² heatmaps';
+    'plot_per_source_cc_re',        '[5/13]  Per-source CC and RE curves';
+    'plot_topoplots',               '[6/13]  Topoplot figures';
+    'plot_distance_vs_amplitude',   '[7/13]  Distance vs amplitude scatter';
+    'plot_front_back_ratio',        '[8/13]  Front/back amplitude ratio';
+    'plot_rsq_re_vs_realistic',     '[9/13]  r² and RE vs realistic bone';
+    'analyse_normal_angles',        '[10/13] Surface normal angle analysis';
+    'compute_amplitude_diff_table', '[11/13] Amplitude % difference table';
+    'compute_re_cc_table',          '[12/13] RE and r² summary table';
+    'plot_decomposition',           '[13/13] Amplitude/topography decomposition';
 };
 
 for s = 1:size(scripts, 1)
