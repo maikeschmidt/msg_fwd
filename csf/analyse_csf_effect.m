@@ -71,15 +71,15 @@ fprintf('=== CSF effect analysis ===\n\n');
 % USER CONFIGURATION
 
 % Folder written by run_fem_leadfields_csf.m
-csf_dir = 'D:\Simulations\CSF\fields\fem\geometries_original_source_original';   % SET THIS
+csf_dir = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\CSF\fields\fem\geometries_anatom_full_realistic';   % SET THIS
 
 % Optional: the matching BEM leadfield for the same geometry, for
 % comparisons (B) and (C). Leave empty to skip them.
-bem_file = 'D:\Simulations\Pertubations\fields\bem\geometries_original_source_original\leadfield_original_source_original_bem_realistic_back.mat';   % SET THIS or ''
+bem_file = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\og_fields\geometries_anatom_full_realistic\leadfield_anatom_full_realistic_bem_back.mat';   % SET THIS or ''
 
 save_dir = fullfile(save_base_dir, 'csf_effect');   % SET THIS
 
-geom_short  = 'original_source_original';   % SET THIS: matches the filenames
+geom_short  = 'anatom_full_realistic';   % SET THIS: matches the filenames
 array_name  = 'back';                       % SET THIS
 target_axis = 3;                            % radial axis for OPM
 
