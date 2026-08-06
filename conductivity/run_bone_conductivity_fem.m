@@ -53,8 +53,8 @@ cr_add_functions;
 
 % USER CONFIGURATION
 
-geoms_path  = 'D:\Simulations\Pertubations\geometries';   % SET THIS
-output_base = 'D:\Simulations\BoneCond\fields\fem';       % SET THIS
+geoms_path   = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\og_geometries';        % SET THIS
+output_base = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\bone_cond_change\fem';            % SET THIS
 
 % DUNEuro binary location
 % -------------------------------------------------------------------------
@@ -81,7 +81,7 @@ if ~isfile(duneuro_exe)
            'executables to run from.'], duneuro_exe);
 end
 
-filename    = 'geometries_original_source_original';      % SET THIS
+filename    = 'geometries_anatom_full_realistic';      % SET THIS
 
 % Which sensor arrays to solve. MUST include whatever array_name is set to
 % in analyse_bone_conductivity (default 'back'). Every extra array costs a
@@ -103,8 +103,9 @@ sensor_arrays_wanted = {'back'};   % {'back'} or {'front','back'}
 %
 % Values can be added later without recomputing: existing leadfields are
 % skipped, so the sweep is incremental.
-bone_cond_values = [0.002, 0.004, 0.006, 0.00825, 0.010, ...
-                    0.0125, 0.015, 0.020, 0.025, 0.030, 0.040];
+bone_cond_values = [0.002, 0.00825, 0.010, ...
+                    0.020, 0.040];
+
 ref_cond_value   = 0.00825;
 
 % Nominal conductivities: cord, bone, heart, lungs, torso

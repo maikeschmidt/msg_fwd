@@ -61,9 +61,9 @@ fprintf('=== BEM bone conductivity sweep ===\n\n');
 
 % USER CONFIGURATION
 
-geoms_path   = 'D:\Simulations\Pertubations\geometries';        % SET THIS
-lf_save_path = 'D:\Simulations\BoneCond\fields\bem';            % SET THIS
-filename     = 'geometries_original_source_original';           % SET THIS
+geoms_path   = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\og_geometries';        % SET THIS
+lf_save_path = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\bone_cond_change\bem';            % SET THIS
+filename     = 'geometries_anatom_full_realistic';           % SET THIS
 
 cd('D:\');          % SET THIS
 Metadata;           % SET THIS
@@ -81,8 +81,8 @@ sensor_arrays_wanted = {'back'};   % {'back'} or {'front','back'}
 % MUST MATCH run_bone_conductivity_fem.m exactly, or the matched-pair and
 % cross-conductivity analyses cannot be formed. If you shorten one, shorten
 % the other identically.
-bone_cond_values = [0.002, 0.004, 0.006, 0.00825, 0.010, ...
-                    0.0125, 0.015, 0.020, 0.025, 0.030, 0.040];
+bone_cond_values = [0.002, 0.00825, 0.010, ...
+                    0.020, 0.040];
 
 % Index of the manuscript value within the sweep — used as the reference
 % in the analysis script
