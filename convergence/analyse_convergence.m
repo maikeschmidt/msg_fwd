@@ -415,10 +415,21 @@ function report_order_and_tradeoff(R, man, have, ref_L, label, ...
 
     % Coarsest level meeting the tolerance on every orientation
     fprintf(fid, '\n  CONVERGENCE AT %.1f%% TOLERANCE\n', tol_pct);
-    ok_all = all(R.re_med <= tol_pct | R.re_med == 0, 2);
+    % EXCLUDE THE REFERENCE LEVEL. Its RE is 0 by construction — it is
+    % being compared with itself — so including it makes the reference
+    % always "meet" any tolerance and the recommendation degenerates to
+    % "use the finest mesh", which is not a finding.
+    is_ref = (have(:) == ref_L);
+    ok_all = all(R.re_med <= tol_pct, 2) & ~is_ref;
     idx    = find(ok_all);
     if isempty(idx)
-        fprintf(fid, '    No level met the tolerance on all orientations.\n');
+        fprintf(fid, '    NO level (other than the reference) met the tolerance\n');
+        fprintf(fid, '    on all orientations. Report the per-level errors and the\n');
+        fprintf(fid, '    observed order instead of a recommended setting, and say\n');
+        fprintf(fid, '    which orientation is limiting.\n');
+        [~, worst_ori] = max(max(R.re_med, [], 1));
+        fprintf(fid, '    Limiting orientation: %s (max median RE %.3f%%)\n', ...
+            oris{worst_ori}, max(R.re_med(:, worst_ori)));
     else
         % Coarsest = worst resolution among those meeting tolerance
         vals = arrayfun(@(i) man(have(i)).(res_field), idx);

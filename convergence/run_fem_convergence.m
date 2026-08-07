@@ -400,7 +400,8 @@ for L = 1:n_lvl
             'n_tets_cord',  M(L).n_tets_cord, ...
             'mean_vol_mm3', M(L).mean_vol_mm3, ...
             'h_mm',         M(L).h_mm, ...
-            'time_mesh_s',  M(L).time_mesh_s);
+            'time_mesh_s',  M(L).time_mesh_s, ...
+            'time_solve_s', NaN);   % patched in after the array loop
 
         leadfield_ft.units_out = 'fT/nAm';
         leadfield_ft.model     = 'fem_convergence';
@@ -415,6 +416,18 @@ for L = 1:n_lvl
     end
     M(L).time_solve_s = toc(t1);
     M(L).completed    = true;
+
+    % Persist the solve time so a resumed level does not lose it
+    for g = 1:numel(grads)
+        f = fullfile(conv_dir, sprintf('cord_leadfield_conv_lvl%02d_%s.mat', ...
+            L, grads(g).name));
+        if isfile(f)
+            ci = load(f, 'conv_info');
+            ci = ci.conv_info;
+            ci.time_solve_s = M(L).time_solve_s;
+            save(f, 'conv_info', '-append');
+        end
+    end
 
     fprintf('    Solve time %.1f s | total %.1f s\n\n', ...
         M(L).time_solve_s, M(L).time_mesh_s + M(L).time_solve_s);
