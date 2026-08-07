@@ -18,9 +18,13 @@
 %   relative error")
 %     -> the accuracy-versus-runtime curve and the knee-point
 %        recommendation.
-%   Reviewer 2 point 3.2 ("impact of the 50% torso reduction")
-%     -> the BEM curve reports the error at keep = 0.5 against the
-%        undecimated surface directly.
+%
+% NOT ANSWERED HERE, DELIBERATELY
+%   Reviewer 2 point 3.2 (impact of the 50% torso reduction) is answered by
+%   analyse_torso_decimation.m, and the St. Venant near-source question is
+%   answered by analyse_cord_refinement.m. Both use sweeps in which only one
+%   thing varies. They are kept separate so this general convergence result
+%   stands on its own and does not depend on either.
 %
 % THE REFERENCE SOLUTION
 %   Convergence is measured against the FINEST mesh in each sweep, since no
@@ -69,7 +73,14 @@ fprintf('=== Mesh convergence analysis ===\n\n');
 % USER CONFIGURATION
 
 fem_conv_dir = 'D:\Simulations\Convergence\fem\convergence';   % SET THIS
-bem_conv_dir = 'D:\Simulations\Convergence\bem\convergence';   % SET THIS
+bem_conv_dir = 'D:\Simulations\Convergence\bem\convergence_allsurf';   % SET THIS
+%   ^ The ALL-SURFACES sweep (sweep_all_surfaces = true). That is the one
+%     that supports the general claim "results are independent of mesh
+%     resolution", because every compartment varies.
+%     The torso-only sweep lives in convergence_torso and is analysed
+%     separately by analyse_torso_decimation.m — this script does not
+%     depend on it, and must not, since in that sweep the cord and bone
+%     surfaces never change.
 save_dir     = fullfile(save_base_dir, 'convergence');         % SET THIS
 
 array_name    = 'back';
@@ -231,17 +242,6 @@ if isfile(bem_manifest_file)
             'keep_fraction', 'fraction kept', 'n_vert_torso', tol_pct, ...
             bem_production_keep, fid, orientation_labels);
 
-        % Reviewer 2 point 3.2 — call the 50% answer out explicitly
-        i50 = find(abs([man(have).keep_fraction] - 0.5) < 1e-9, 1);
-        if ~isempty(i50)
-            fprintf(fid, '\nREVIEWER 2, POINT 3.2 — impact of the 50%% torso reduction:\n');
-            for oi = 1:numel(orientation_labels)
-                fprintf(fid, '  [%s] RE = %.3f%% , r2 = %.5f  vs the undecimated torso\n', ...
-                    orientation_labels{oi}, R.re_med(i50, oi), R.r2_med(i50, oi));
-            end
-            fprintf(['  -> quote these numbers directly; they measure the effect at\n' ...
-                     '     the sensors rather than arguing it from first principles.\n']);
-        end
     end
 else
     fprintf('BEM manifest not found — skipping BEM.\n');

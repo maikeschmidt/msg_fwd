@@ -43,11 +43,27 @@
 %       2. run_bone_conductivity_fem
 %       3. analyse_bone_conductivity
 %
-%     convergence/   Mesh convergence (Reviewer 1; Reviewer 2 pts 7 and 3.2)
-%       1. run_fem_convergence        volume h-refinement sweep
-%       2. run_bem_convergence        surface refinement sweep
-%       3. analyse_convergence
-%       Both sweeps are resumable and ordered coarsest first.
+%     convergence/   Mesh convergence. THREE INDEPENDENT TESTS — none of
+%                    them depends on the results of the others.
+%
+%       CORE (Reviewer 1; Reviewer 2 pt 7): global resolution
+%         1. run_fem_convergence                     volume h-refinement
+%         2. run_bem_convergence, sweep_all_surfaces = true
+%         3. analyse_convergence                     reads convergence_allsurf
+%
+%       TORSO DECIMATION (Reviewer 2 pt 3.2): the 50% reduction
+%         1. run_bem_convergence, sweep_all_surfaces = false
+%         2. analyse_torso_decimation                reads convergence_torso
+%                                                    also checks it
+%                                                    reproduces the
+%                                                    published lead field
+%
+%       NEAR-SOURCE (Reviewer 2 pt 7.1): St. Venant singularity
+%         1. run_fem_cord_refinement    global bound fixed, cord refined
+%         2. analyse_cord_refinement
+%
+%       All sweeps are resumable and ordered coarsest first. The BEM output
+%       folder is tagged by sweep mode so the two BEM sweeps cannot collide.
 %
 %     csf/           CSF compartment in the FEM (Reviewer 1)
 %       1. run_fem_leadfields_csf     computes with AND without CSF

@@ -79,9 +79,21 @@ filename     = 'geometries_original_source_original';      % SET THIS
 % 0.5 is the value used throughout the manuscript.
 keep_fraction_levels = [0.25, 0.40, 0.50, 0.65, 0.80, 1.00];
 
-% false = decimate the torso only (matches the current pipeline and
-%         directly answers Reviewer 2 point 3.2)
-% true  = decimate every compartment together (stricter convergence test)
+% WHICH SURFACES ARE REFINED
+%
+% false = TORSO ONLY. The cord, bone, heart and lung surfaces stay at full
+%         resolution at every level. This matches the production pipeline,
+%         where the torso is the only decimated surface, and it answers
+%         Reviewer 2 point 3.2 directly. It does NOT, on its own,
+%         demonstrate that the cord and bone surfaces are adequately
+%         resolved, because they never vary.
+%
+% true  = EVERY compartment decimated together. This is the stricter test
+%         and the one that supports Reviewer 1's general claim that results
+%         are independent of mesh resolution.
+%
+% RUN BOTH. They answer different questions and each takes only a handful
+% of BEM builds. Output folders are tagged by mode so they do not collide.
 sweep_all_surfaces = false;
 
 ordering_cord = {'wm', 'bone', 'heart', 'lungs', 'torso'};
@@ -91,8 +103,21 @@ co_cord = [0.23,  0.23,         0.23,  0.23,  0.00];
 
 sensor_arrays_wanted = {'back'};   % {'back'} or {'front','back'}
 
-conv_dir = fullfile(lf_save_path, 'convergence');
+% Output folder is TAGGED BY SWEEP MODE. Without this the two sweeps write
+% identical filenames, and because the script skips levels whose output
+% already exists, a second run with sweep_all_surfaces flipped would
+% silently reuse the first run's leadfields while recording the new flag in
+% the manifest. Tagging lets both sweeps coexist and be analysed separately.
+if sweep_all_surfaces
+    sweep_tag = 'allsurf';
+else
+    sweep_tag = 'torso';
+end
+conv_dir = fullfile(lf_save_path, ['convergence_' sweep_tag]);
 if ~exist(conv_dir, 'dir'); mkdir(conv_dir); end
+
+fprintf('Output folder: %s\n', conv_dir);
+fprintf('  -> point bem_conv_dir in analyse_convergence.m at this folder\n\n');
 
 
 % LOAD GEOMETRY

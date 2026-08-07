@@ -52,9 +52,10 @@
 %   demonstrates that the resulting sensor-level fields are mesh
 %   independent, which is the claim the paper actually makes.
 %
-%   If a reviewer presses further, the natural follow-up is to hold the
-%   global bound fixed and refine ONLY around the cord. See
-%   local_refine_factor below.
+%   The complementary test — hold the global bound fixed and refine ONLY
+%   around the cord — is run_fem_cord_refinement.m. It is deliberately a
+%   SEPARATE script so this sweep stays a clean, self-contained global
+%   convergence test that does not depend on it.
 %
 % USAGE:
 %   Set the paths, then run. Then run_bem_convergence, then
@@ -129,12 +130,6 @@ filename    = 'geometries_original_source_original';      % SET THIS
 % rather than assumed.
 maxvol_mm3_levels = [1000, 500, 200, 100, 50, 20, 10, 5, 2];
 
-% Optional extra refinement local to the cord. 1 = no local refinement.
-% Set e.g. 0.1 to force tetrahedra near the cord to be 10x smaller than
-% the global bound, which directly addresses the dipole-singularity point
-% without paying for a globally fine mesh.
-local_refine_factor = 1;
-
 surf2mesh_opt_scale = 1;
 ordering = {'wm', 'bone', 'heart', 'lungs', 'torso'};
 cratio   = 40;
@@ -151,8 +146,21 @@ if ~exist(conv_dir, 'dir'); mkdir(conv_dir); end
 fprintf('Geometry: %s\n\n', filename);
 geoms = load(fullfile(geoms_path, [filename '.mat']));
 
+% TORSO SURFACE RESOLUTION DURING THE SWEEP
+%
+% This sweep refines the VOLUME mesh (tetgen_maxvol) across every
+% compartment, but the torso SURFACE is decimated to reduction_torso at
+% every level. That is deliberate — it matches production, so the reported
+% error is the error of the mesh you actually use — but it does mean the
+% outer boundary discretisation is held FIXED and is therefore a confound
+% for a pure volume-convergence claim.
+%
+% Set reduction_torso = 1.0 to remove the confound and refine the volume
+% against an undecimated boundary. The BEM surface sweep
+% (run_bem_convergence with sweep_all_surfaces = true) covers the surface
+% dimension separately.
 reduce_torso    = contains(filename, 'anatom');
-reduction_torso = 0.5;
+reduction_torso = 0.5;   % SET 1.0 to remove the fixed-boundary confound
 
 clear bnd
 for ii = 1:numel(ordering)
@@ -275,7 +283,6 @@ M = struct( ...
     'completed',    repmat({false}, 1, n_lvl));
 
 fprintf('Refinement levels (mm^3): %s\n', mat2str(maxvol_mm3_levels));
-fprintf('Local refinement factor : %g\n', local_refine_factor);
 fprintf('Manuscript states 10 mm^3; previous committed value was 500 mm^3.\n\n');
 
 for L = 1:n_lvl
@@ -308,20 +315,16 @@ for L = 1:n_lvl
         continue;
     end
 
-    % Optional local refinement around the cord via a per-region volume
-    % bound. surf2mesh accepts a [n_regions x 1] bound; a scalar applies
-    % globally.
-    if local_refine_factor ~= 1
-        regionvol = repmat(maxvol_m3, numel(klust), 1);
-        regionvol(1) = maxvol_m3 * local_refine_factor;   % cord is region 1
-    else
-        regionvol = maxvol_m3;
-    end
+    % Uniform global volume bound. Per-region refinement is NOT done here:
+    % surf2mesh passes maxvol into the TetGen command line via num2str, so a
+    % vector would emit a malformed command. Per-region constraints must go
+    % in a 4th column of the regions matrix with maxvol left empty — see
+    % run_fem_cord_refinement.m, which does exactly that.
 
     t0 = tic;
     [node, elem, ~] = surf2mesh(merged_mesh.p, merged_mesh.e, ...
         min(merged_mesh.p), max(merged_mesh.p), ...
-        surf2mesh_opt_scale, regionvol, cent, [], [], 'tetgen1.5');
+        surf2mesh_opt_scale, maxvol_m3, cent, [], [], 'tetgen1.5');
     M(L).time_mesh_s = toc(t0);
 
     % Remap region IDs to tissue labels
@@ -397,8 +400,7 @@ for L = 1:n_lvl
             'n_tets_cord',  M(L).n_tets_cord, ...
             'mean_vol_mm3', M(L).mean_vol_mm3, ...
             'h_mm',         M(L).h_mm, ...
-            'time_mesh_s',  M(L).time_mesh_s, ...
-            'local_refine_factor', local_refine_factor);
+            'time_mesh_s',  M(L).time_mesh_s);
 
         leadfield_ft.units_out = 'fT/nAm';
         leadfield_ft.model     = 'fem_convergence';
@@ -420,7 +422,7 @@ for L = 1:n_lvl
     % Save the manifest after every level so partial runs are analysable
     manifest = M;
     save(fullfile(conv_dir, 'fem_convergence_manifest.mat'), ...
-        'manifest', 'maxvol_mm3_levels', 'local_refine_factor', ...
+        'manifest', 'maxvol_mm3_levels', ...
         'sensor_arrays_wanted', 'filename');
 end
 
