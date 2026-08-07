@@ -70,9 +70,9 @@ cr_add_functions;
 
 % USER CONFIGURATION
 
-geoms_path   = 'D:\Simulations\Pertubations\geometries';   % SET THIS
-lf_save_path = 'D:\Simulations\Convergence\bem';           % SET THIS
-filename     = 'geometries_original_source_original';      % SET THIS
+geoms_path  = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\og_geometries';   % SET THIS
+lf_save_path = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\Convergence\bem';           % SET THIS
+filename     = 'geometries_anatom_full_realistic';      % SET THIS
 
 % REFINEMENT LEVELS — fraction of faces KEPT by reducepatch.
 % Coarsest first. 1.0 = undecimated = the convergence reference.

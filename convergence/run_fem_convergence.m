@@ -92,8 +92,8 @@ cr_add_functions;
 
 % USER CONFIGURATION
 
-geoms_path  = 'D:\Simulations\Pertubations\geometries';   % SET THIS
-output_base = 'D:\Simulations\Convergence\fem';           % SET THIS
+geoms_path  = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\og_geometries';   % SET THIS
+output_base = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\Convergence\fem';           % SET THIS
 
 % DUNEuro binary location
 % -------------------------------------------------------------------------
@@ -120,7 +120,7 @@ if ~isfile(duneuro_exe)
            'executables to run from.'], duneuro_exe);
 end
 
-filename    = 'geometries_original_source_original';      % SET THIS
+filename    = 'geometries_anatom_full_realistic';      % SET THIS
 
 % REFINEMENT LEVELS — maximum tetrahedron volume in mm^3.
 % Coarsest first so partial runs are still useful.
