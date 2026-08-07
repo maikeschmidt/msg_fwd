@@ -293,6 +293,10 @@ for L = 1:n_lvl
             end
         end
 
+        % NOTE: time_solve_s is written back into conv_info AFTER the loop
+        % over arrays (see below). Without it, a resumed level restores
+        % every field except the solve time, leaving it NaN and breaking
+        % the accuracy-versus-cost curve in analyse_convergence.
         conv_info = struct( ...
             'keep_fraction', keep, ...
             'n_vert_total',  M(L).n_vert_total, ...
@@ -301,6 +305,7 @@ for L = 1:n_lvl
             'n_tri_torso',   M(L).n_tri_torso, ...
             'h_torso_mm',    M(L).h_torso_mm, ...
             'time_build_s',  M(L).time_build_s, ...
+            'time_solve_s',  NaN, ...
             'sweep_all_surfaces', sweep_all_surfaces);
 
         leadfield_cord.units_out = 'fT/nAm';
@@ -316,6 +321,18 @@ for L = 1:n_lvl
     end
     M(L).time_solve_s = toc(t1);
     M(L).completed    = true;
+
+    % Patch the recorded solve time into every file written for this level
+    for a = 1:numel(sensor_arrays)
+        f = fullfile(conv_dir, sprintf('leadfield_conv_bem_lvl%02d_%s.mat', ...
+            L, sensor_arrays{a}));
+        if isfile(f)
+            ci = load(f, 'conv_info');
+            ci = ci.conv_info;
+            ci.time_solve_s = M(L).time_solve_s;
+            save(f, 'conv_info', '-append');
+        end
+    end
 
     fprintf('    Build %.1f s | solve %.1f s\n\n', ...
         M(L).time_build_s, M(L).time_solve_s);
