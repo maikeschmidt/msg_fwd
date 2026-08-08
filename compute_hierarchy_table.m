@@ -28,10 +28,16 @@
 %                  solver. "Does the literature value chosen matter?"
 %                  Cross-solver conductivity comparisons are deliberately
 %                  left to analyse_bone_conductivity.
-%   coreg          Pairwise between repeated manual coregistrations, within
-%                  a solver. "Does coregistration quality matter?"
-%   warping        Pairwise between warped anatomies, within a solver.
-%                  "How much does body shape matter?"
+%   coreg          BEM vs FEM on each repeated manual coregistration.
+%   warping        BEM vs FEM on each warped anatomy.
+%                  Both are CROSS-SOLVER on matched geometry. They do not ask
+%                  "how much does coregistration or body shape matter?" —
+%                  they ask whether BEM-FEM agreement holds up when the
+%                  anatomy changes underneath it. Read them for STABILITY
+%                  against the solver row, not for magnitude.
+%                  The within-solver spread is still computed and written to
+%                  all_comparisons.csv as coreg_within / warping_within, but
+%                  is kept out of the table: it answers a different question.
 %   solver         BEM vs FEM on matched geometry. The paper's core question.
 %
 % AGGREGATION
@@ -104,7 +110,15 @@ rep_bem_base = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\replications
 rep_fem_base = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\replications\fields';   % SET THIS
 coreg_ids    = arrayfun(@(k) sprintf('coreg_rep%02d', k), 1:5,  'uni', 0);
 warp_ids     = arrayfun(@(k) sprintf('warp%02d',      k), 1:30, 'uni', 0);
-rep_variant  = 'inhomo';   % bone variant the replicates were built with
+
+% The two families were built on DIFFERENT bone variants: the coregistration
+% repeats use the canonical torso, which has no realistic bone mesh, so they
+% are toroidal; the warps are on the anatomical model with realistic bone.
+% Each family is therefore compared against the solver result on its OWN
+% variant in the report — comparing the realistic warps against a toroidal
+% solver baseline would confound bone model with anatomy.
+coreg_variant = 'inhomo';      % SET THIS
+warp_variant  = 'realistic';   % SET THIS
 
 array_name    = core_array;   % from config_models — shared with every analysis
 headline_axis = 3;            % axis quoted in the LaTeX table
@@ -267,62 +281,94 @@ for m = {'bem','fem'}
 end
 
 % ---- 5/6: replicates (coreg, warping) ---------------------------------
-rep_specs = {'coreg', 'Coregistration', coreg_ids; ...
-             'warping','Anatomy (warp)', warp_ids};
+%
+% CROSS-SOLVER, matched geometry. For each replicate the BEM and FEM are
+% run on the SAME anatomy and compared to each other. The question these
+% analyses answer is not "how much does coregistration matter?" but
+% "does BEM-FEM agreement survive a change of anatomy?" — so the table
+% row is a solver comparison repeated over many anatomies, and the
+% quantity to read is how STABLE it is across replicates, not its size.
+%
+% The within-solver pairwise spread is still computed and written to
+% all_comparisons.csv under the factors coreg_within / warping_within.
+% It is genuinely informative — it is how far apart two independent
+% realisations land — but it is a different question from the one the
+% table asks, so it is deliberately not in factor_order.
+
+rep_specs = {'coreg',  'Solver, across coregistrations',  coreg_ids, coreg_variant; ...
+             'warping','Solver, across warped anatomies', warp_ids,  warp_variant};
 
 for r = 1:size(rep_specs,1)
-    fac = rep_specs{r,1}; lab = rep_specs{r,2}; ids = rep_specs{r,3};
-    for m = {'bem','fem'}
-        meth = m{1};
-        try
-            lfr = struct(); amr = struct(); got = {};
-            for i = 1:numel(ids)
-                short = sprintf('%s_%s', ids{i}, rep_variant);
-                gdir  = sprintf('geometries_%s', short);
-                if strcmp(meth,'bem')
-                    f = fullfile(rep_bem_base, gdir, ...
-                        sprintf('leadfield_%s_bem_%s.mat', short, array_name));
-                else
-                    f = fullfile(rep_fem_base, gdir, ...
-                        sprintf('cord_leadfield_%s_fem_%s.mat', short, array_name));
-                end
-                if ~isfile(f), continue; end
-                d  = load(f);
+    fac = rep_specs{r,1}; lab = rep_specs{r,2};
+    ids = rep_specs{r,3}; rep_variant = rep_specs{r,4};
+    try
+        lfr = struct(); amr = struct();
+        got_bem = {}; got_fem = {}; got_both = {};
+
+        for i = 1:numel(ids)
+            short = sprintf('%s_%s', ids{i}, rep_variant);
+            gdir  = sprintf('geometries_%s', short);
+            base  = matlab.lang.makeValidName(ids{i});
+
+            files = {fullfile(rep_bem_base, gdir, ...
+                        sprintf('leadfield_%s_bem_%s.mat', short, array_name)), 'bem'; ...
+                     fullfile(rep_fem_base, gdir, ...
+                        sprintf('cord_leadfield_%s_fem_%s.mat', short, array_name)), 'fem'};
+
+            have = false(1,2);
+            for q = 1:2
+                if ~isfile(files{q,1}), continue; end
+                d  = load(files{q,1});
                 fn = fieldnames(d);
                 vi = find(cellfun(@(x) isstruct(d.(x)) && isfield(d.(x),'leadfield'), fn),1);
-                us = lf_unit_scale(d.(fn{vi}), meth, is_meg);
-                key = matlab.lang.makeValidName(ids{i});
+                if isempty(vi), continue; end
+                us  = lf_unit_scale(d.(fn{vi}), files{q,2}, is_meg);
+                key = sprintf('%s_%s', files{q,2}, base);
                 [lfr, amr] = organise_leadfield(lfr, amr, d.(fn{vi}), key, ...
                     us, orientation_labels, n_sensor_axes, is_meg);
-                got{end+1} = key; %#ok<SAGROW>
+                have(q) = true;
+                if q == 1, got_bem{end+1} = key; else, got_fem{end+1} = key; end %#ok<SAGROW>
             end
 
-            if numel(got) < 2
-                fprintf('  %s %s: SKIPPED (only %d replicate(s) found)\n', ...
-                    fac, upper(meth), numel(got));
-                continue;
+            % Cross-solver comparison, only where BOTH solvers ran on this
+            % identical geometry — that matching is the whole point.
+            if all(have)
+                C(end+1) = mk(fac, lab, 'BEM vs FEM', ...
+                    sprintf('BEM vs FEM on %s', ids{i}), ...
+                    lfr, sprintf('bem_%s', base), sprintf('fem_%s', base)); %#ok<SAGROW>
+                got_both{end+1} = ids{i}; %#ok<SAGROW>
             end
+        end
 
-            % PAIRWISE between replicates. There is no privileged replicate,
-            % so a reference-based comparison would be arbitrary; the
-            % pairwise median answers "how far apart are two independent
-            % realisations?", which is the quantity to report.
+        if isempty(got_both)
+            fprintf(['  %s (%s bone): SKIPPED for the table (no replicate has ' ...
+                'BOTH solvers; %d BEM, %d FEM found)\n'], fac, rep_variant, ...
+                numel(got_bem), numel(got_fem));
+        else
+            fprintf('  %s (%s bone): OK (%d matched BEM/FEM geometries)\n', ...
+                fac, rep_variant, numel(got_both));
+        end
+
+        % Within-solver spread — recorded, but kept out of the table
+        for m = {'bem','fem'}
+            meth = m{1};
+            if strcmp(meth,'bem'), gs = got_bem; else, gs = got_fem; end
+            if numel(gs) < 2, continue; end
             np = 0;
-            for a = 1:numel(got)
-                for b = a+1:numel(got)
+            for a = 1:numel(gs)
+                for b = a+1:numel(gs)
                     if np >= max_pairs, break; end
-                    C(end+1) = mk(fac, lab, upper(meth), ...
-                        sprintf('%s %s vs %s', upper(meth), got{a}, got{b}), ...
-                        lfr, got{a}, got{b}); %#ok<SAGROW>
+                    C(end+1) = mk([fac '_within'], [lab ' (within-solver spread)'], ...
+                        upper(meth), sprintf('%s %s vs %s', upper(meth), gs{a}, gs{b}), ...
+                        lfr, gs{a}, gs{b}); %#ok<SAGROW>
                     np = np + 1;
                 end
                 if np >= max_pairs, break; end
             end
-            fprintf('  %s %s: OK (%d replicates, %d pairs)\n', ...
-                fac, upper(meth), numel(got), np);
-        catch err
-            fprintf('  %s %s: SKIPPED (%s)\n', fac, upper(meth), err.message);
+            fprintf('  %s_within %s: %d pairs (CSV only)\n', fac, upper(meth), np);
         end
+    catch err
+        fprintf('  %s: SKIPPED (%s)\n', fac, err.message);
     end
 end
 
@@ -340,7 +386,7 @@ fprintf(fcsv, ['factor,factor_label,solver,comparison,axis,orientation,' ...
     'n_sources,re_median,re_ci_lo,re_ci_hi,re_iqr_lo,re_iqr_hi,re_min,re_max,' ...
     'r2_median,r2_min,r2_max,rdm_median,lnmag_median,gain_pct,abs_gain_pct\n']);
 
-Rall = struct('factor',{},'solver',{},'axis',{},'mode',{}, ...
+Rall = struct('factor',{},'solver',{},'name',{},'axis',{},'mode',{}, ...
               're',{},'r2',{},'rdm',{},'lnmag',{},'gain',{});
 
 for c = 1:numel(C)
@@ -385,7 +431,7 @@ for c = 1:numel(C)
                 median(rd,'omitnan'), ln_med, gain, abs(gain));
 
             Rall(end+1) = struct('factor', C(c).factor, 'solver', C(c).solver, ...
-                'axis', ax, 'mode', omode, 're', re_med, ...
+                'name', C(c).name, 'axis', ax, 'mode', omode, 're', re_med, ...
                 'r2', median(r2,'omitnan'), 'rdm', median(rd,'omitnan'), ...
                 'lnmag', ln_med, 'gain', abs(gain)); %#ok<SAGROW>
         end
@@ -401,8 +447,9 @@ fprintf('\nAll comparisons written.\n');
 factor_order = {'segmentation','bone_detail','csf','organ_removal', ...
                 'conductivity','coreg','warping','solver'};
 factor_names = {'Bone segmentation','Bone geom. detail','CSF', ...
-                'Organ segmentation','Bone conductivity','Coregistration', ...
-                'Anatomy (warp)','Solver choice'};
+                'Organ segmentation','Bone conductivity', ...
+                'Solver, across coregistrations', ...
+                'Solver, across warped anatomies','Solver choice'};
 
 axes_present = unique([Rall.axis]);
 
@@ -489,13 +536,61 @@ for ax = axes_present
 end
 fclose(fsum);
 
+% Stability of BEM-FEM agreement across anatomies — the point of 5/6
+sv = strcmp({Rall.mode}, headline_mode) & ([Rall.axis] == headline_axis);
+Hh = Rall(sv);
+S = Hh(strcmp({Hh.factor},'solver'));
+if ~isempty(S)
+    fprintf(fid, '\n%s\nDOES SOLVER AGREEMENT SURVIVE A CHANGE OF ANATOMY?\n%s\n', ...
+        repmat('=',1,78), repmat('=',1,78));
+    fprintf(fid, ['The two replicate families sit on different bone variants, so\n' ...
+        'each is quoted against the single-anatomy solver result on its OWN\n' ...
+        'variant. Comparing across variants would confound bone model with\n' ...
+        'anatomy.\n\n']);
+
+    fam = {'coreg','Across coregistrations', coreg_variant; ...
+           'warping','Across warped anatomies', warp_variant};
+
+    for q = 1:size(fam,1)
+        sub = Hh(strcmp({Hh.factor}, fam{q,1}));
+        if isempty(sub), continue; end
+        rr = [sub.re];
+
+        % The single-anatomy baseline on the SAME bone variant
+        bi = find(contains({S.name}, fam{q,3}), 1);
+        if isempty(bi)
+            base_txt = 'baseline not available';
+        else
+            base_txt = sprintf('%.2f%% on one anatomy', S(bi).re);
+        end
+
+        fprintf(fid, '%-26s (%-9s bone): %.2f%% median, range %.2f-%.2f%% over %d anatomies\n', ...
+            fam{q,2}, fam{q,3}, median(rr), min(rr), max(rr), numel(rr));
+        fprintf(fid, '%-26s  reference          : %s\n', '', base_txt);
+    end
+
+    fprintf(fid, ['\nIf each range brackets its own reference value, BEM and FEM\n' ...
+        'agree to the same degree whatever the anatomy — the result does not\n' ...
+        'depend on this participant.\n']);
+end
+
 fprintf(fid, '\nNOTE: CSF is FEM-only by construction — the BEM cannot represent\n');
 fprintf(fid, 'a thin CSF layer between cord and segmented vertebrae. Charging the\n');
 fprintf(fid, 'BEM for that belongs in the Results, not in this table.\n');
 fprintf(fid, 'NOTE: organ removal is BEM-only and within-BEM only. The\n');
 fprintf(fid, 'cross-solver arm is in analyse_organ_removal.\n');
-fprintf(fid, 'NOTE: coreg and warping are PAIRWISE between replicates; there is\n');
-fprintf(fid, 'no privileged realisation to use as a reference.\n');
+fprintf(fid, ['NOTE: the coregistration and warping rows are CROSS-SOLVER —\n' ...
+    'BEM vs FEM run on the same anatomy, one comparison per replicate. They\n' ...
+    'are not a measure of how much coregistration or body shape matters.\n' ...
+    'They answer: does BEM-FEM agreement survive a change of anatomy? Read\n' ...
+    'them against the "Solver choice" row on the reference anatomy — if the\n' ...
+    'three are close, solver agreement does not depend on getting the\n' ...
+    'anatomy right, which is the claim those analyses exist to support.\n' ...
+    'The SPREAD across replicates carries the result, so use\n' ...
+    'all_comparisons.csv, not the median alone.\n']);
+fprintf(fid, ['NOTE: within-solver spread between replicates is in\n' ...
+    'all_comparisons.csv as coreg_within / warping_within. It is kept out\n' ...
+    'of the table because it answers a different question.\n']);
 fclose(fid);
 
 
@@ -561,7 +656,12 @@ function write_latex_cols(path, order, names, vals, mode, ax, lbl, is_main)
                 sprintf('%s orientation', mode)), ax);
     fprintf(fid, '$RE$: overall error (magnitude + shape); $r^2$: shape only;\n');
     fprintf(fid, '$RDM$: shape only, on normalised fields; $|\\mathrm{gain}\\%%|$:\n');
-    fprintf(fid, 'magnitude only. Columns marked -- await analyses not yet complete.}\n');
+    fprintf(fid, 'magnitude only. Columns marked -- await analyses not yet complete.\n');
+    fprintf(fid, ['Columns labelled ``Solver, across \\ldots'''' are BEM vs FEM computed on\n' ...
+        'matched anatomy, one comparison per replicate; they show whether\n' ...
+        'solver agreement is stable when the anatomy changes, and should be\n' ...
+        'read against the ``Solver choice'''' entry rather than as an effect size.\n']);
+    fprintf(fid, '}\n');
     fprintf(fid, '\\label{tab:%s}\n', lbl);
     fprintf(fid, '\\resizebox{\\textwidth}{!}{%%\n');
     fprintf(fid, '\\begin{tabular}{l%s}\n\\toprule\n', repmat('r', 1, numel(order)));
@@ -612,7 +712,12 @@ function write_latex_rows(path, order, names, vals, mode, ax, lbl, is_main)
         ternary(strcmp(mode,'ALL'), 'all three orientations concatenated', ...
                 sprintf('%s orientation', mode)), ax);
     fprintf(fid, 'ordered by overall error. Rows marked -- await analyses not\n');
-    fprintf(fid, 'yet complete.}\n\\label{tab:%s}\n', lbl);
+    fprintf(fid, 'yet complete.\n');
+    fprintf(fid, ['Rows labelled ``Solver, across \\ldots'''' are BEM vs FEM computed on\n' ...
+        'matched anatomy, one comparison per replicate; they show whether\n' ...
+        'solver agreement is stable when the anatomy changes, and should be\n' ...
+        'read against the ``Solver choice'''' entry rather than as an effect size.\n']);
+    fprintf(fid, '}\n\\label{tab:%s}\n', lbl);
     fprintf(fid, '\\begin{tabular}{lrrrr}\n\\toprule\n');
     fprintf(fid, '\\textbf{Modelling choice} & \\textbf{$RE$ (\\%%)} & ');
     fprintf(fid, '\\textbf{$r^2$} & \\textbf{$RDM$} & \\textbf{$|\\mathrm{gain}\\%%|$} \\\\\n');
@@ -653,7 +758,12 @@ function write_latex_all_axes(path, order, names, vals_by_axis, axes_present, mo
     fprintf(fid, 'each sensor measurement axis. Rows are ordered by mean $RE$ across\n');
     fprintf(fid, 'axes. $RE$: overall error (magnitude + shape); $r^2$ and $RDM$:\n');
     fprintf(fid, 'shape only; $|\\mathrm{gain}\\%%|$: magnitude only. Entries marked --\n');
-    fprintf(fid, 'await analyses not yet complete.}\n');
+    fprintf(fid, 'await analyses not yet complete.\n');
+    fprintf(fid, ['Rows labelled ``Solver, across \\ldots'''' are BEM vs FEM computed on\n' ...
+        'matched anatomy, one comparison per replicate; they show whether\n' ...
+        'solver agreement is stable when the anatomy changes, and should be\n' ...
+        'read against the ``Solver choice'''' entry rather than as an effect size.\n']);
+    fprintf(fid, '}\n');
     fprintf(fid, '\\label{tab:hierarchy_all_axes}\n');
     fprintf(fid, '\\resizebox{\\textwidth}{!}{%%\n');
     fprintf(fid, '\\begin{tabular}{l%s}\n\\toprule\n', repmat('rrrr', 1, na));

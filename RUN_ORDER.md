@@ -83,8 +83,9 @@ files = cr_build_coreg_geometries(S);
 ```
 
 > **Canonical torso has no realistic bone mesh.** Use `cont` and `inhomo`.
-> This is why the default contrast in `st_collect_replicates` is
-> inhomo-vs-cont rather than realistic-vs-cont.
+> This is why the coregistration repeats resolve to `inhomo` in
+> `st_collect_replicates` (`variant_for_type.coreg`) while the warps, which
+> are on the anatomical model, resolve to `realistic`.
 
 ### 1c. Warps — **inspect before computing**, ~15 min
 
@@ -104,13 +105,30 @@ carries one bone mesh:
 S = struct('outdir', 'D:\Simulations\Replicates\geometries', ...
            'warp_file', 'anatomical_warps.mat');
 
-S.geom_file = '...anatom_full_inhomo.mat';  cr_build_warp_geometries(S);
-S.geom_file = '...anatom_full_cont.mat';    cr_build_warp_geometries(S);
+S.geom_file = '...anatom_full_realistic.mat';  cr_build_warp_geometries(S);
+S.geom_file = '...anatom_full_cont.mat';       cr_build_warp_geometries(S);
 ```
 
 The variant tag is inferred from the base filename, giving
-`geometries_warp01_inhomo` / `geometries_warp01_cont`. The warp set is
+`geometries_warp01_realistic` / `geometries_warp01_cont`. The warp set is
 seeded, so warp *k* is the same deformation in both runs.
+
+> **The two replicate families are on different bone variants.** The warps
+> are on the anatomical model, so they can use `realistic`. The
+> coregistration repeats are on the canonical torso, which has no realistic
+> bone mesh, so they are `inhomo`. This is expected, but it must be declared
+> in two places or files will be looked for under the wrong name:
+>
+> | Script | Setting |
+> |---|---|
+> | `compute_hierarchy_table` | `coreg_variant = 'inhomo'`, `warp_variant = 'realistic'` |
+> | `st_collect_replicates` | `variant_for_type.coreg`, `variant_for_type.warp` |
+>
+> Because of this, the `geometry` contrast in `st_collect_replicates`
+> resolves to inhomo-vs-cont for the coreg repeats and realistic-vs-cont for
+> the warps — two different comparisons. Split by `G.replicate_type` before
+> reporting it. The `solver` contrast is unaffected: it is BEM vs FEM on
+> identical geometry either way.
 
 ---
 
@@ -155,7 +173,10 @@ run_fem_leadfields
 ```
 
 Scale: 35 replicates × 2 bone variants = 70 geometries. You need BEM on all
-70 and FEM on the 35 inhomo ones.
+70, and FEM on the 35 that carry the family's main variant — the 5 `inhomo`
+coreg repeats and the 30 `realistic` warps. The cross-solver rows in the
+hierarchy table only appear where BOTH solvers ran on the same geometry, so
+a missing FEM silently drops that replicate from the table.
 
 **Set `sensor_arrays` to `back` only.** `st_collect_replicates` uses the
 back array, and computing front as well doubles the cost for nothing.
