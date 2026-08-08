@@ -246,6 +246,11 @@ surf2mesh_opt_scale  = 1;
 % transforms a cached volume mesh rather than re-meshing warped surfaces.
 save_volume_mesh     = true;
 
+% Stop after caching the mesh, skipping the DUNEuro solve. Use this when the
+% base lead field already exists and you only need its mesh to seed
+% run_fem_leadfields_warped — meshing takes minutes, solving takes hours.
+mesh_only            = false;
+
 % Compartment ordering — must match the field names in the geometry .mat file
 % and the conductivity assignments below
 ordering = {'wm', 'bone', 'heart', 'lungs', 'torso'};
@@ -583,6 +588,11 @@ for fIdx = 1:numel(filenames)
                     'tetgen_maxvol', tetgen_maxvol);
         save(vm_file, '-struct', 'vm', '-v7.3');
         fprintf('  Cached volume mesh: %s\n', vm_file);
+    end
+
+    if mesh_only
+        fprintf('  mesh_only is set — skipping the DUNEuro solve.\n\n');
+        continue;
     end
 
     %% STEP 8: Run FEM forward model for front and back sensor arrays
