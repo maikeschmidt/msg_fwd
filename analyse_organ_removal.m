@@ -47,6 +47,14 @@
 % OUTPUTS (to <save_base_dir>/organ_removal/):
 %   organ_removal_report.txt
 %   organ_removal_results.csv        every variant x axis x orientation
+%
+%   Per-source curves, same style as plot_per_source_cc_re:
+%   organ_removal_per_source_within_bem_overview_axis<N>.png/.fig
+%   organ_removal_per_source_within_bem_axis<N>_<ori>.png/.fig
+%   organ_removal_per_source_vs_fem_overview_axis<N>.png/.fig
+%   organ_removal_per_source_vs_fem_axis<N>_<ori>.png/.fig
+%
+%   Summary bars, median RE per variant:
 %   organ_removal_within_bem.png/.fig
 %   organ_removal_vs_fem.png/.fig
 %
@@ -319,7 +327,53 @@ fclose(fid);
 fclose(fcsv);
 
 
-% FIGURES
+% PER-SOURCE FIGURES
+%
+% Same style as plot_per_source_cc_re produces for the published lead
+% fields: r2 on top, RE below, against distance along the cord, one
+% overview per sensor axis plus one figure per orientation.
+
+fprintf('\nPer-source r2 and RE figures...\n');
+
+% (A) within-BEM — every variant against the intact model
+pairs_A = cell(numel(keys)-1, 3);
+for v = 2:numel(keys)
+    pairs_A(v-1,:) = {ref_key, keys{v}, labs{v}};
+end
+
+popts = struct( ...
+    'save_dir',           save_dir, ...
+    'orientation_labels', {orientation_labels}, ...
+    'ori_titles',         ori_titles, ...
+    'src_spacing_mm',     src_spacing_mm, ...
+    'metric_opts',        metric_opts, ...
+    'colors',             pair_colors, ...
+    'markers',            {pair_markers}, ...
+    'line_width',         pub_line_width, ...
+    'marker_size',        pub_marker_size, ...
+    'individual',         true);
+
+fprintf('  (A) within-BEM\n');
+popts.prefix     = 'organ_removal_per_source_within_bem';
+popts.title_stem = 'Organ removal vs intact BEM';
+plot_per_source_metrics(leadfields, pairs_A, popts);
+
+% (B) cross-solver — every BEM variant against the intact FEM, with the
+% intact BEM included so the baseline curve is on the same axes. This is
+% the figure that shows whether organ removal closes the VD divergence.
+if have_fem
+    pairs_B = cell(numel(keys), 3);
+    for v = 1:numel(keys)
+        pairs_B(v,:) = {fem_ref_key, keys{v}, labs{v}};
+    end
+    fprintf('  (B) cross-solver vs FEM\n');
+    popts.prefix     = 'organ_removal_per_source_vs_fem';
+    popts.title_stem = 'BEM organ variants vs FEM original';
+    plot_per_source_metrics(leadfields, pairs_B, popts);
+end
+
+
+% SUMMARY BAR FIGURES
 
 for fam = 1:size(families,1)
     if strcmp(families{fam,1},'A_within_bem')
