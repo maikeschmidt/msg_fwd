@@ -91,11 +91,11 @@ warp_geom_dir = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\replication
 mesh_dir    = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\replications\fields';        % SET THIS
 output_base = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\replications\fields\fem';   % SET THIS
 
-duneuro_binpath = 'D:\MATLAB Tools\msg_coreg\fem_tutorial\fem_tools\bst_duneuro_meeg_win64.exe';  % SET THIS
+duneuro_binpath = 'C:\wtcnapps\duneuro\bst_duneuro_meeg_win64.exe';  % SET THIS
 
 % Bone variants to process. Each needs its own cached base mesh, because
 % each base geometry carries a different bone mesh.
-variants   = {'cont', 'inhomo', 'realistic'};   % SET THIS
+variants   = {'realistic'};   % SET THIS
 base_stem  = 'geometries_anatom_full_%s';       % base geometry naming
 warp_stem  = 'geometries_warp*_%s.mat';         % warped geometry naming
 
