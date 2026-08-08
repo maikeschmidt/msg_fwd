@@ -33,6 +33,12 @@ function [tet, src, sens, Q] = fem_warp_volume(tet, src, sens, M, opts)
 %   ANATOMIES, and mesh variability is quantified separately by the
 %   convergence study. State it rather than leave it implicit.
 %
+% ORIENTATION
+%   Handled by fem_check_orientation, which uses
+%   hbf_CheckTriangleOrientation — the same function the rest of the
+%   pipeline uses on its surface components. See that file for how a
+%   surface check is applied to a volume mesh.
+%
 % LIMITS
 %   Affine transforms only. This is exactly the class cr_generate_warps
 %   produces (per-axis scale plus shear, rescaled to det = 1) and the class
@@ -55,7 +61,8 @@ function [tet, src, sens, Q] = fem_warp_volume(tet, src, sens, M, opts)
 % OUTPUT:
 %   tet, src, sens - transformed copies
 %   Q    - struct: det, cond, quality_before, quality_after, quality_ratio,
-%          n_inverted
+%          n_inverted, flipped, base_n_positive, base_n_negative, n_zero,
+%          orient_method, hbf_per_region
 %
 % -------------------------------------------------------------------------
 % Copyright (c) 2026 University College London
@@ -87,6 +94,26 @@ if Q.det <= 0
          'and inverts every tetrahedron.'], Q.det);
 end
 
+% ELEMENT ORIENTATION, VIA THE PIPELINE'S OWN CHECK
+%
+% fem_check_orientation extracts each tissue region's boundary surface and
+% runs hbf_CheckTriangleOrientation on it — the same function
+% run_fem_leadfields and run_bem_leadfields use on their surface components
+% — then corrects the TETRAHEDRA if the verdict is clockwise. It also
+% refuses a mesh with mixed element ordering, which no global swap can fix.
+%
+% Done BEFORE the transform, so what gets warped is already consistently
+% ordered and the post-transform check below is a genuine assertion rather
+% than a convention test.
+[tet, R] = fem_check_orientation(tet, struct('verbose', opts.verbose));
+
+Q.flipped         = R.flipped;
+Q.base_n_positive = R.n_positive;
+Q.base_n_negative = R.n_negative;
+Q.n_zero          = R.n_zero;
+Q.orient_method   = R.method;
+Q.hbf_per_region  = R.hbf_per_region;
+
 % Quality before and after. Normalised so a regular tetrahedron scores 1.
 Q.quality_before = tet_quality(tet.pos, tet.tet);
 
@@ -95,13 +122,13 @@ tet.pos = tet.pos * A' + b;
 Q.quality_after = tet_quality(tet.pos, tet.tet);
 Q.quality_ratio = mean(Q.quality_after) / mean(Q.quality_before);
 
-% Guaranteed by det > 0, but verified rather than assumed — a silent
-% inversion would poison the FEM solve without any error.
+% det(A) > 0 guarantees the sign survives, but verify rather than assume: a
+% silent inversion would poison the FEM solve without raising anything.
 Q.n_inverted = sum(signed_volume(tet.pos, tet.tet) <= 0);
 if Q.n_inverted > 0
     error('fem_warp_volume:inverted', ...
-        '%d tetrahedra have non-positive volume after the transform.', ...
-        Q.n_inverted);
+        ['%d tetrahedra have non-positive volume after the transform, ' ...
+         'despite det(A) = %.6g > 0.'], Q.n_inverted, Q.det);
 end
 
 if Q.quality_ratio < opts.min_quality
