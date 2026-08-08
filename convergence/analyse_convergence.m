@@ -72,8 +72,8 @@ fprintf('=== Mesh convergence analysis ===\n\n');
 
 % USER CONFIGURATION
 
-fem_conv_dir = 'D:\Simulations\Convergence\fem\convergence';   % SET THIS
-bem_conv_dir = 'D:\Simulations\Convergence\bem\convergence_allsurf';   % SET THIS
+fem_conv_dir = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\Convergence\fem\convergence';   % SET THIS
+bem_conv_dir = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\Convergence\bem\convergence_allsurf';   % SET THIS
 %   ^ The ALL-SURFACES sweep (sweep_all_surfaces = true). That is the one
 %     that supports the general claim "results are independent of mesh
 %     resolution", because every compartment varies.

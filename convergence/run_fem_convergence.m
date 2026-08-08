@@ -128,7 +128,7 @@ filename    = 'geometries_anatom_full_realistic';      % SET THIS
 % Spans the previously committed 500 mm^3 and the manuscript's 10 mm^3,
 % and continues finer so that a genuine asymptote can be demonstrated
 % rather than assumed.
-maxvol_mm3_levels = [1000, 500, 200, 100, 50, 20, 10, 5, 2];
+maxvol_mm3_levels = [1000, 500, 200, 100, 50];
 
 surf2mesh_opt_scale = 1;
 ordering = {'wm', 'bone', 'heart', 'lungs', 'torso'};

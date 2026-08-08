@@ -94,7 +94,7 @@ keep_fraction_levels = [0.25, 0.40, 0.50, 0.65, 0.80, 1.00];
 %
 % RUN BOTH. They answer different questions and each takes only a handful
 % of BEM builds. Output folders are tagged by mode so they do not collide.
-sweep_all_surfaces = false;
+sweep_all_surfaces = true;
 
 ordering_cord = {'wm', 'bone', 'heart', 'lungs', 'torso'};
 cratio  = 40;

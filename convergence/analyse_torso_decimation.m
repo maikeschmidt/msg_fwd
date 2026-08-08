@@ -67,13 +67,11 @@ fprintf('=== Torso decimation impact (Reviewer 2, point 3.2) ===\n\n');
 % USER CONFIGURATION
 
 % Folder written by run_bem_convergence with sweep_all_surfaces = false
-bem_conv_dir = 'D:\Simulations\Convergence\bem\convergence_torso';   % SET THIS
+bem_conv_dir = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\Convergence\bem\convergence_torso';   % SET THIS
 
 % The ORIGINAL published BEM lead field for the same geometry and array.
 % Leave empty to skip comparison (2).
-published_bem_file = ['D:\Simulations\Pertubations\fields\bem\' ...
-    'geometries_original_source_original\' ...
-    'leadfield_original_source_original_bem_back.mat'];   % SET THIS or ''
+published_bem_file = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\og_fields\geometries_anatom_full_realistic\leadfield_anatom_full_realistic_bem_back.mat';   % SET THIS or ''
 
 save_dir = fullfile(save_base_dir, 'torso_decimation');   % SET THIS
 
