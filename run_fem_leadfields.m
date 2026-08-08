@@ -507,9 +507,55 @@ for fIdx = 1:numel(filenames)
     % seed point (cent) it contains.
     
     fprintf('  Generating tetrahedral mesh (TetGen)...\n');
-    [node, elem, ~] = surf2mesh(merged_mesh.p, merged_mesh.e, ...
-        min(merged_mesh.p), max(merged_mesh.p), ...
-        surf2mesh_opt_scale, tetgen_maxvol, cent, [], [], 'tetgen1.5');
+
+    % Validate the region seeds BEFORE handing them to TetGen. Rows for the
+    % heart, lungs and torso keep the CENTROID assigned above, and the
+    % centroid of a concave organ can fall outside it. A non-finite seed is
+    % worse still: savesurfpoly writes it verbatim, TetGen cannot parse it
+    % and exits without printing anything, which surfaces as the unhelpful
+    % 'Tetgen command failed:' with an empty message.
+    bad_seed = find(any(~isfinite(cent), 2));
+    if ~isempty(bad_seed)
+        error('run_fem_leadfields:badSeed', ...
+            ['Region seed(s) %s are non-finite. TetGen cannot parse these ' ...
+             'and will fail with an empty error message.'], mat2str(bad_seed'));
+    end
+    for ii = 1:numel(klust)
+        if ~tt_is_inside(cent(ii,:), klust(ii).vertices, klust(ii).faces)
+            warning('run_fem_leadfields:seedOutside', ...
+                ['Seed for %s is OUTSIDE its own surface. TetGen will ' ...
+                 'mislabel that compartment.'], klust(ii).name);
+        end
+    end
+
+    try
+        [node, elem, ~] = surf2mesh(merged_mesh.p, merged_mesh.e, ...
+            min(merged_mesh.p), max(merged_mesh.p), ...
+            surf2mesh_opt_scale, tetgen_maxvol, cent, [], [], 'tetgen1.5');
+    catch meshErr
+        % Save exactly what TetGen was given, so the failure can be
+        % reproduced without re-running the whole pipeline. Without this the
+        % .poly is overwritten by the next geometry and the evidence is gone.
+        dump = fullfile(output_base, ...
+            sprintf('TETGEN_FAILED_%s.mat', geom_fname_noext));
+        comp_names = {klust.name};
+        save(dump, 'merged_mesh', 'cent', 'comp_names', 'tetgen_maxvol', ...
+             'surf2mesh_opt_scale', '-v7.3');
+
+        if exist('mwpath','file') == 2 && isfile(mwpath('post_vmesh.poly'))
+            copyfile(mwpath('post_vmesh.poly'), ...
+                fullfile(output_base, ...
+                sprintf('TETGEN_FAILED_%s.poly', geom_fname_noext)));
+        end
+
+        fprintf(2, '\n  TetGen FAILED on %s\n', geom_fname_noext);
+        fprintf(2, '  %s\n', meshErr.message);
+        fprintf(2, '  Input saved to %s\n', dump);
+        fprintf(2, '  Diagnose with:  diagnose_tetgen(''maxvol'', %g)\n', ...
+            tetgen_maxvol);
+        fprintf(2, '  Continuing to the next geometry.\n\n');
+        continue;
+    end
 
     %% STEP 7: Remap TetGen region IDs to tissue conductivity labels
     % TetGen assigns region IDs starting from 11 (offset of 10).
