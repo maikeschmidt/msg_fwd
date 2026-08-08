@@ -119,8 +119,9 @@
 % PATHS — update these before running
 
 forward_fields_base = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\og_fields\';   % SET THIS: path to leadfield .mat files
+real_fields_base    = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\og_fields\geometries_anatom_full_realistic';
 geoms_path          = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\og_geometries';   % SET THIS: path to geometry .mat files
-save_base_dir       = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\og_fields_analysis_rerun';   % SET THIS: base path for saving all figures
+save_base_dir       = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\replicates';   % SET THIS: base path for saving all figures
 
 
 % MODEL NAMES AND TYPES
@@ -165,8 +166,8 @@ core_fem_key = sprintf('fem_%s_%s', core_variant, core_array);
 % BEM files hold 'leadfield_cord'; FEM files hold 'leadfield_ft'.
 core_bem_fname = sprintf('leadfield_%s_bem_%s.mat',       core_variant, core_array);
 core_fem_fname = sprintf('cord_leadfield_%s_fem_%s.mat',  core_variant, core_array);
-core_bem_file  = fullfile(forward_fields_base, core_bem_fname);
-core_fem_file  = fullfile(forward_fields_base, core_fem_fname);
+core_bem_file  = fullfile(real_fields_base, core_bem_fname);
+core_fem_file  = fullfile(real_fields_base, core_fem_fname);
 
 
 % ORGAN REMOVAL (Reviewer 1: move this analysis into the Results)

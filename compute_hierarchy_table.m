@@ -97,17 +97,17 @@ save_dir = fullfile(save_base_dir, 'hierarchy');   % SET THIS
 % leadfields_organised.mat via forward_fields_base in config_models.
 
 % CSF sweep
-csf_dir        = 'D:\Simulations\CSF\fields\fem\geometries_original_source_original';  % SET THIS
-csf_geom_short = 'original_source_original';                                            % SET THIS
+csf_dir        = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\CSF\fields\fem\geometries_anatom_full_realistic';  % SET THIS
+csf_geom_short = 'anatom_full_realistic';                                            % SET THIS
 
 % Bone conductivity sweep
-cond_bem_dir    = 'D:\Simulations\BoneCond\fields\bem\geometries_original_source_original';  % SET THIS
-cond_fem_dir    = 'D:\Simulations\BoneCond\fields\fem\geometries_original_source_original';  % SET THIS
-cond_geom_short = 'original_source_original';                                                 % SET THIS
+cond_bem_dir    = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\bone_cond_change\bem\geometries_anatom_full_realistic';  % SET THIS
+cond_fem_dir    = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\bone_cond_change\fem\geometries_anatom_full_realistic';  % SET THIS
+cond_geom_short = 'anatom_full_realistic';                                                 % SET THIS
 
 % Replicate geometries (coreg + warping)
-rep_bem_base = 'D:\Simulations\Replicates\fields\bem';   % SET THIS
-rep_fem_base = 'D:\Simulations\Replicates\fields\fem';   % SET THIS
+rep_bem_base = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\replications\fields';   % SET THIS
+rep_fem_base = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\replications\fields';   % SET THIS
 coreg_ids    = arrayfun(@(k) sprintf('coreg_rep%02d', k), 1:5,  'uni', 0);
 warp_ids     = arrayfun(@(k) sprintf('warp%02d',      k), 1:30, 'uni', 0);
 
