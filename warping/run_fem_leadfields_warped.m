@@ -91,7 +91,11 @@ warp_geom_dir = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\replication
 mesh_dir    = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\replications\fields';        % SET THIS
 output_base = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\replications\fields\fem';   % SET THIS
 
-duneuro_binpath = 'C:\wtcnapps\duneuro\bst_duneuro_meeg_win64.exe';  % SET THIS
+% FOLDER containing bst_duneuro_meeg_win64.exe — NOT the .exe itself.
+% fem_calc_fwds does fullfile(S.binpath, 'bst_duneuro_meeg_win64.exe'), so
+% passing the executable builds ...exe\...exe and Windows reports
+% 'The directory name is invalid'. Matches run_fem_leadfields.
+duneuro_binpath = 'C:\wtcnapps\duneuro';   % SET THIS
 
 % Bone variants to process. Each needs its own cached base mesh, because
 % each base geometry carries a different bone mesh.
@@ -110,8 +114,18 @@ overwrite         = false;
 
 % RUN
 
-if ~isfile(duneuro_binpath)
-    error('DUNEuro binary not found:\n  %s', duneuro_binpath);
+% Fail here rather than 30 replicates deep. Checked as a FOLDER, because
+% passing the .exe is the easy mistake and its error names neither.
+if isfile(duneuro_binpath)
+    error(['duneuro_binpath must be the FOLDER containing ' ...
+           'bst_duneuro_meeg_win64.exe, not the executable itself:\n  %s'], ...
+          duneuro_binpath);
+end
+if ~isfolder(duneuro_binpath)
+    error('DUNEuro folder not found:\n  %s', duneuro_binpath);
+end
+if ~isfile(fullfile(duneuro_binpath, 'bst_duneuro_meeg_win64.exe'))
+    error('bst_duneuro_meeg_win64.exe not found in:\n  %s', duneuro_binpath);
 end
 
 fprintf('=== FEM lead fields on warped volume meshes ===\n');
