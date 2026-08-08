@@ -121,7 +121,7 @@
 forward_fields_base = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\og_fields\';   % SET THIS: path to leadfield .mat files
 real_fields_base    = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\og_fields\geometries_anatom_full_realistic';
 geoms_path          = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\og_geometries';   % SET THIS: path to geometry .mat files
-save_base_dir       = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\';   % SET THIS: base path for saving all figures
+save_base_dir       = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\replicates';   % SET THIS: base path for saving all figures
 
 
 % MODEL NAMES AND TYPES

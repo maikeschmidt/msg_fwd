@@ -69,8 +69,8 @@ fprintf('=== Collecting replicate metrics ===\n\n');
 
 % Folders holding the BEM and FEM leadfields for the replicate geometries.
 % Each replicate is expected in its own subfolder named after the geometry.
-bem_base = 'D:\Simulations\Replicates\fields\bem';   % SET THIS
-fem_base = 'D:\Simulations\Replicates\fields\fem';   % SET THIS
+bem_base = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\replications\fields';   % SET THIS
+fem_base = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\replications\fields';   % SET THIS
 save_dir = fullfile(save_base_dir, 'group_stats');   % SET THIS
 
 % SET THIS: replicate IDENTIFIERS (no 'geometries_' prefix, no bone tag).
