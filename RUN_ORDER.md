@@ -164,6 +164,26 @@ you still get a convergence curve.
 
 ### 2d. Replicates — **by far the biggest job**, several days
 
+> **FEM replicates: transform the volume mesh, do not re-mesh.**
+> Re-tetrahedralising 30 warped geometries puts TetGen in the loop 30 times
+> and it fails on anisotropically scaled surfaces. Instead:
+>
+> ```matlab
+> run_fem_leadfields          % base geometry only, save_volume_mesh = true
+> run_fem_leadfields_warped   % all replicates, no TetGen
+> ```
+>
+> Each replicate's transform is read back from the warped geometry file the
+> BEM already used and verified against the base, so **the BEM does not need
+> re-running** — both solvers sit on the identical anatomy. Element quality
+> is measured per replicate; quote the minimum in the Methods.
+>
+> This does not help a base geometry that cannot be meshed at all. The
+> canonical torso with toroidal bone self-intersects before any transform is
+> applied — check with `cr_scan_intersections` and fix the base, or run that
+> family on a bone variant that meshes.
+
+
 Paste the filenames printed by the Phase 1 build scripts into the
 `filenames` list in `run_bem_leadfields.m` and `run_fem_leadfields.m`, then:
 

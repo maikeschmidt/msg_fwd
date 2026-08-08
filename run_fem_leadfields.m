@@ -241,6 +241,11 @@ tetgen_maxvol_mm3    = 500;                       % produced the published resul
 tetgen_maxvol        = tetgen_maxvol_mm3 * 1e-9;  % mm^3 -> m^3
 surf2mesh_opt_scale  = 1;
 
+% Save the tetrahedral mesh alongside the lead fields. Needed if you intend
+% to run the warped replicates via run_fem_leadfields_warped, which
+% transforms a cached volume mesh rather than re-meshing warped surfaces.
+save_volume_mesh     = true;
+
 % Compartment ordering — must match the field names in the geometry .mat file
 % and the conductivity assignments below
 ordering = {'wm', 'bone', 'heart', 'lungs', 'torso'};
@@ -561,6 +566,24 @@ for fIdx = 1:numel(filenames)
     tet.tet    = elem(:, 1:4);
     tet.tissue = elem(:, 5);
     tet.unit   = 'm';
+
+    % CACHE THE VOLUME MESH
+    % Tetrahedralising is the fragile, expensive step. Saving the result
+    % means a replicate study can transform THIS mesh instead of meshing a
+    % warped surface 30 more times — see run_fem_leadfields_warped. The
+    % tissue labels and node ordering are inherited exactly, which also
+    % removes the randomly-sampled region seeds as a source of
+    % replicate-to-replicate variation.
+    if save_volume_mesh
+        vm_file = fullfile(output_base, ...
+            sprintf('volume_mesh_%s.mat', geom_fname_noext));
+        vm = struct('tet', tet, 'src', src, ...
+                    'grad_front', grad_front, 'grad_back', grad_back, ...
+                    'bone_count', bone_count, 'geom_file', geom_fname_noext, ...
+                    'tetgen_maxvol', tetgen_maxvol);
+        save(vm_file, '-struct', 'vm', '-v7.3');
+        fprintf('  Cached volume mesh: %s\n', vm_file);
+    end
 
     %% STEP 8: Run FEM forward model for front and back sensor arrays
     % DUNEuro solves the FEM forward problem for each sensor array.
