@@ -21,6 +21,20 @@
 %     model_types          - Cell array: 'bem', 'fem', or 'both' per model
 %     model_display        - Struct mapping model keys to display label strings
 %
+%   Core reference models (the MRI-realistic anatomical model):
+%     core_array           - Sensor array for the core models ('back')
+%     core_variant         - Reference geometry ('anatom_full_realistic')
+%     core_bem_key         - Key into leadfields_organised.mat for core BEM
+%     core_fem_key         - Key into leadfields_organised.mat for core FEM
+%     core_bem_fname       - Bare filename of the core BEM lead field
+%     core_fem_fname       - Bare filename of the core FEM lead field
+%     core_bem_file        - Full path to the core BEM lead field
+%     core_fem_file        - Full path to the core FEM lead field
+%
+%   Organ removal:
+%     organ_removal_base     - Parent folder holding the organ-removal runs
+%     organ_removal_variants - {subfolder, display label} per variant
+%
 %   Orientation labels:
 %     orientation_labels   - {'VD', 'RC', 'LR'} — internal field names
 %     orientation_display  - {'Ventral-Dorsal', 'Rostral-Caudal', 'Left-Right'}
@@ -131,6 +145,47 @@ model_types = { ...
 % Safety reshape — guards against accidental 2D cell array definitions
 model_names = model_names(:)';
 model_types = model_types(:)';
+
+
+% CORE REFERENCE MODELS
+%
+% The MRI-realistic anatomical model on the back array is the reference for
+% the whole study. Defined once here so every analysis script means the same
+% thing by "the core model", instead of each script rebuilding the key with
+% its own sprintf. Use these anywhere a script needs the baseline BEM or FEM.
+
+core_array   = 'back';                    % SET THIS: sensor array
+core_variant = 'anatom_full_realistic';   % SET THIS: reference geometry
+
+% Keys into leadfields_organised.mat
+core_bem_key = sprintf('bem_%s_%s', core_variant, core_array);
+core_fem_key = sprintf('fem_%s_%s', core_variant, core_array);
+
+% Raw lead field files, for analyses that load outside the organised struct.
+% BEM files hold 'leadfield_cord'; FEM files hold 'leadfield_ft'.
+core_bem_fname = sprintf('leadfield_%s_bem_%s.mat',       core_variant, core_array);
+core_fem_fname = sprintf('cord_leadfield_%s_fem_%s.mat',  core_variant, core_array);
+core_bem_file  = fullfile(forward_fields_base, core_bem_fname);
+core_fem_file  = fullfile(forward_fields_base, core_fem_fname);
+
+
+% ORGAN REMOVAL (Reviewer 1: move this analysis into the Results)
+%
+% BEM lead fields recomputed on the SAME realistic anatomical model with
+% thoracic organs removed. Because the geometry variant is unchanged the
+% filenames are identical to core_bem_fname — only the folder differs, so
+% each variant is defined by its directory.
+%
+% Used by analyse_organ_removal and by compute_hierarchy_table.
+
+organ_removal_base = fullfile(forward_fields_base, 'forward_fields_heart_lungs');   % SET THIS
+
+% {subfolder, display label}. Comment out any variant you do not have.
+organ_removal_variants = { ...
+    'no_heart',       'No heart'; ...
+    'no_lungs',       'No lungs'; ...
+    'no_heart_lungs', 'No heart or lungs'; ...
+};
 
 
 % BONE MODEL VARIANTS

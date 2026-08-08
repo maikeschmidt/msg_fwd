@@ -166,7 +166,9 @@ back array, and computing front as well doubles the cost for nothing.
 
 ```matlab
 % Core pipeline — regenerates every main-text figure and table with the
-% unified Eq 13 / Eq 14 metrics
+% unified Eq 13 / Eq 14 metrics. Step 14 is the organ-removal analysis;
+% uncomment the organ block in config_models first if you have those
+% lead fields, otherwise it reports SKIPPED and the run continues.
 load_and_organise_leadfields
 run_all_analysis
 
@@ -176,11 +178,36 @@ analyse_csf_effect            % needs 2b
 analyse_convergence           % needs 2c
 st_collect_replicates         % needs 2d
 st_group_stats                % needs st_collect_replicates
+
+% LAST — pulls every factor above onto one scale
+compute_hierarchy_table
 ```
 
 Run `run_all_analysis` even though the leadfields are unchanged: the RE
 definition moved from the symmetric L1 metric to manuscript Eq 13, so every
 number in the existing figures and tables is superseded.
+
+### `compute_hierarchy_table` — run this last
+
+It reads from all the analyses above, so run it once the others have
+finished. Anything missing is reported as `--` rather than erroring, so it
+is safe to run early to see progress.
+
+Outputs, in `<save_base_dir>/hierarchy/`:
+
+| File | Use |
+|---|---|
+| `hierarchy_table.tex` | main text, factors as columns, headline axis |
+| `hierarchy_table_rows.tex` | main text alternative, factors as rows, sorted by RE |
+| `hierarchy_table_axis<N>.tex` | supplementary, one per sensor axis |
+| `hierarchy_table_rows_axis<N>.tex` | supplementary, one per sensor axis |
+| `hierarchy_table_all_axes.tex` | supplementary, all three axes side by side |
+| `hierarchy_summary.csv` | the same numbers, every axis, per solver and pooled |
+| `all_comparisons.csv` | every comparison x axis x orientation — extract any number from here |
+| `hierarchy_report.txt` | human-readable, one section per axis |
+
+The `.tex` files with factors as columns use `\resizebox`, so the preamble
+needs `\usepackage{graphicx}`. All of them use `booktabs`.
 
 ---
 
@@ -194,6 +221,10 @@ base geom ──> cr_generate_warps ─> cr_build_warp_geometries ─┘
 base geom ──> run_bone_conductivity_{bem,fem} ──> analyse_bone_conductivity
 base geom ──> run_fem_leadfields_csf ──────────> analyse_csf_effect
 base geom ──> run_{fem,bem}_convergence ───────> analyse_convergence
+
+BEM organ variants ─> load_and_organise_leadfields ─> analyse_organ_removal
+
+  all of the above ──────────────────────────────> compute_hierarchy_table
 ```
 
 ---
