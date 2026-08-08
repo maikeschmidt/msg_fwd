@@ -173,13 +173,9 @@ end
 % All geometry .mat files to process. Add or remove variants as needed.
 
 filenames = { ...                                                                          % line 175
-    'geometries_anatom_full_cont', ...
-    'geometries_anatom_full_inhomo', ...
     'geometries_anatom_full_realistic', ...
 };
 
-save_volume_mesh = true;
-mesh_only        = true;
 
 % MESHING PARAMETERS
 % tetgen_maxvol_mm3:  maximum tetrahedron volume in CUBIC MILLIMETRES.
