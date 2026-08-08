@@ -46,10 +46,18 @@
 %     convergence/   Mesh convergence. THREE INDEPENDENT TESTS — none of
 %                    them depends on the results of the others.
 %
-%       CORE (Reviewer 1; Reviewer 2 pt 7): global resolution
-%         1. run_fem_convergence                     volume h-refinement
-%         2. run_bem_convergence, sweep_all_surfaces = true
-%         3. analyse_convergence                     reads convergence_allsurf
+%       CORE (Reviewer 1; Reviewer 2 pt 7): surface resolution.
+%       PREFERRED, because the FEM mesh on this geometry is geometry-
+%       limited: a 20x sweep of tetgen_maxvol changed achieved element
+%       volume only 3.7x. Surface density is the controlling variable, and
+%       sweeping it puts BEM and FEM on ONE axis.
+%         1. run_bem_convergence, sweep_all_surfaces = true
+%         2. run_fem_surface_convergence, sweep_all_surfaces = true
+%         3. analyse_surface_convergence             both solvers, one axis
+%
+%       VOLUME SWEEP (secondary): run_fem_convergence + analyse_convergence.
+%       Retained because it bounds the volume bound's own effect, but it is
+%       a weak lever here — see the note in run_fem_surface_convergence.
 %
 %       TORSO DECIMATION (Reviewer 2 pt 3.2): the 50% reduction
 %         1. run_bem_convergence, sweep_all_surfaces = false
@@ -122,10 +130,10 @@ fprintf('  Department of Imaging Neuroscience\n');
 % Before running, ensure model_names in config_models.m matches the
 % set of leadfields you want to analyse.
 
-fprintf('[1/13] Loading and organising leadfields...\n');
+fprintf('[1/14] Loading and organising leadfields...\n');
 try
     run('load_and_organise_leadfields.m');
-    fprintf('[1/13] Complete.\n\n');
+    fprintf('[1/14] Complete.\n\n');
 catch err
     fprintf('ERROR: load_and_organise_leadfields failed:\n  %s\n', err.message);
     fprintf('Cannot continue without organised leadfields. Exiting.\n');
@@ -135,30 +143,35 @@ end
 % STEP 2: Anatomical figures
 % Does not depend on leadfields_organised.mat — can be run independently.
 
-fprintf('[2/13] Generating anatomical figures...\n');
+fprintf('[2/14] Generating anatomical figures...\n');
 try
     run('plot_anatomical_figures.m');
-    fprintf('[2/13] Complete.\n\n');
+    fprintf('[2/14] Complete.\n\n');
 catch err
     fprintf('WARNING: plot_anatomical_figures failed:\n  %s\n', err.message);
     fprintf('Continuing with remaining scripts...\n\n');
 end
 
-% STEPS 3-13: Core analysis and figure generation
+% STEPS 3-14: Core analysis and figure generation
 % All scripts load leadfields_organised.mat and config_models independently.
+%
+% Step 14 (organ removal) needs the organ-removal variants uncommented in
+% config_models and load_and_organise_leadfields re-run. If they are not
+% loaded it reports that and is skipped, like any other missing analysis.
 
 scripts = {
-    'plot_absmax_curves',           '[3/13]  Absolute max amplitude curves';
-    'plot_pairwise_heatmaps',       '[4/13]  Pairwise RE and r² heatmaps';
-    'plot_per_source_cc_re',        '[5/13]  Per-source CC and RE curves';
-    'plot_topoplots',               '[6/13]  Topoplot figures';
-    'plot_distance_vs_amplitude',   '[7/13]  Distance vs amplitude scatter';
-    'plot_front_back_ratio',        '[8/13]  Front/back amplitude ratio';
-    'plot_rsq_re_vs_realistic',     '[9/13]  r² and RE vs realistic bone';
-    'analyse_normal_angles',        '[10/13] Surface normal angle analysis';
-    'compute_amplitude_diff_table', '[11/13] Amplitude % difference table';
-    'compute_re_cc_table',          '[12/13] RE and r² summary table';
-    'plot_decomposition',           '[13/13] Amplitude/topography decomposition';
+    'plot_absmax_curves',           '[3/14]  Absolute max amplitude curves';
+    'plot_pairwise_heatmaps',       '[4/14]  Pairwise RE and r² heatmaps';
+    'plot_per_source_cc_re',        '[5/14]  Per-source CC and RE curves';
+    'plot_topoplots',               '[6/14]  Topoplot figures';
+    'plot_distance_vs_amplitude',   '[7/14]  Distance vs amplitude scatter';
+    'plot_front_back_ratio',        '[8/14]  Front/back amplitude ratio';
+    'plot_rsq_re_vs_realistic',     '[9/14]  r² and RE vs realistic bone';
+    'analyse_normal_angles',        '[10/14] Surface normal angle analysis';
+    'compute_amplitude_diff_table', '[11/14] Amplitude % difference table';
+    'compute_re_cc_table',          '[12/14] RE and r² summary table';
+    'plot_decomposition',           '[13/14] Amplitude/topography decomposition';
+    'analyse_organ_removal',        '[14/14] Organ removal (heart / lungs)';
 };
 
 for s = 1:size(scripts, 1)
