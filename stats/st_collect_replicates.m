@@ -92,22 +92,33 @@ replicate_type = [repmat({'coreg'}, 1, 5), repmat({'warp'}, 1, 30)];
 %   FEM      : cord_leadfield_<replicate_id>_<variant>_fem_<array>.mat
 % This matches run_bem_leadfields.m and run_fem_leadfields.m exactly.
 %
-% WHY 'inhomo' AND NOT 'realistic' BY DEFAULT
-% The canonical torso has NO realistic bone mesh — cr_check_registration
-% errors on that combination — and the coregistration repeats use the
-% canonical model. 'inhomo' (toroidal) exists for both canonical and
-% anatomical, so using it lets the coreg repeats and the warped anatomies
-% go into ONE collection with identical contrasts.
+% THE BONE VARIANT DIFFERS BETWEEN THE TWO REPLICATE FAMILIES
+% The coregistration repeats were run on the CANONICAL torso, which has no
+% realistic bone mesh — cr_check_registration errors on that combination —
+% so they use 'inhomo' (toroidal). The warped anatomies were run on the
+% anatomical model with 'realistic' bone.
 %
-% It is also a fair choice scientifically: the paper's geometry effect is
-% continuous versus SEGMENTED, and the toroidal model is segmented. The
-% paper already reports toroidal and realistic as comparable.
-%
-% To use 'realistic' instead, restrict replicate_ids to the warps only.
+% Contrasts therefore name the variant with the token 'main', resolved per
+% replicate through variant_for_type below. Everything downstream is keyed
+% on the token, so the two families still go into ONE collection with
+% identical contrast names.
+variant_for_type = struct( ...
+    'coreg', 'inhomo', ...       % SET THIS: bone variant of the coreg repeats
+    'warp',  'realistic');       % SET THIS: bone variant of the warps
+
 contrasts = {
-    'solver',   'inhomo', 'bem', 'inhomo', 'fem';   % BEM vs FEM, same geometry
-    'geometry', 'inhomo', 'bem', 'cont',   'bem';   % segmented vs continuous bone
+    'solver',   'main', 'bem', 'main', 'fem';   % BEM vs FEM, same geometry
+    'geometry', 'main', 'bem', 'cont', 'bem';   % segmented vs continuous bone
 };
+
+% CAVEAT ON THE 'geometry' CONTRAST
+% Because 'main' resolves differently per family, the geometry contrast is
+% toroidal-vs-continuous for the coreg repeats and realistic-vs-continuous
+% for the warps. Those are not the same comparison, so pooling all 35
+% replicates for THAT contrast mixes two effects. The 'solver' contrast is
+% unaffected — it is BEM vs FEM on identical geometry either way, which is
+% the contrast the replicate analysis exists to test. If you report the
+% geometry contrast, split it by G.replicate_type first.
 
 array_name    = 'back';
 target_axis   = 3;
@@ -159,9 +170,14 @@ for r = 1:n_rep
     loaded = true;
 
     for k = 1:size(needed, 1)
-        variant = needed{k, 1};
-        method  = needed{k, 2};
-        key     = model_key(variant, method);
+        variant_tok = needed{k, 1};
+        method      = needed{k, 2};
+
+        % Key on the TOKEN so contrasts match regardless of which bone
+        % variant this replicate family actually used; load from the
+        % RESOLVED variant, which is what is on disk.
+        variant = resolve_variant(variant_tok, replicate_type{r}, variant_for_type);
+        key     = model_key(variant_tok, method);
 
         fpath = leadfield_path(bem_base, fem_base, rep_id, variant, ...
                                method, array_name);
@@ -246,6 +262,9 @@ G.contrast_models    = contrasts;
 G.replicate_names    = replicate_ids;
 G.replicate_ids      = replicate_ids;
 G.replicate_type     = replicate_type;
+G.replicate_variant  = cellfun(@(ty) variant_for_type.(ty), replicate_type, ...
+                               'UniformOutput', false);
+G.variant_for_type   = variant_for_type;
 G.orientation_labels = orientation_labels;
 G.metric_opts        = metric_opts;
 G.array              = array_name;
@@ -289,6 +308,16 @@ function f = leadfield_path(bem_base, fem_base, rep_id, variant, method, arr)
                 sprintf('cord_leadfield_%s_fem_%s.mat', short, arr));
         otherwise
             error('Unknown method "%s". Valid: bem | fem.', method);
+    end
+end
+
+function v = resolve_variant(tok, rtype, map)
+% 'main' means "whichever bone variant this replicate family was built
+% with"; anything else is a literal variant name.
+    if strcmp(tok, 'main')
+        v = map.(rtype);
+    else
+        v = tok;
     end
 end
 
