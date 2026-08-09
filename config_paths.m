@@ -135,8 +135,12 @@ core_fem_key  = sprintf('fem_%s_%s', core_variant, core_array);
 
 core_bem_fname = sprintf('leadfield_%s_bem_%s.mat',      core_variant, core_array);
 core_fem_fname = sprintf('cord_leadfield_%s_fem_%s.mat', core_variant, core_array);
-core_bem_file  = fullfile(og_fields, core_bem_fname);
-core_fem_file  = fullfile(og_fields, core_fem_fname);
+
+% og_fields keeps one subfolder per geometry, so the core lead fields are
+% inside geometries_<variant>, not at the root.
+core_model_dir = fullfile(og_fields, sprintf('geometries_%s', core_variant));
+core_bem_file  = fullfile(core_model_dir, core_bem_fname);
+core_fem_file  = fullfile(core_model_dir, core_fem_fname);
 
 
 % ORGAN REMOVAL
@@ -150,6 +154,13 @@ organ_removal_variants = { ...
     'no_lungs',       'No lungs'; ...
     'no_heart_lungs', 'No heart or lungs'; ...
 };
+
+% The intact models from the SAME run as the organ variants. Preferred over
+% the core files for that analysis, since a difference then reflects organ
+% removal rather than any difference between runs.
+organ_intact_dir      = fullfile(organ_fields, 'original');
+organ_intact_bem_file = fullfile(organ_intact_dir, core_bem_fname);
+organ_intact_fem_file = fullfile(organ_intact_dir, core_fem_fname);
 
 
 % BACK-COMPATIBILITY
@@ -187,6 +198,8 @@ if ~exist('config_paths_quiet', 'var') || ~config_paths_quiet
         'bone_cond_fields_fem', bone_cond_fields_fem; ...
         'convergence_bem_base', convergence_bem_base; ...
         'convergence_fem_base', convergence_fem_base; ...
+        'core_model_dir',       core_model_dir; ...
+        'organ_intact_dir',     organ_intact_dir; ...
     };
     missing = path_checks(~cellfun(@(p) isfolder(p), path_checks(:,2)), 1);
     if ~isempty(missing)

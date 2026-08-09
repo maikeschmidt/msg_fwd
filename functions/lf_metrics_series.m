@@ -56,6 +56,32 @@
 
 function M = lf_metrics_series(LA, LB, opts)
 
+
+% MAGNITUDE SANITY CHECK
+%
+% Two lead fields of the same physical quantity cannot differ in overall
+% magnitude by orders of magnitude. When they do it is a units or scaling
+% mistake, and the symptom is RE pinned near 100% with r2 still near 1 —
+% which reads as a dramatic result rather than a bug. Warned once per
+% session so a batch does not flood the console.
+persistent warned_scale
+if isempty(warned_scale), warned_scale = false; end
+if ~warned_scale
+    na = median(sqrt(sum(LA.^2, 1)), 'omitnan');
+    nb = median(sqrt(sum(LB.^2, 1)), 'omitnan');
+    if na > 0 && nb > 0
+        r = nb / na;
+        if r > 1e3 || r < 1e-3
+            warning('lf_metrics_series:scaleMismatch', ...
+                ['The two lead fields differ in magnitude by %.3g. That is ' ...
+                 'a units mismatch, not a result: RE will sit near 100%% ' ...
+                 'while r2 stays near 1. Check units_out in both files and ' ...
+                 'see lf_unit_scale. This warning appears once per session.'], r);
+            warned_scale = true;
+        end
+    end
+end
+
 if nargin < 3, opts = struct(); end
 
 if size(LA, 1) ~= size(LB, 1)
