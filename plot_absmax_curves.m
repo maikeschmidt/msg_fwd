@@ -13,17 +13,23 @@
 %   config_models                  — shared configuration
 %   leadfields_organised.mat       — produced by load_and_organise_leadfields
 %
-% OUTPUTS (saved to <save_base_dir>/absmax/):
-%   absmax_compare_axis<N>_<ori>.png/.fig
-%   One figure per sensor axis per orientation (VD, RC, LR)
+% OUTPUTS (saved to <save_base_dir>/absmax/<group>/):
+%   absmax_compare_axis<N>_<ori>.png/.fig   one per sensor axis per orientation
+%   absmax_overview_axis<N>.png/.fig        all orientations side by side
+%
+%   One subfolder per comparison group:
+%     tor_comp_bem    BEM homogeneous vs toroidal
+%     tor_comp_fem    FEM homogeneous vs toroidal
+%     bone_comp_bem   BEM continuous / toroidal / realistic
+%     bone_comp_fem   FEM continuous / toroidal / realistic
 %
 % NOTES:
 %   - First and last sources are trimmed (vals(2:end-1)) to avoid edge
 %     artefacts from the spinal cord mesh boundary
-%   - models_to_compare and display_labels are configured in this script;
-%     update these to change which models appear in the figures
-%   - The models_to_compare list must be a subset of loaded_models from
-%     leadfields_organised.mat
+%   - Which models are plotted comes from config_comparisons.m;
+%     edit the groups there to change which models appear
+%   - Group members must be a subset of loaded_models from
+%     leadfields_organised.mat; anything missing is warned about and dropped
 %
 % REPOSITORY:
 %   https://github.com/maikeschmidt/msg_fwd
@@ -50,24 +56,40 @@ load(fullfile(forward_fields_base, 'leadfields_organised.mat'), ...
     'leadfields', 'abs_max_per_source', 'loaded_models');
 
 
-% CONFIGURATION — update to select which models to plot
+% CONFIGURATION
+%
+% Runs once per comparison group in absmax_groups, writing each to its own
+% subfolder of results/absmax named by group id:
+%
+%   absmax/tor_comp_bem/    BEM homogeneous vs toroidal
+%   absmax/tor_comp_fem/    FEM homogeneous vs toroidal
+%   absmax/bone_comp_bem/   BEM continuous / toroidal / realistic
+%   absmax/bone_comp_fem/   FEM continuous / toroidal / realistic
+%
+% Change which groups are produced, or what is in them, in
+% config_comparisons.m — not here.
 
-% SET THIS: models to include in the overlay plot.
-% Must match keys in abs_max_per_source (method_geometry_array format).
-models_to_compare = {
-    % 'bem_anatom_full_cont_back', ...
-    % 'bem_anatom_full_homo_back', ...
-    % 'bem_anatom_full_inhomo_back', ...
-    'bem_anatom_full_realistic_back', ...
-    % 'fem_anatom_full_cont_back', ...
-    % 'fem_anatom_full_homo_back', ...
-    % 'fem_anatom_full_inhomo_back', ...
-    'fem_anatom_full_realistic_back', ...
-};
+config_comparisons;
 
-% Output subfolder
-save_dir = fullfile(save_base_dir, 'absmax');
+groups_to_run = absmax_groups;   % SET THIS
+
+for grp_i = 1:numel(groups_to_run)
+
+group_id = groups_to_run{grp_i};
+gi = strcmp({CMP_GROUPS.id}, group_id);
+if ~any(gi)
+    warning('Unknown group "%s" — skipped.', group_id);
+    continue;
+end
+
+% Legend labels come from model_display, keyed per model, so they stay
+% correct even if a model in the group is missing and gets dropped.
+models_to_compare = CMP_GROUPS(gi).members;
+
+save_dir = fullfile(save_base_dir, 'absmax', group_id);
 if ~exist(save_dir, 'dir'); mkdir(save_dir); end
+
+fprintf('\n=== absmax: %s -> %s ===\n', CMP_GROUPS(gi).label, save_dir);
 
 
 % VALIDATE MODELS
@@ -82,7 +104,8 @@ for i = 1:numel(models_to_compare)
 end
 
 if numel(valid_models) < 2
-    error('Need at least 2 valid models to plot. Check models_to_compare.');
+    warning('Group "%s": fewer than 2 models loaded — skipped.', group_id);
+    continue;
 end
 
 n_models = numel(valid_models);
@@ -291,3 +314,7 @@ end
 fprintf('Combined overview figures saved to: %s\n', save_dir);
 
 fprintf('Absolute max plots saved to: %s\n', save_dir);
+
+end   % group loop
+
+fprintf('\nAll absmax groups complete.\n');
