@@ -237,7 +237,7 @@ save_volume_mesh     = true;
 % Stop after caching the mesh, skipping the DUNEuro solve. Use this when the
 % base lead field already exists and you only need its mesh to seed
 % run_fem_leadfields_warped — meshing takes minutes, solving takes hours.
-mesh_only            = false;
+mesh_only            = true;
 
 % Compartment ordering — must match the field names in the geometry .mat file
 % and the conductivity assignments below
