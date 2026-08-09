@@ -63,8 +63,10 @@ load(fullfile(forward_fields_base, 'leadfields_organised.mat'), ...
 % CONFIGURATION
 
 
-% SET THIS: bone variants to compare against realistic reference
-variant_names_rsq = {'cont', 'homo', 'inhomo'};
+% Bone variants compared against the realistic reference. Taken from the
+% registry so the set matches every other comparison.
+config_comparisons;
+variant_names_rsq = setdiff(bone_variants, {'realistic'}, 'stable');
 
 % Colours and markers for the three variants
 rsq_colors  = cb_colors(1:3, :);   % cont=blue, homo=orange, inhomo=green

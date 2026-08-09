@@ -12,7 +12,8 @@
 %   plot_per_source_cc_re
 %
 % DEPENDENCIES:
-%   config_models                  — shared configuration
+%   config_models                  — labels, colours, plotting conventions
+%   config_comparisons             — which comparisons to draw
 %   leadfields_organised.mat       — produced by load_and_organise_leadfields
 %
 % OUTPUTS (saved to <save_base_dir>/per_source_cc_re/):
@@ -27,11 +28,10 @@
 %   RE is returned in PERCENT — do not rescale when plotting.
 %   Computed per source position, not as a median across sources.
 %
-% MODEL PAIRS CONFIGURATION:
-%   model_pairs is defined below as an [n_pairs x 3] cell array:
-%     {full_key_A, full_key_B, legend_label}
-%   Several comparison types are pre-written as commented blocks —
-%   uncomment the relevant block for the desired comparison.
+% MODEL PAIRS:
+%   Taken from the registry in config_comparisons.m via cmp_select. Filter
+%   the selection to choose which comparisons are drawn; do not edit a pair
+%   list here.
 %
 % NOTES:
 %   - All pairs are truncated to the minimum sensor count across all
@@ -64,35 +64,23 @@ config_models;
 load(fullfile(forward_fields_base, 'leadfields_organised.mat'), ...
     'leadfields', 'abs_max_per_source', 'loaded_models');
 
-% CONFIGURATION — select comparison type by uncommenting one block
+% CONFIGURATION
+%
+% Pairs come from the comparison registry, not from an edited list here.
+% Change WHICH comparisons are drawn by editing config_comparisons.m, or by
+% changing the filter below.
+%
+%   cmp_select(CMP, 'dest','main')                    main-text figures
+%   cmp_select(CMP, 'dataset','og','kind','within_bem')   bone models, BEM
+%   cmp_select(CMP, 'dataset','og','kind','cross_solver') BEM vs FEM
+%
+% 'complete' drops registry entries whose pairs are built per replicate or
+% per sweep level by their own analysis script, since those carry no fixed
+% model keys.
 
-% % BEM vs FEM (matched bone model pairs) 
-model_pairs = {
-    'bem_anatom_full_cont_back',      'fem_anatom_full_cont_back',      'Continuous';
-    'bem_anatom_full_homo_back',      'fem_anatom_full_homo_back',      'Homogeneous';
-    'bem_anatom_full_inhomo_back',    'fem_anatom_full_inhomo_back',    'Toroidal';
-    'bem_anatom_full_realistic_back', 'fem_anatom_full_realistic_back', 'Realistic';
-};
+config_comparisons;
 
-% BEM vs BEM (bone model comparison within BEM) 
-% model_pairs = {
-%     'bem_anatom_full_realistic_back',     'bem_anatom_full_cont_back',      'Realistic vs Cont';
-%     % 'bem_anatom_full_realistic_back',     'bem_anatom_full_homo_back',      'Realistic vs Homo';
-%     'bem_anatom_full_realistic_back',     'bem_anatom_full_inhomo_back',    'Realistic vs Toroidal';
-% };
-
-% FEM vs FEM (bone model comparison within FEM) 
-% model_pairs = {
-    % 'fem_anatom_full_realistic_back',     'fem_anatom_full_cont_back',      'Realistic vs Cont';
-    % 'fem_anatom_full_realistic_back',     'fem_anatom_full_homo_back',      'Realistic vs Homo';
-    % 'fem_anatom_full_realistic_back',     'fem_anatom_full_inhomo_back',    'Realistic vs Toroidal';
-% };
-
-% Toroidal equivalence check (homo vs inhomo)
-% model_pairs = {
-%     'bem_anatom_full_homo_back',    'bem_anatom_full_inhomo_back',    'BEM Homo vs Inhomo';
-%     'fem_anatom_full_homo_back',    'fem_anatom_full_inhomo_back',    'FEM Homo vs Inhomo';
-% };
+model_pairs = cmp_select(CMP, 'dataset', 'og', 'complete');   % SET THIS
 
 save_dir = fullfile(save_base_dir, 'per_source_cc_re');
 if ~exist(save_dir, 'dir'); mkdir(save_dir); end

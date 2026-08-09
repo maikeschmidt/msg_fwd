@@ -92,17 +92,22 @@ load(fullfile(forward_fields_base, 'leadfields_organised.mat'), ...
 % CONFIGURATION
 
 % SET THIS: models to include in the table
-table_models = {
-    'bem_anatom_full_cont_back',       'BEM Continuous';
-    'bem_anatom_full_inhomo_back',     'BEM Toroidal';
-    'bem_anatom_full_realistic_back',  'BEM Realistic';
-    'fem_anatom_full_cont_back',       'FEM Continuous';
-    'fem_anatom_full_inhomo_back',     'FEM Toroidal';
-    'fem_anatom_full_realistic_back',  'FEM Realistic';
-};
+% Models come from the registry group, so the table covers the same set as
+% every other output. Every pair within it is reported, both directions.
+config_comparisons;
 
-% SET THIS: sensor axis to report (3 = radial axis for OPM)
-target_axis = 3;
+group_id = 'bone_both';   % SET THIS
+gi = strcmp({CMP_GROUPS.id}, group_id);
+if ~any(gi)
+    error('Unknown group "%s". Available: %s', group_id, ...
+        strjoin({CMP_GROUPS.id}, ', '));
+end
+table_models = [CMP_GROUPS(gi).members(:), CMP_GROUPS(gi).labels(:)];
+
+% Sensor axis to report. axis 3 is radial for a triaxial magnetometer;
+% on a two-axis sensor the radial channel is axis 2. Set radial_axis in
+% config_comparisons rather than here.
+target_axis = radial_axis;
 
 % Bootstrap settings
 n_boot   = 10000;
