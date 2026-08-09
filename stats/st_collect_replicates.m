@@ -94,9 +94,19 @@ replicate_type = repmat({'warp'}, 1, 30);
 % rather than in every contrast.
 variant_for_type = struct('warp', 'realistic');   % SET THIS: bone variant of the warps
 
+% CONTRASTS
+% One per replicate. The solver contrast is what this analysis exists to
+% test: BEM against FEM on identical anatomy, repeated over independent
+% body shapes, so the spread across replicates says whether solver
+% agreement depends on the anatomy.
+%
+% To add a contrast, both models must exist for EVERY replicate. A
+% within-solver bone comparison (say realistic against continuous) needs
+% lead fields computed on the warped continuous geometries as well; a
+% missing model disables only the contrasts that need it, so an incomplete
+% set is reported rather than fatal.
 contrasts = {
-    'solver',   'main', 'bem', 'main', 'fem';   % BEM vs FEM, same geometry
-    'geometry', 'main', 'bem', 'cont', 'bem';   % segmented vs continuous bone
+    'solver', 'main', 'bem', 'main', 'fem';   % BEM vs FEM, same geometry
 };
 
 array_name    = 'back';

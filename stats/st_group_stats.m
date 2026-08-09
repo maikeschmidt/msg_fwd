@@ -97,18 +97,44 @@ load(metrics_file, 'G');
 ci_eff  = find(strcmp(G.contrast_names, contrast_effect));
 ci_base = find(strcmp(G.contrast_names, contrast_baseline));
 
-if isempty(ci_eff) || isempty(ci_base)
-    error('Contrast "%s" or "%s" not found. Available: %s', ...
-        contrast_effect, contrast_baseline, strjoin(G.contrast_names, ', '));
+% TWO MODES
+%
+% PAIRED   both contrasts present. Tests whether the effect contrast
+%          exceeds the baseline contrast, replicate by replicate.
+% SINGLE   only one contrast present. There is nothing to pair against, so
+%          the analysis becomes descriptive: the distribution of that
+%          contrast ACROSS replicates, which is what says whether the
+%          result depends on the anatomy. Reported with bootstrap CIs over
+%          replicates, no significance test — a one-sample test against
+%          zero would be meaningless for a strictly positive metric.
+paired_mode = ~isempty(ci_eff) && ~isempty(ci_base);
+
+if ~paired_mode
+    if isempty(ci_base) && isempty(ci_eff)
+        error('Neither "%s" nor "%s" found. Available: %s', ...
+            contrast_effect, contrast_baseline, strjoin(G.contrast_names, ', '));
+    end
+    ci_single = ci_base;
+    if isempty(ci_single), ci_single = ci_eff; end
+    single_name = G.contrast_names{ci_single};
+
+    % Both indices point at the same contrast so the array indexing below
+    % stays valid. The paired SECTIONS are skipped rather than run on a
+    % zero difference, which would report a meaningless null result.
+    ci_eff  = ci_single;
+    ci_base = ci_single;
+    fprintf(['Only one contrast present ("%s") — reporting its spread\n' ...
+             'across replicates rather than a paired test.\n\n'], single_name);
+    valid_rep = G.ok(ci_single, :);
+else
+    % Pairing requires both contrasts on the same replicate
+    valid_rep = G.ok(ci_eff, :) & G.ok(ci_base, :);
 end
 
-% Replicates where BOTH contrasts succeeded — pairing requires both
-valid_rep = G.ok(ci_eff, :) & G.ok(ci_base, :);
-n_rep     = sum(valid_rep);
+n_rep = sum(valid_rep);
 
 if n_rep < 3
-    error(['Only %d replicate(s) have both contrasts. ' ...
-           'Need at least 3 for group statistics.'], n_rep);
+    error(['Only %d usable replicate(s). Need at least 3.'], n_rep);
 end
 
 D      = G.(test_metric);
@@ -119,8 +145,12 @@ dist   = G.distances_mm;
 fprintf('Replicates usable : %d of %d\n', n_rep, numel(G.replicate_names));
 fprintf('  warped anatomies: %d\n', sum(strcmp(G.replicate_type(valid_rep),'warp')));
 fprintf('Metric tested     : %s\n', test_metric);
-fprintf('Contrast          : %s (effect) vs %s (baseline)\n\n', ...
-    contrast_effect, contrast_baseline);
+if paired_mode
+    fprintf('Contrast          : %s (effect) vs %s (baseline)\n\n', ...
+        contrast_effect, contrast_baseline);
+else
+    fprintf('Contrast          : %s (spread across replicates)\n\n', single_name);
+end
 
 if ~exist(save_dir, 'dir'); mkdir(save_dir); end
 
@@ -131,8 +161,18 @@ fprintf(fid, '=== GROUP-LEVEL STATISTICS ACROSS REPLICATE GEOMETRIES ===\n');
 fprintf(fid, 'Generated  : %s\n', datestr(now));
 fprintf(fid, 'Replicates : %d warped anatomies\n', n_rep);
 fprintf(fid, 'Metric     : %s\n', test_metric);
-fprintf(fid, 'Test       : sign-flip permutation on paired differences\n');
-fprintf(fid, '             H1: %s effect > %s effect\n', contrast_effect, contrast_baseline);
+if paired_mode
+    fprintf(fid, 'Test       : sign-flip permutation on paired differences\n');
+    fprintf(fid, '             H1: %s effect > %s effect\n', ...
+        contrast_effect, contrast_baseline);
+else
+    fprintf(fid, 'Contrast   : %s\n', single_name);
+    fprintf(fid, ['Test       : none. With a single contrast there is nothing\n' ...
+                  '             to pair against, so this reports the spread of\n' ...
+                  '             %s across replicates. Read it for STABILITY:\n' ...
+                  '             a narrow spread means the result does not\n' ...
+                  '             depend on the anatomy.\n'], single_name);
+end
 fprintf(fid, 'Correction : Benjamini-Hochberg FDR, q = %.2f, across %d sources\n', ...
     q_fdr, n_src);
 fprintf(fid, 'CIs        : %d-draw percentile bootstrap, resampling REPLICATES\n\n', n_boot);
@@ -144,6 +184,9 @@ fprintf(fcsv, 'orientation,source_mm,median_effect,median_baseline,median_diff,c
 
 
 % PER-SOURCE TESTS
+% Paired only — skipped when a single contrast was collected.
+if paired_mode
+
 
 P    = struct();
 stats_by_ori = cell(1, n_ori);
@@ -204,9 +247,13 @@ for oi = 1:n_ori
             res.p_perm(s), res.p_fdr(s), res.sig(s), res.eff_size(s));
     end
 end
+end   % paired_mode
 
 
 % WHOLE-CORD SUMMARY TEST
+% Paired only — skipped when a single contrast was collected.
+if paired_mode
+
 % One test per orientation on the per-replicate cord-median, which is the
 % single headline number for the manuscript.
 
@@ -256,14 +303,18 @@ for oi = 1:n_ori
         contrast_baseline, median(b_rep,'omitnan'), ...
         median(d_rep), ci(1), ci(2), p);
 end
+end   % paired_mode
 
 fclose(fid);
 fclose(fcsv);
 
 
 % FIGURES
+% The paired figures need both contrasts; the replicate-distribution figure
+% at the end is meaningful either way.
 
 for oi = 1:n_ori
+    if ~paired_mode, break; end
     ori = G.orientation_labels{oi};
     res = stats_by_ori{oi};
 
