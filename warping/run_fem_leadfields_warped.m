@@ -191,15 +191,17 @@ for vi = 1:numel(variants)
             Lfem = fem_calc_fwds(S);
             Lfem = Lfem * 1e6;             % T/(A*m) -> fT/nAm
 
-            leadfield_ft = struct();
-            leadfield_ft.leadfield    = Lfem;
-            leadfield_ft.pos          = src.pos;
-            leadfield_ft.label        = grad.label;
-            leadfield_ft.units_out    = 'fT/nAm';
-            leadfield_ft.warp_matrix  = M;
-            leadfield_ft.warp_quality = Q;
+            % Same conversion run_fem_leadfields uses. The raw DUNEuro
+            % matrix is not the format the rest of the pipeline reads:
+            % organise_leadfield expects .leadfield as a CELL, one entry per
+            % source, so saving the matrix directly fails on load.
+            leadfield_ft = convert_duneuro_to_fieldtrip(Lfem, src, grad, S);
+
+            leadfield_ft.units_out          = 'fT/nAm';
+            leadfield_ft.warp_matrix        = M;
+            leadfield_ft.warp_quality       = Q;
             leadfield_ft.transform_residual = RT.rms;
-            leadfield_ft.source_note  = ['volume mesh of ' B.geom_file ...
+            leadfield_ft.source_note        = ['volume mesh of ' B.geom_file ...
                                          ' transformed to match ' gfile(k).name];
 
             if ~exist(outdir, 'dir'), mkdir(outdir); end
