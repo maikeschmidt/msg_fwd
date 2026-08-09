@@ -69,7 +69,7 @@ cr_add_functions;
 
 geoms_path  = og_geoms;   % SET THIS
 output_base = convergence_fem_base;           % SET THIS
-filename    = 'geometries_original_source_original';      % SET THIS
+filename    = 'geometries_anatom_full_realistic';      % SET THIS
 
 duneuro_binpath = duneuro_binpath;   % SET THIS
 duneuro_exe = fullfile(duneuro_binpath, 'bst_duneuro_meeg_win64.exe');
