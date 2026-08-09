@@ -134,8 +134,15 @@ G.ok        = false(n_con, n_rep);
 fprintf('Replicates : %d warped anatomies\n', n_rep);
 fprintf('Contrasts  : %s\n\n', strjoin(contrasts(:,1)', ', '));
 
-% Every (variant, method) pair any contrast needs
-needed = unique([contrasts(:,2:3); contrasts(:,4:5)], 'rows');
+% Every (variant, method) pair any contrast needs.
+%
+% unique(...,'rows') does not support cell arrays: MATLAB warns, ignores
+% 'rows', and returns a flat Nx1 list of strings. Indexing that as {k,2}
+% then fails. De-duplicate on a joined key instead, which keeps the Nx2
+% shape the loop below relies on.
+all_pairs = [contrasts(:,2:3); contrasts(:,4:5)];
+[~, ia]   = unique(strcat(all_pairs(:,1), '|', all_pairs(:,2)), 'stable');
+needed    = all_pairs(ia, :);
 
 n_src_ref = [];
 
