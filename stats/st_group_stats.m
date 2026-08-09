@@ -173,14 +173,18 @@ else
                   '             a narrow spread means the result does not\n' ...
                   '             depend on the anatomy.\n'], single_name);
 end
+if paired_mode
 fprintf(fid, 'Correction : Benjamini-Hochberg FDR, q = %.2f, across %d sources\n', ...
     q_fdr, n_src);
+end
 fprintf(fid, 'CIs        : %d-draw percentile bootstrap, resampling REPLICATES\n\n', n_boot);
 fprintf(fid, ['IMPORTANT: replicates are geometries, not participants. These\n' ...
               'tests bound robustness to geometric variation. They are not\n' ...
               'evidence about between-subject anatomical variability.\n']);
 
-fprintf(fcsv, 'orientation,source_mm,median_effect,median_baseline,median_diff,ci_lo,ci_hi,p_perm,p_fdr,significant,effect_size_rb\n');
+if paired_mode
+    fprintf(fcsv, 'orientation,source_mm,median_effect,median_baseline,median_diff,ci_lo,ci_hi,p_perm,p_fdr,significant,effect_size_rb\n');
+end
 
 
 % PER-SOURCE TESTS
@@ -305,6 +309,66 @@ for oi = 1:n_ori
 end
 end   % paired_mode
 
+% SINGLE-CONTRAST REPORTING
+%
+% With nothing to pair against there is no test, but the distribution of
+% the contrast across replicates is the result: a narrow spread means the
+% lead field difference does not depend on which anatomy it was measured
+% on. Reported per orientation as a cord-median across replicates, then
+% resolved along the cord.
+
+if ~paired_mode
+    D_s = squeeze(D(ci_single, valid_rep, :, :));    % [n_rep x n_ori x n_src]
+
+    fprintf(fid, '\n%s\nSPREAD OF "%s" ACROSS %d REPLICATE GEOMETRIES\n%s\n', ...
+        repmat('=',1,74), single_name, n_rep, repmat('=',1,74));
+    fprintf(fid, ['Each replicate contributes one cord-median. A narrow range\n' ...
+                  'means the result is insensitive to the anatomy it was\n' ...
+                  'measured on.\n\n']);
+    fprintf(fid, '  %-6s %8s %8s %8s %8s %22s\n', ...
+        'ori', 'median', 'IQR lo', 'IQR hi', 'range', '95% CI on the median');
+    fprintf(fid, '  %s\n', repmat('-', 1, 68));
+
+    fprintf(fcsv, 'orientation,scope,source_index,distance_mm,n_rep,median,iqr_lo,iqr_hi,min,max,ci_lo,ci_hi\n');
+
+    for oi = 1:n_ori
+        ori = G.orientation_labels{oi};
+        rep_med = median(squeeze(D_s(:,oi,:)), 2, 'omitnan');   % one per replicate
+        rep_med = rep_med(~isnan(rep_med));
+        if isempty(rep_med), continue; end
+
+        q  = prctile_sg(rep_med, [25 75]);
+        ci = st_boot_ci_median(rep_med, n_boot, 0.95);
+
+        fprintf(fid, '  %-6s %8.3f %8.3f %8.3f %8.3f   [%8.3f, %8.3f]\n', ...
+            ori, median(rep_med), q(1), q(2), max(rep_med)-min(rep_med), ci(1), ci(2));
+        fprintf(fcsv, '%s,cord_median,,,%d,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f\n', ...
+            ori, numel(rep_med), median(rep_med), q(1), q(2), ...
+            min(rep_med), max(rep_med), ci(1), ci(2));
+
+        % Along the cord: where does the anatomy matter most
+        for s = 1:n_src
+            v = squeeze(D_s(:,oi,s)); v = v(~isnan(v));
+            if isempty(v), continue; end
+            qs = prctile_sg(v, [25 75]);
+            fprintf(fcsv, '%s,per_source,%d,%.1f,%d,%.4f,%.4f,%.4f,%.4f,%.4f,,\n', ...
+                ori, s, dist(s), numel(v), median(v), qs(1), qs(2), min(v), max(v));
+        end
+
+        allsrc = squeeze(D_s(:,oi,:));
+        spread = prctile_sg_rows(allsrc, 75) - prctile_sg_rows(allsrc, 25);
+        [~, worst] = max(spread);
+        fprintf(fid, '  %-6s  widest spread across replicates at %.0f mm (IQR %.3f)\n', ...
+            '', dist(worst), spread(worst));
+    end
+
+    fprintf(fid, ['\nNo p-values are reported. A one-sample test against zero\n' ...
+                  'would be meaningless for a strictly positive metric, and\n' ...
+                  'there is no second contrast to compare against. For a\n' ...
+                  'tested comparison of geometry against solver, run\n' ...
+                  'st_warp_geometry_impact.\n']);
+end
+
 fclose(fid);
 fclose(fcsv);
 
@@ -367,21 +431,37 @@ title(tl, sprintf(['Per-replicate cord-median %s (n = %d geometries)\n' ...
 
 for oi = 1:n_ori
     nexttile(tl); hold on;
-    A = squeeze(D(ci_eff,  valid_rep, oi, :));
-    B = squeeze(D(ci_base, valid_rep, oi, :));
-    a_rep = median(A, 2, 'omitnan');
-    b_rep = median(B, 2, 'omitnan');
-
     jit = @(n) 0.12*(rand(n,1)-0.5);
-    plot(1+jit(numel(b_rep)), b_rep, 'o', 'MarkerFaceColor', ratio_colors(1,:), ...
-        'MarkerEdgeColor','none', 'MarkerSize', 6);
-    plot(2+jit(numel(a_rep)), a_rep, 'o', 'MarkerFaceColor', ratio_colors(2,:), ...
-        'MarkerEdgeColor','none', 'MarkerSize', 6);
-    plot([0.8 1.2], [median(b_rep,'omitnan') median(b_rep,'omitnan')], 'k-', 'LineWidth', 2);
-    plot([1.8 2.2], [median(a_rep,'omitnan') median(a_rep,'omitnan')], 'k-', 'LineWidth', 2);
 
-    xlim([0.5 2.5]); xticks([1 2]);
-    xticklabels({contrast_baseline, contrast_effect});
+    if paired_mode
+        A = squeeze(D(ci_eff,  valid_rep, oi, :));
+        B = squeeze(D(ci_base, valid_rep, oi, :));
+        a_rep = median(A, 2, 'omitnan');
+        b_rep = median(B, 2, 'omitnan');
+
+        plot(1+jit(numel(b_rep)), b_rep, 'o', 'MarkerFaceColor', ratio_colors(1,:), ...
+            'MarkerEdgeColor','none', 'MarkerSize', 6);
+        plot(2+jit(numel(a_rep)), a_rep, 'o', 'MarkerFaceColor', ratio_colors(2,:), ...
+            'MarkerEdgeColor','none', 'MarkerSize', 6);
+        plot([0.8 1.2], [median(b_rep,'omitnan') median(b_rep,'omitnan')], 'k-', 'LineWidth', 2);
+        plot([1.8 2.2], [median(a_rep,'omitnan') median(a_rep,'omitnan')], 'k-', 'LineWidth', 2);
+        xlim([0.5 2.5]); xticks([1 2]);
+        xticklabels({contrast_baseline, contrast_effect});
+    else
+        % One contrast: show its spread across replicates. Two identical
+        % columns would be worse than one honest one.
+        A = squeeze(D(ci_single, valid_rep, oi, :));
+        a_rep = median(A, 2, 'omitnan');
+        a_rep = a_rep(~isnan(a_rep));
+
+        plot(1+jit(numel(a_rep)), a_rep, 'o', 'MarkerFaceColor', ratio_colors(1,:), ...
+            'MarkerEdgeColor','none', 'MarkerSize', 6);
+        plot([0.75 1.25], [median(a_rep) median(a_rep)], 'k-', 'LineWidth', 2.5);
+        q = prctile_sg(a_rep, [25 75]);
+        plot([1 1], q, 'k-', 'LineWidth', 1.2);
+        xlim([0.5 1.5]); xticks(1); xticklabels({single_name});
+    end
+
     grid on; title(ori_titles.(G.orientation_labels{oi}), 'FontSize', 12);
     if oi == 1, ylabel(sprintf('Cord-median %s', upper(test_metric))); end
     set(gca,'FontSize',11,'TickDir','out');
@@ -404,3 +484,22 @@ fprintf('Figures: %s\n', save_dir);
 %   st_boot_ci_median   percentile bootstrap CI of the median
 %   st_rank_biserial    matched-pairs effect size
 % They are covered by msg_fwd/tests/test_st_stats.m.
+
+
+function y = prctile_sg(x, p)
+    x = sort(x(~isnan(x)));
+    n = numel(x); y = nan(size(p));
+    if n == 0, return; end
+    for k = 1:numel(p)
+        pos = max(1, min(n, p(k)/100*n + 0.5));
+        lo = floor(pos); hi = ceil(pos);
+        if lo == hi, y(k) = x(lo); else, y(k) = x(lo) + (pos-lo)*(x(hi)-x(lo)); end
+    end
+end
+
+function y = prctile_sg_rows(M, p)
+    y = nan(1, size(M,2));
+    for s = 1:size(M,2)
+        y(s) = prctile_sg(M(:,s), p);
+    end
+end
