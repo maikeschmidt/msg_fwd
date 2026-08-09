@@ -60,13 +60,14 @@ load(fullfile(forward_fields_base, 'leadfields_organised.mat'), ...
 
 % CONFIGURATION
 
-% SET THIS: geometry variants to process (without method prefix or array suffix)
-ratio_geometries = {
-    'anatom_full_realistic', ...
-    % 'anatom_full_cont', ...
-    % 'anatom_full_homo', ...
-    % 'anatom_full_inhomo', ...
-};
+% Geometry variants to process, without method prefix or array suffix.
+% All four are produced: realistic for the main text, the rest for the
+% supplement. This is the front-vs-back comparison — the two arrays have
+% different sensors, so an amplitude RATIO is the meaningful quantity
+% rather than RE or r-squared between them.
+config_comparisons;
+ratio_geometries = cellfun(@(v) sprintf('anatom_full_%s', v), ...
+    bone_variants, 'UniformOutput', false);
 
 fprintf('Generating front/back amplitude ratio plots...\n');
 

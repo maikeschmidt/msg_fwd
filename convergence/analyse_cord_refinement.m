@@ -106,6 +106,45 @@ t_total  = [man(have).time_mesh_s] + [man(have).time_solve_s];
 ref_L     = have(imin);
 ref_key   = sprintf('fem_C%02d', ref_L);
 
+% EXTERNAL REFERENCES
+%
+% The sweep compares refinement levels against the finest level, which shows
+% self-convergence. Two further references say whether the refined result
+% agrees with the models the paper reports:
+%   the unrefined FEM realistic  — did refining the cord change the answer?
+%   the BEM realistic            — does the refined FEM agree with the BEM?
+%
+% Both are loaded from og_fields; either being absent is not fatal.
+
+ext_refs = struct('key', {}, 'label', {});
+
+ext_specs = { ...
+    fullfile(dataset_dir(og_fields, core_variant), core_fem_fname), ...
+        'fem', 'fem_original', 'FEM realistic (unrefined)'; ...
+    fullfile(dataset_dir(og_fields, core_variant), core_bem_fname), ...
+        'bem', 'bem_original', 'BEM realistic'};
+
+for e = 1:size(ext_specs, 1)
+    f = ext_specs{e,1};
+    if ~isfile(f)
+        f = fullfile(og_fields, ext_specs{e,2+0});   % flat layout fallback
+    end
+    if ~isfile(f)
+        fprintf('  external reference not found, skipped: %s\n', ext_specs{e,4});
+        continue;
+    end
+    d  = load(f);
+    fn = fieldnames(d);
+    vi = find(cellfun(@(x) isstruct(d.(x)) && isfield(d.(x),'leadfield'), fn), 1);
+    if isempty(vi), continue; end
+    us = lf_unit_scale(d.(fn{vi}), ext_specs{e,2}, is_meg);
+    [lf, amps] = organise_leadfield(lf, amps, d.(fn{vi}), ext_specs{e,3}, ...
+        us, orientation_labels, n_sensor_axes, is_meg);
+    ext_refs(end+1) = struct('key', ext_specs{e,3}, ...
+                             'label', ext_specs{e,4}); %#ok<SAGROW>
+    fprintf('  external reference loaded: %s\n', ext_specs{e,4});
+end
+
 n_ori = numel(orientation_labels);
 n_lvl = numel(have);
 
@@ -253,6 +292,46 @@ end
 fprintf(fid, ['\nLocal refinement buys near-source accuracy at a fraction of the\n' ...
     'element count an equivalent GLOBAL refinement would require, since the\n' ...
     'extra elements are confined to the cord.\n']);
+
+
+% FINEST LEVEL AGAINST THE EXTERNAL REFERENCES
+if ~isempty(ext_refs)
+    fprintf(fid, '\n%s\nFINEST REFINEMENT vs THE REPORTED MODELS\n%s\n', ...
+        repmat('=',1,74), repmat('=',1,74));
+    fprintf(fid, ['Refining the cord only matters if it moves the answer away\n' ...
+                  'from what the paper reports. Compared here at the finest\n' ...
+                  'cord bound.\n\n']);
+    fprintf(fid, '  %-28s %-5s %9s %9s %9s %10s\n', ...
+        'Reference', 'ori', 'RE(%)', 'r2', 'RDM', 'gain(%)');
+
+    for e = 1:numel(ext_refs)
+        for oi = 1:n_ori
+            vopts = struct('vector_mode','orientation', ...
+                           'orientation', orientation_labels{oi});
+            try
+                [LA, LB] = lf_pair_vectors(lf, ext_refs(e).key, ref_key, ...
+                    target_axis, vopts);
+            catch
+                continue;
+            end
+            M = lf_metrics_series(LA, LB, metric_opts);
+            keep = 2:(size(LA,2)-1);
+            ln   = median(M.lnmag(keep), 'omitnan');
+            fprintf(fid, '  %-28s %-5s %9.3f %9.5f %9.4f %+10.2f\n', ...
+                ext_refs(e).label, orientation_labels{oi}, ...
+                median(M.re(keep),'omitnan'), median(M.rsq(keep),'omitnan'), ...
+                median(M.rdm(keep),'omitnan'), (exp(ln)-1)*100);
+
+            fprintf(fcsv, '%g,%g,%d,%d,%g,%s_vs_%s,%.4f,,,%.4f,%.6f,%.6f,%.6f,%.4f\n', ...
+                man(ref_L).cord_maxvol_mm3, man(ref_L).h_cord_mm, ...
+                man(ref_L).n_tets_cord, man(ref_L).n_tets_total, NaN, ...
+                ext_refs(e).key, orientation_labels{oi}, ...
+                median(M.re(keep),'omitnan'), max(M.re(keep)), ...
+                median(M.rsq(keep),'omitnan'), min(M.rsq(keep)), ...
+                median(M.rdm(keep),'omitnan'), (exp(ln)-1)*100);
+        end
+    end
+end
 
 fclose(fid);
 fclose(fcsv);
