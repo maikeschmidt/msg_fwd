@@ -33,58 +33,33 @@
 %   Generate shifted geometry files in msg_pert, then run the relevant
 %   forward model scripts here, then return to msg_pert for analysis.
 %
-% NOTE — REVIEW-RESPONSE ANALYSES:
-%   The analyses added for the peer-review response are NOT part of this
-%   pipeline, because each depends on leadfields that must be computed
-%   first and that take hours to produce. Run them separately:
+% NOTE — SUPPORTING ANALYSES:
+%   These are NOT part of this pipeline, because each depends on lead fields
+%   that must be computed first and take hours to produce. Run them
+%   separately once those exist.
 %
-%     conductivity/  Bone conductivity sensitivity (Reviewers 1 and 3)
-%       1. run_bone_conductivity_bem
-%       2. run_bone_conductivity_fem
-%       3. analyse_bone_conductivity
+%     convergence/   Mesh resolution. THREE INDEPENDENT TESTS — none depends
+%                    on the results of the others:
 %
-%     convergence/   Mesh convergence. THREE INDEPENDENT TESTS — none of
-%                    them depends on the results of the others.
-%
-%       CORE (Reviewer 1; Reviewer 2 pt 7): surface resolution.
-%       PREFERRED, because the FEM mesh on this geometry is geometry-
-%       limited: a 20x sweep of tetgen_maxvol changed achieved element
-%       volume only 3.7x. Surface density is the controlling variable, and
-%       sweeping it puts BEM and FEM on ONE axis.
-%         1. run_bem_convergence, sweep_all_surfaces = true
-%         2. run_fem_surface_convergence, sweep_all_surfaces = true
-%         3. analyse_surface_convergence             both solvers, one axis
+%       SURFACE SWEEP (core): run_fem_surface_convergence +
+%       analyse_surface_convergence. Decimates the surface meshes and
+%       rebuilds the volume mesh from each, so the discretisation actually
+%       changes near the cord.
 %
 %       VOLUME SWEEP (secondary): run_fem_convergence + analyse_convergence.
-%       Retained because it bounds the volume bound's own effect, but it is
-%       a weak lever here — see the note in run_fem_surface_convergence.
+%       Bounds the effect of the tetrahedron volume limit. A weak lever
+%       here — see the note in run_fem_surface_convergence.
 %
-%       TORSO DECIMATION (Reviewer 2 pt 3.2): the 50% reduction
-%         1. run_bem_convergence, sweep_all_surfaces = false
-%         2. analyse_torso_decimation                reads convergence_torso
-%                                                    also checks it
-%                                                    reproduces the
-%                                                    published lead field
-%
-%       NEAR-SOURCE (Reviewer 2 pt 7.1): St. Venant singularity
-%         1. run_fem_cord_refinement    global bound fixed, cord refined
-%         2. analyse_cord_refinement
+%       CORD REFINEMENT: run_fem_cord_refinement + analyse_cord_refinement.
+%       Refines only the region around the cord, where the sources are.
 %
 %       All sweeps are resumable and ordered coarsest first. The BEM output
 %       folder is tagged by sweep mode so the two BEM sweeps cannot collide.
 %
-%     csf/           CSF compartment in the FEM (Reviewer 1)
-%       1. run_fem_leadfields_csf     computes with AND without CSF
-%       2. analyse_csf_effect
-%
-%     stats/         Group statistics over replicate geometries (Reviewer 1)
-%       0. msg_coreg/repeatability/cr_repeat_coreg          collect coregs
-%          msg_coreg/repeatability/cr_build_coreg_geometries
-%          msg_coreg/warping/cr_generate_warps              30 warps
-%          msg_coreg/warping/cr_build_warp_geometries
-%       1. run BEM and FEM on every geometry produced above
-%       2. st_collect_replicates
-%       3. st_group_stats
+%     conductivity/  Bone conductivity sweep, BEM and FEM
+%     csf/           CSF compartment in the FEM
+%     stats/         Group statistics over warped replicate geometries
+%     warping/       FEM lead fields on warped anatomies
 %
 % NOTE — METRIC DEFINITIONS:
 %   All RE and r² values everywhere in this toolbox now come from
@@ -95,7 +70,7 @@
 %   Verify with: tests/test_lf_metrics
 %
 % GENERAL NOTES:
-%   - All paths are configured in config_models.m — update that file first
+%   - All paths are configured in config_paths.m — update that file first
 %   - plot_anatomical_figures does not depend on leadfields_organised.mat
 %     and can be run at any point independently
 %   - Each script saves its own outputs independently; if one script fails

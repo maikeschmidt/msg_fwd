@@ -1,18 +1,6 @@
 % analyse_bone_conductivity - Quantify sensitivity to vertebral bone conductivity
 %
-% Loads the BEM and FEM bone-conductivity sweeps and answers the three
-% questions the reviewers raised, using the same RE and r2 definitions as
-% every other analysis in the toolbox (via lf_metrics).
-%
 % THE THREE ANALYSES
-%
-%   (A) WITHIN-METHOD SENSITIVITY
-%       BEM(sigma) vs BEM(sigma_ref), and FEM(sigma) vs FEM(sigma_ref).
-%       Answers: "does the choice of bone conductivity within the
-%       literature range change the forward solution at all?" If r2 stays
-%       near 1 and RE stays small across 0.002-0.04 S/m, then the specific
-%       value chosen is not driving the results, which is exactly what
-%       Reviewer 3 asked to be demonstrated.
 %
 %   (B) MATCHED-PAIR BEM vs FEM ACROSS THE SWEEP
 %       BEM(sigma) vs FEM(sigma) at every sigma.
@@ -62,8 +50,8 @@ fprintf('=== Bone conductivity sensitivity analysis ===\n\n');
 
 % USER CONFIGURATION
 
-bem_dir = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\bone_cond_change\bem\geometries_anatom_full_realistic';  % SET THIS
-fem_dir = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\bone_cond_change\fem\geometries_anatom_full_realistic';  % SET THIS
+bem_dir = dataset_dir(bone_cond_fields_bem, core_variant);
+fem_dir = dataset_dir(bone_cond_fields_fem, core_variant);
 save_dir = fullfile(save_base_dir, 'bone_conductivity');                             % SET THIS
 
 geom_short  = 'anatom_full_realistic';   % SET THIS: matches the filenames

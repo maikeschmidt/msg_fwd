@@ -3,16 +3,6 @@
 % Step-up false discovery rate correction. Returns ADJUSTED p-values, so
 % a result is significant at FDR level q when the adjusted value is < q.
 %
-% Reviewer 1 asked for correction for multiple comparisons (FDR or
-% Bonferroni). FDR is the right choice here rather than Bonferroni:
-% the tests are run at every source position along the spinal cord, and
-% adjacent source positions are strongly dependent — sources 5 mm apart see
-% almost the same volume conductor. Bonferroni assumes independence and
-% would be severely over-conservative on such correlated tests, hiding
-% real effects. Benjamini-Hochberg controls the expected proportion of
-% false positives among the rejected tests and is valid under positive
-% dependence, which is exactly the structure here.
-%
 % USAGE:
 %   p_adj = st_bh_fdr(pvals)
 %   [p_adj, sig] = st_bh_fdr(pvals, q)

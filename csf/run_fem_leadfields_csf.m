@@ -11,17 +11,6 @@
 % of the design: a CSF model built from a separately generated mesh would
 % confound the two.
 %
-% WHY FEM ONLY
-%   Reviewer 1 asked for CSF in all volume conductor models. The BEM
-%   formulation needs closed, nested, non-intersecting surfaces. A thin CSF
-%   shell threaded between the cord and the segmented vertebrae would
-%   intersect the bone surfaces along most of the cord, so it cannot be
-%   represented in the BEM without abandoning the segmented bone geometry
-%   that the paper is about. The FEM assigns tissue per tetrahedron and has
-%   no such constraint. Reporting the FEM CSF effect quantifies what the
-%   omission costs, which is a stronger and more honest response than
-%   claiming CSF everywhere.
-%
 % USAGE:
 %   Set the paths and filename below, then run.
 %
@@ -61,6 +50,8 @@ clearvars
 close all
 clc
 
+config_paths;
+
 fprintf('=== FEM leadfields with and without CSF ===\n\n');
 
 cd('D:\');          % SET THIS: working directory
@@ -70,8 +61,8 @@ cr_add_functions;   % initialise MSG toolbox and HBF library paths
 
 % USER CONFIGURATION
 
-geoms_path  = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\og_geometries';   % SET THIS
-output_base = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\CSF\fields\fem';            % SET THIS
+geoms_path  = og_geoms;   % SET THIS
+output_base = csf_fields;            % SET THIS
 
 % DUNEuro binary location
 % -------------------------------------------------------------------------
@@ -87,7 +78,7 @@ output_base = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\CSF\fields\fe
 %
 % The folder below must contain bst_duneuro_meeg_win64.exe and must be in a
 % location group policy permits executables to run from.
-duneuro_binpath = 'C:\wtcnapps\duneuro';   % SET THIS
+duneuro_binpath = duneuro_binpath;   % SET THIS
 
 % Fail fast: check the binary before meshing, which can take hours.
 duneuro_exe = fullfile(duneuro_binpath, 'bst_duneuro_meeg_win64.exe');

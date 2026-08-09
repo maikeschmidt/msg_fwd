@@ -5,21 +5,13 @@
 % its decomposition into an amplitude component and a topography component,
 % and the squared correlation, using the published leadfields.
 %
-% WHY THIS EXISTS
+% PURPOSE
 %   The paper reports that segmented bone models raise LR-oriented field
 %   amplitudes by 35-72% relative to the continuous model. Relative error
 %   alone cannot say whether that is the field being RESCALED or being
 %   RESHAPED, and those have different consequences: a pure rescaling
 %   changes amplitude estimates but leaves source localisation intact,
 %   whereas reshaping affects both.
-%
-%   Reviewer 2 asked precisely this (Question 1.2): "Physically, how do you
-%   explain why this specific orientation is so highly sensitive to
-%   vertebral segmentation?" Splitting RE into gain and topography answers
-%   it with a measurement rather than an argument. If the amplitude row
-%   accounts for the whole of the RE row while RDM stays near zero, the
-%   effect is a rescaling, which is exactly what reduced secondary-current
-%   cancellation would produce.
 %
 %   compute_re_cc_table reports the same decomposition as numbers, with
 %   confidence intervals. This script shows where along the cord it happens.

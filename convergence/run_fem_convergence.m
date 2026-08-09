@@ -5,21 +5,6 @@
 % wall-clock time at each level, so that solution accuracy can be plotted
 % against mesh resolution and against compute cost.
 %
-% WHY THIS EXISTS
-%   Reviewer 1: "Perform a mesh convergence study for both BEM and FEM to
-%                demonstrate that results are independent of mesh
-%                resolution."
-%   Reviewer 2 (point 7): "...it does not present a rigorous mesh
-%                convergence study (H-refinement or P-refinement) as
-%                typically performed in structural mechanics to ensure that
-%                stress no longer depends on the element size... how would
-%                you conduct a systematic mesh convergence study to
-%                guarantee that potential singularities (related to the
-%                St. Venant approximation for dipoles) are stably resolved?"
-%   Reviewer 2 (point 7.2): "What is the optimal trade-off observed in the
-%                literature between computation time and relative error
-%                when densifying the mesh around the spinal cord?"
-%
 %   This script produces the data for all three. analyse_convergence.m
 %   turns it into the convergence curves, the observed convergence order
 %   and the accuracy-versus-runtime trade-off curve.
@@ -40,17 +25,6 @@
 %   count at every bound and flags any level landing inside the reported
 %   range. Use it to state the corrected figure with confidence, and to
 %   bound the discretisation error at the 500 mm^3 production setting.
-%
-% ON THE DIPOLE SINGULARITY (Reviewer 2)
-%   A current dipole is a singular source, so the FEM solution near it does
-%   not converge in the same way as the far field. That is precisely why
-%   the sensor-level leadfield is the right convergence target here: the
-%   sensors are centimetres from the cord, the quantity the paper reports
-%   is the field at those sensors, and it is that quantity which must stop
-%   changing under refinement. DUNEuro's default source model already uses
-%   a St. Venant-type approach to regularise the singularity; this study
-%   demonstrates that the resulting sensor-level fields are mesh
-%   independent, which is the claim the paper actually makes.
 %
 %   The complementary test — hold the global bound fixed and refine ONLY
 %   around the cord — is run_fem_cord_refinement.m. It is deliberately a
@@ -84,6 +58,8 @@ clearvars
 close all
 clc
 
+config_paths;
+
 fprintf('=== FEM mesh convergence study (h-refinement) ===\n\n');
 
 cd('D:\');          % SET THIS
@@ -93,8 +69,8 @@ cr_add_functions;
 
 % USER CONFIGURATION
 
-geoms_path  = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\og_geometries';   % SET THIS
-output_base = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\Convergence\fem';           % SET THIS
+geoms_path  = og_geoms;   % SET THIS
+output_base = convergence_fem_base;           % SET THIS
 
 % DUNEuro binary location
 % -------------------------------------------------------------------------
@@ -110,7 +86,7 @@ output_base = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\Convergence\f
 %
 % The folder below must contain bst_duneuro_meeg_win64.exe and must be in a
 % location group policy permits executables to run from.
-duneuro_binpath = 'C:\wtcnapps\duneuro';   % SET THIS
+duneuro_binpath = duneuro_binpath;   % SET THIS
 
 % Fail fast: check the binary before meshing, which can take hours.
 duneuro_exe = fullfile(duneuro_binpath, 'bst_duneuro_meeg_win64.exe');

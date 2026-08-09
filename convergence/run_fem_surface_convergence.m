@@ -58,6 +58,8 @@ clearvars
 close all
 clc
 
+config_paths;
+
 fprintf('=== FEM surface-driven convergence study ===\n\n');
 
 cd('D:\');          % SET THIS
@@ -67,11 +69,11 @@ cr_add_functions;
 
 % USER CONFIGURATION
 
-geoms_path  = 'D:\Simulations\Pertubations\geometries';   % SET THIS
-output_base = 'D:\Simulations\Convergence\fem';           % SET THIS
+geoms_path  = og_geoms;   % SET THIS
+output_base = convergence_fem_base;           % SET THIS
 filename    = 'geometries_anatom_full_realistic';         % SET THIS
 
-duneuro_binpath = 'C:\wtcnapps\duneuro';   % SET THIS
+duneuro_binpath = duneuro_binpath;   % SET THIS
 duneuro_exe = fullfile(duneuro_binpath, 'bst_duneuro_meeg_win64.exe');
 if ~isfile(duneuro_exe)
     error(['DUNEuro binary not found:\n  %s\n' ...

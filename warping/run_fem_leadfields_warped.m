@@ -1,60 +1,31 @@
 % run_fem_leadfields_warped - FEM lead fields for warped anatomies, by
 %                             transforming the volume mesh
 %
-% THE PROBLEM THIS SOLVES
-%   Warping the surface meshes and re-tetrahedralising each one puts TetGen
-%   in the loop 30 times. TetGen is the fragile part: anisotropic scaling
-%   degrades triangle quality, and the failures arrive as
-%   'Tetgen command failed:' with an empty message.
+% WHAT IT DOES
+%   Produces one FEM lead field per warped anatomy by transforming a cached
+%   volume mesh of the base geometry, rather than re-tetrahedralising each
+%   warped surface. The base is meshed once; TetGen is not called again.
 %
-%   Here the base geometry is tetrahedralised ONCE, by run_fem_leadfields
-%   with save_volume_mesh = true, and each replicate is that mesh under its
-%   affine warp. TetGen never runs again.
+% WHAT IT SHOWS
+%   Whether BEM-FEM agreement holds when the anatomy changes underneath it.
+%   Each replicate's transform is read from the warped geometry file the BEM
+%   used and verified against the base, so both solvers sit on identical
+%   anatomy and the comparison isolates the solver.
 %
-% WHY IT IS SOUND
-%   An affine map with positive determinant multiplies every tetrahedron's
-%   signed volume by det(A), so no element can invert. cr_generate_warps
-%   rescales every warp to det = 1, so volume is preserved exactly and
-%   element quality changes only by the condition number of A — around 1.18
-%   median, 1.38 worst case for the configured range. fem_warp_volume
-%   measures this per replicate and refuses anything that degrades quality
-%   beyond a set fraction, so the claim is checked rather than assumed.
+%   Per replicate it reports the transform residual against the BEM
+%   geometry, det and condition number of the transform, and the fraction of
+%   element quality retained. The minimum quality ratio across the set
+%   bounds how far the discretisation degraded and belongs in the Methods.
 %
-% WHAT THIS CHANGES SCIENTIFICALLY
-%   Every replicate shares one discretisation and one set of tissue labels.
-%   That REMOVES mesh generation variability from the replicate comparison,
-%   which is desirable here — the question is whether BEM and FEM agree
-%   across ANATOMIES, and mesh variability is quantified separately by the
-%   convergence study. It must be stated in the Methods, not left implicit.
+% REQUIRES
+%   A cached volume mesh of the base geometry. Produce it with
+%   run_fem_leadfields on the base geometry alone, with
+%   save_volume_mesh = true and mesh_only = true.
 %
-%   It also makes the FEM cleaner than before in one respect: the region
-%   seeds in run_fem_leadfields are sampled randomly per run, so two FEM
-%   runs on identical input could previously differ in tissue labelling near
-%   compartment boundaries. Inheriting one labelling removes that noise.
-%
-% WHAT IT DOES NOT FIX
-%   Geometries whose BASE model cannot be tetrahedralised. If the canonical
-%   torso with toroidal bone self-intersects, it self-intersects before any
-%   transform is applied — a rigid or affine map cannot create or remove an
-%   intersection. Fix the base mesh, or use a bone variant that meshes.
-%
-% THE BEM DOES NOT NEED RE-RUNNING
-%   Each replicate's transform is read back from the warped geometry file
-%   the BEM already consumed, and verified by applying it to the base and
-%   measuring the residual against that file's own vertices. So the FEM is
-%   guaranteed to sit on the identical anatomy, replicate by replicate.
-%
-%   This matters because cr_build_warp_geometries recentres the warps about
-%   the torso centroid by default, which rebuilds the matrices — the ones
-%   stored in anatomical_warps.mat are therefore not necessarily the ones
-%   that were applied. Driving off the geometry files avoids that trap
-%   entirely, and works the same way for coregistration replicates.
-%
-% BEFORE RUNNING
-%   1. run_fem_leadfields on the BASE geometry with save_volume_mesh = true,
-%      to cache its tetrahedral mesh.
-%   2. Have the warped geometry files present — the same ones the BEM ran on.
-%      Nothing needs regenerating and the BEM does not need re-running.
+% LIMITS
+%   The base geometry must tetrahedralise. A base model whose surfaces
+%   self-intersect cannot be meshed at all, and no transform of it exists to
+%   warp — check with cr_scan_intersections in msg_coreg.
 %
 % USAGE:
 %   Set the paths below, then run.
@@ -74,28 +45,17 @@ clc
 
 % USER CONFIGURATION
 
-% Where the UNWARPED base geometries live — the exact files passed as
-% S.geom_file to cr_build_warp_geometries.
-og_geom_dir = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\og_geometries';   % SET THIS
+% All locations come from config_paths. Override any of them below only if
+% this run needs to point somewhere non-standard.
 
-% Where the WARPED geometries live — the same files the BEM ran on.
-% Transforms are read back from these, not from anatomical_warps.mat:
-% cr_build_warp_geometries recentres the warps about the torso centroid,
-% so the matrices on disk in the warp file are not necessarily the ones
-% that were applied. Driving off these files is what guarantees the FEM
-% sees the identical anatomy the BEM saw.
-warp_geom_dir = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\replications\geometries';   % SET THIS
+config_paths;
 
-% Where run_fem_leadfields wrote volume_mesh_*.mat (its output_base), and
-% where the FEM lead fields should go.
-mesh_dir    = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\replications\fields';        % SET THIS
-output_base = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\replications\fields\fem';   % SET THIS
-
-% FOLDER containing bst_duneuro_meeg_win64.exe — NOT the .exe itself.
-% fem_calc_fwds does fullfile(S.binpath, 'bst_duneuro_meeg_win64.exe'), so
-% passing the executable builds ...exe\...exe and Windows reports
-% 'The directory name is invalid'. Matches run_fem_leadfields.
-duneuro_binpath = 'C:\wtcnapps\duneuro';   % SET THIS
+og_geom_dir     = og_geoms;             % unwarped base geometries
+warp_geom_dir   = warp_geoms;           % warped geometries the BEM ran on
+mesh_dir        = warp_volume_meshes;   % where run_fem_leadfields cached volume_mesh_*.mat
+output_base     = warp_fields_fem;      % where FEM lead fields go
+% duneuro_binpath comes from config_paths — the FOLDER holding
+% bst_duneuro_meeg_win64.exe, not the executable.
 
 % Bone variants to process. Each needs its own cached base mesh, because
 % each base geometry carries a different bone mesh.

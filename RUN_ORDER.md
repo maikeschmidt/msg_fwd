@@ -1,4 +1,4 @@
-# Run order — peer-review response
+# Run order
 
 Where to run, then what to run in what order. Every step says whether it
 needs you at the keyboard and roughly what it costs.
@@ -11,7 +11,7 @@ Not a preference — your Mac cannot run the pipeline. Checked directly:
 
 | Dependency | Mac | Needed by |
 |---|---|---|
-| Statistics & ML Toolbox | **not installed** | `knnsearch` in `cr_register_torso`, all coregistration |
+| Statistics & ML Toolbox | **not installed** | `knnsearch` in `cr_register_torso` |
 | SPM | **absent** | `spm_mesh_select`, `spm_mesh_split`, `spm_eeg_inv_icp`, FieldTrip |
 | FieldTrip | **absent** | `ft_prepare_headmodel`, `ft_prepare_leadfield` |
 | iso2mesh | **absent** | `surf2mesh`, `mergemesh`, TetGen |
@@ -39,6 +39,25 @@ and statistics cores anywhere.
 
 ---
 
+## Configuration
+
+Two files, and only two, need editing before anything runs:
+
+| File | Holds |
+|---|---|
+| `config_paths.m` | every filesystem location — data root, each dataset's folder, results, DUNEuro binary |
+| `config_models.m` | display names, colours, orientation labels, plotting conventions |
+
+In most cases only `data_root`, `results_root` and `duneuro_binpath` at the
+top of `config_paths.m` need changing; everything else is derived from them.
+No analysis script contains a hard-coded path. `config_models` calls
+`config_paths`, so a script starting with `config_models;` has both.
+
+On startup `config_paths` reports any dataset folder it cannot find, so a
+wrong root shows up immediately rather than as a confusing error later.
+
+---
+
 ## Phase 0 — setup (once, ~15 min)
 
 1. **`msg_fwd/config_models.m`** — set `forward_fields_base`, `geoms_path`,
@@ -59,35 +78,7 @@ and statistics cores anywhere.
 `geometries_original_source_original.mat` and the `anatom_full_*` set.
 Everything below builds on these; nothing here recomputes them.
 
-### 1b. Coregistration repeats — **interactive**, ~30 min
-
-```matlab
-S = struct('subject', body_scan_mesh, 'n_repeats', 5, ...
-           'outfile', 'coreg_repeats.mat');
-R = cr_repeat_coreg(S);          % picks fiducials 5x — you must be present
-cr_summarise_coreg('coreg_repeats.mat');   % check the spread is sane
-```
-
-Saves after every repeat, so you can do 2 today and 3 tomorrow
-(`S.resume` defaults true). Pick fiducials exactly as you normally would —
-deliberately sloppy picking would inflate the spread and misrepresent the
-pipeline.
-
-Then build geometries (unattended, ~10 min):
-
-```matlab
-S = struct('subject', body_scan_mesh, 'repeat_file', 'coreg_repeats.mat', ...
-           'outdir', 'D:\Simulations\Replicates\geometries', ...
-           'torso_mode', 'canonical', 'bone_modes', {{'cont','inhomo'}});
-files = cr_build_coreg_geometries(S);
-```
-
-> **Canonical torso has no realistic bone mesh.** Use `cont` and `inhomo`.
-> This is why the coregistration repeats resolve to `inhomo` in
-> `st_collect_replicates` (`variant_for_type.coreg`) while the warps, which
-> are on the anatomical model, resolve to `realistic`.
-
-### 1c. Warps — **inspect before computing**, ~15 min
+### 1b. Warps — **inspect before computing**, ~15 min
 
 ```matlab
 W = cr_generate_warps(struct('n_warps', 30));
@@ -113,29 +104,17 @@ The variant tag is inferred from the base filename, giving
 `geometries_warp01_realistic` / `geometries_warp01_cont`. The warp set is
 seeded, so warp *k* is the same deformation in both runs.
 
-> **The two replicate families are on different bone variants.** The warps
-> are on the anatomical model, so they can use `realistic`. The
-> coregistration repeats are on the canonical torso, which has no realistic
-> bone mesh, so they are `inhomo`. This is expected, but it must be declared
-> in two places or files will be looked for under the wrong name:
->
-> | Script | Setting |
-> |---|---|
-> | `compute_hierarchy_table` | `coreg_variant = 'inhomo'`, `warp_variant = 'realistic'` |
-> | `st_collect_replicates` | `variant_for_type.coreg`, `variant_for_type.warp` |
->
-> Because of this, the `geometry` contrast in `st_collect_replicates`
-> resolves to inhomo-vs-cont for the coreg repeats and realistic-vs-cont for
-> the warps — two different comparisons. Split by `G.replicate_type` before
-> reporting it. The `solver` contrast is unaffected: it is BEM vs FEM on
-> identical geometry either way.
+> The warps are built on the anatomical model, so `warp_variant` is
+> `realistic` in `compute_hierarchy_table` and `variant_for_type.warp` in
+> `st_collect_replicates`. Change it in those two places if you warp a
+> different bone model.
 
 ---
 
 ## Phase 2 — leadfields (the long part)
 
 Each block below is independent. **Do them in this order** — cheapest and
-most reviewer-critical first, so you have usable results early.
+cheapest first, so you have usable results early.
 
 ### 2a. Bone conductivity — ~1 day
 
@@ -192,11 +171,10 @@ run_bem_leadfields
 run_fem_leadfields
 ```
 
-Scale: 35 replicates × 2 bone variants = 70 geometries. You need BEM on all
-70, and FEM on the 35 that carry the family's main variant — the 5 `inhomo`
-coreg repeats and the 30 `realistic` warps. The cross-solver rows in the
-hierarchy table only appear where BOTH solvers ran on the same geometry, so
-a missing FEM silently drops that replicate from the table.
+Scale: 30 replicates × 2 bone variants = 60 geometries. You need BEM on all
+60, and FEM on the 30 that carry the main variant. The cross-solver row in
+the hierarchy table only appears where BOTH solvers ran on the same
+geometry, so a missing FEM silently drops that replicate from the table.
 
 **Set `sensor_arrays` to `back` only.** `st_collect_replicates` uses the
 back array, and computing front as well doubles the cost for nothing.
@@ -255,9 +233,11 @@ needs `\usepackage{graphicx}`. All of them use `booktabs`.
 ## Dependency map
 
 ```
-body scan ──> cr_repeat_coreg ──> cr_build_coreg_geometries ─┐
-                                                              ├─> BEM+FEM ─> st_collect_replicates ─> st_group_stats
-base geom ──> cr_generate_warps ─> cr_build_warp_geometries ─┘
+base geom ──> cr_generate_warps ─> cr_build_warp_geometries ──> BEM
+                                                        └──> FEM (volume warp)
+                                                              │
+                                                              v
+                                          st_collect_replicates ─> st_group_stats
 
 base geom ──> run_bone_conductivity_{bem,fem} ──> analyse_bone_conductivity
 base geom ──> run_fem_leadfields_csf ──────────> analyse_csf_effect
@@ -272,13 +252,13 @@ BEM organ variants ─> load_and_organise_leadfields ─> analyse_organ_removal
 
 ## If time is tight
 
-Priority by reviewer weight:
+Suggested priority:
 
-1. **`run_all_analysis`** — the metric fix touches every published number
-2. **Bone conductivity** (2a) — two reviewers, cheap
-3. **CSF** (2b) — Reviewer 1's "fatal flaw", cheap
+1. **`run_all_analysis`** — every main-text figure and table
+2. **Bone conductivity** (2a) — cheap
+3. **CSF** (2b) — cheap
 4. **Replicates** (2d) — answers n=1 *and* enables all statistics
 5. **Convergence** (2c) — important, but the most droppable at the margin
 
-Phases 2a–2c together are roughly two days and clear three reviewer points.
+Phases 2a–2c together are roughly two days.
 Phase 2d alone is longer than all of them combined.

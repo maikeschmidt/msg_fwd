@@ -5,20 +5,9 @@
 % each level, so that solution accuracy can be plotted against surface
 % resolution and against compute cost.
 %
-% WHY THIS EXISTS
-%   Reviewer 1: "Perform a mesh convergence study for both BEM and FEM to
-%                demonstrate that results are independent of mesh
-%                resolution."
-%
 %   The FEM half is run_fem_convergence.m (volume h-refinement). The BEM is
 %   a surface method, so its analogue is refinement of the BOUNDARY
 %   triangulations rather than of a volume mesh. That is what this does.
-%
-% IT ALSO ANSWERS REVIEWER 2, POINT 3.2
-%   "The authors applied a 50% mesh reduction on the torso to ensure the
-%    stability of the BEM. What was the impact of this simplification on
-%    the local accuracy of the sensors located only 10 mm away from the
-%    skin surface?"
 %
 %   The default sweep varies exactly that decimation factor, from 25% of
 %   faces up to the full undecimated surface, with the full surface as the
@@ -61,6 +50,8 @@ clearvars
 close all
 clc
 
+config_paths;
+
 fprintf('=== BEM surface mesh convergence study ===\n\n');
 
 cd('D:\');          % SET THIS
@@ -70,8 +61,8 @@ cr_add_functions;
 
 % USER CONFIGURATION
 
-geoms_path  = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\og_geometries';   % SET THIS
-lf_save_path = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\Convergence\bem';           % SET THIS
+geoms_path  = og_geoms;   % SET THIS
+lf_save_path = convergence_bem_base;           % SET THIS
 filename     = 'geometries_anatom_full_realistic';      % SET THIS
 
 % REFINEMENT LEVELS — fraction of faces KEPT by reducepatch.
@@ -80,17 +71,6 @@ filename     = 'geometries_anatom_full_realistic';      % SET THIS
 keep_fraction_levels = [0.25, 0.40, 0.50, 0.65, 0.80, 1.00];
 
 % WHICH SURFACES ARE REFINED
-%
-% false = TORSO ONLY. The cord, bone, heart and lung surfaces stay at full
-%         resolution at every level. This matches the production pipeline,
-%         where the torso is the only decimated surface, and it answers
-%         Reviewer 2 point 3.2 directly. It does NOT, on its own,
-%         demonstrate that the cord and bone surfaces are adequately
-%         resolved, because they never vary.
-%
-% true  = EVERY compartment decimated together. This is the stricter test
-%         and the one that supports Reviewer 1's general claim that results
-%         are independent of mesh resolution.
 %
 % RUN BOTH. They answer different questions and each takes only a handful
 % of BEM builds. Output folders are tagged by mode so they do not collide.

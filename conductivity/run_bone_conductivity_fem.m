@@ -13,12 +13,6 @@
 %   numerically identical geometry, so the resulting sensitivity curve is
 %   free of meshing noise.
 %
-% WHY THIS EXISTS
-%   Reviewers 1 and 3 both asked for a bone conductivity sensitivity
-%   analysis over roughly 0.004-0.02 S/m. See run_bone_conductivity_bem.m
-%   for the full quotes. The sweep here must match the BEM sweep exactly so
-%   that matched and cross-conductivity BEM-FEM comparisons are possible.
-%
 % USAGE:
 %   Set the paths below, then run. Run the BEM counterpart too, then
 %   analyse_bone_conductivity.
@@ -44,6 +38,8 @@ clearvars
 close all
 clc
 
+config_paths;
+
 fprintf('=== FEM bone conductivity sweep ===\n\n');
 
 cd('D:\');          % SET THIS
@@ -53,8 +49,8 @@ cr_add_functions;
 
 % USER CONFIGURATION
 
-geoms_path   = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\og_geometries';        % SET THIS
-output_base = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\bone_cond_change\fem';            % SET THIS
+geoms_path   = og_geoms;        % SET THIS
+output_base = bone_cond_fields_fem;            % SET THIS
 
 % DUNEuro binary location
 % -------------------------------------------------------------------------
@@ -70,7 +66,7 @@ output_base = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\bone_cond_cha
 %
 % The folder below must contain bst_duneuro_meeg_win64.exe and must be in a
 % location group policy permits executables to run from.
-duneuro_binpath = 'C:\wtcnapps\duneuro';   % SET THIS
+duneuro_binpath = duneuro_binpath;   % SET THIS
 
 % Fail fast: check the binary before meshing, which can take hours.
 duneuro_exe = fullfile(duneuro_binpath, 'bst_duneuro_meeg_win64.exe');
@@ -93,11 +89,6 @@ sensor_arrays_wanted = {'back'};   % {'back'} or {'front','back'}
 % COST: conductivity enters the FEM stiffness matrix, so every value needs
 % its own solve — the mesh is reused but the linear system is not. Cost is
 % therefore (number of values) x (number of arrays) solves.
-%
-% The claim being supported is that results are insensitive across the
-% literature range, which does not need fine sampling. If time is short,
-% this reduced set still covers both reviewer endpoints (0.004 and 0.02),
-% the manuscript value (0.00825) and both extremes:
 %
 %   bone_cond_values = [0.002, 0.004, 0.00825, 0.015, 0.020, 0.040];
 %

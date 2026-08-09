@@ -1,23 +1,5 @@
 % analyse_torso_decimation - Impact of the 50% torso mesh reduction
 %
-% Compares the BEM torso-only refinement sweep against BOTH the undecimated
-% torso surface AND the original published lead field, to answer Reviewer 2
-% point 3.2 directly and to confirm the sweep reproduces production.
-%
-% STANDALONE BY DESIGN
-%   This is deliberately NOT part of analyse_convergence.m. That script is
-%   the general mesh-convergence test and must stand on its own using the
-%   all-surfaces BEM sweep and the FEM volume sweep. This one answers a
-%   single specific reviewer question about one specific pipeline choice,
-%   using a sweep in which only the torso varies. Keeping them apart means
-%   neither result depends on the other.
-%
-% THE QUESTION (Reviewer 2, point 3.2)
-%   "The authors applied a 50% mesh reduction on the torso to ensure the
-%    stability of the BEM. What was the impact of this simplification on
-%    the local accuracy of the sensors located only 10 mm away from the
-%    skin surface?"
-%
 %   The torso carries the sensors roughly 10 mm outside it, so errors in
 %   its discretisation land closest to the measurement points. This is the
 %   compartment where decimation should matter most.
@@ -61,17 +43,17 @@ clc
 
 config_models;
 
-fprintf('=== Torso decimation impact (Reviewer 2, point 3.2) ===\n\n');
+fprintf('=== Torso decimation impact ===\n\n');
 
 
 % USER CONFIGURATION
 
 % Folder written by run_bem_convergence with sweep_all_surfaces = false
-bem_conv_dir = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\Convergence\bem\convergence_torso';   % SET THIS
+bem_conv_dir = convergence_bem_torso;   % SET THIS
 
 % The ORIGINAL published BEM lead field for the same geometry and array.
 % Leave empty to skip comparison (2).
-published_bem_file = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\og_fields\geometries_anatom_full_realistic\leadfield_anatom_full_realistic_bem_back.mat';   % SET THIS or ''
+published_bem_file = fullfile(dataset_dir(og_fields, core_variant), core_bem_fname);   % SET THIS or ''
 
 save_dir = fullfile(save_base_dir, 'torso_decimation');   % SET THIS
 
@@ -103,7 +85,7 @@ man = Bm.manifest;
 if isfield(Bm, 'sweep_all_surfaces') && Bm.sweep_all_surfaces
     warning(['This manifest was produced with sweep_all_surfaces = TRUE, ' ...
              'so every compartment was decimated, not just the torso. ' ...
-             'The numbers below will not answer Reviewer 2 point 3.2 as ' ...
+             'The numbers below will not isolate the decimation effect as ' ...
              'stated. Point bem_conv_dir at the torso-only sweep.']);
 end
 
@@ -271,8 +253,8 @@ else
             R.rdm(i_prod,oi), R.gain(i_prod,oi));
     end
     fprintf(fid, '\nThis is measured AT THE SENSORS, which sit ~10 mm outside the\n');
-    fprintf(fid, 'torso surface, and is therefore the local accuracy the reviewer\n');
-    fprintf(fid, 'asked about rather than a global mesh-quality statistic.\n');
+    fprintf(fid, 'torso surface, so it is the local accuracy where it matters\n');
+    fprintf(fid, 'rather than a global mesh-quality statistic.\n');
 
     fprintf('  Production keep = %.2f:  RE = %s\n', production_keep, ...
         strjoin(arrayfun(@(x) sprintf('%.3f%%', x), R.re(i_prod,:), 'uni', 0), ' / '));

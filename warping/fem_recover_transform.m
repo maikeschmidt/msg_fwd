@@ -1,25 +1,21 @@
 function [M, R] = fem_recover_transform(base_geom, warped_geom, opts)
 % fem_recover_transform - Recover the exact transform the BEM was run with
 %
-% WHY NOT JUST READ THE WARP FILE
-%   cr_build_warp_geometries recentres the warps about the torso centroid by
-%   default (S.recentre = true), which REBUILDS the matrices. The matrices
-%   sitting in anatomical_warps.mat are therefore NOT necessarily the ones
-%   applied to the geometry the BEM consumed. Using them would give the FEM
-%   a slightly different anatomy from the BEM for the same replicate index,
-%   which is precisely the confound the replicate study exists to avoid.
+% WHAT IT DOES
+%   Returns the affine transform relating a base geometry to a warped one,
+%   taken from the warped file's stored warp_matrix where present and
+%   recovered by least squares from corresponding vertices otherwise.
 %
-%   The transform is instead taken from the WARPED GEOMETRY FILE ITSELF —
-%   the same file the BEM read — and verified against the base geometry by
-%   applying it and measuring the residual. If the residual is not
-%   essentially zero, the two files do not correspond and the function
-%   refuses rather than silently pairing the wrong anatomies.
+%   The transform is always verified: it is applied to the base and the
+%   residual measured against the warped file's own vertices. A residual
+%   above tolerance means the two files are not a base/warped pair, or the
+%   deformation is not affine, and the function errors rather than returning
+%   a transform that would pair the wrong anatomies.
 %
-%   Where no matrix was stored (older files, or coregistration geometries
-%   built by a different script) it is recovered by least squares from
-%   corresponding vertices. Vertex correspondence holds because these
-%   geometries are produced by transforming the base vertex list in place,
-%   so row k means the same anatomical point in both.
+%   Take the transform from the geometry file rather than from the warp
+%   file: cr_build_warp_geometries recentres warps about the torso centroid
+%   by default, which rebuilds the matrices, so the matrices stored in the
+%   warp file are not necessarily the ones that were applied.
 %
 % USAGE:
 %   [M, R] = fem_recover_transform('geometries_base.mat', ...

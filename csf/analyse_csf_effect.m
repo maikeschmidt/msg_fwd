@@ -1,15 +1,5 @@
 % analyse_csf_effect - Quantify the effect of including a CSF compartment
 %
-% Compares the FEM leadfields computed with and without the CSF layer by
-% run_fem_leadfields_csf.m, and optionally the BEM leadfield, to answer
-% Reviewer 1's central objection with a number rather than an argument.
-%
-% WHY THIS EXISTS
-%   Reviewer 1: "The complete omission of CSF from all volume conductor
-%                models... invalidates the physical realism of the forward
-%                solutions and undermines all conclusions about
-%                'anatomically realistic' modelling." (called a fatal flaw)
-%
 %   The productive response is not to claim CSF everywhere, but to measure
 %   what its omission actually costs. Because run_fem_leadfields_csf solves
 %   both variants on ONE identical tetrahedral mesh, the difference reported
@@ -71,11 +61,11 @@ fprintf('=== CSF effect analysis ===\n\n');
 % USER CONFIGURATION
 
 % Folder written by run_fem_leadfields_csf.m
-csf_dir = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\CSF\fields\fem\geometries_anatom_full_realistic';   % SET THIS
+csf_dir = dataset_dir(csf_fields, core_variant);   % SET THIS
 
 % Optional: the matching BEM leadfield for the same geometry, for
 % comparisons (B) and (C). Leave empty to skip them.
-bem_file = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\og_fields\geometries_anatom_full_realistic\leadfield_anatom_full_realistic_bem_back.mat';   % SET THIS or ''
+bem_file = fullfile(dataset_dir(og_fields, core_variant), core_bem_fname);   % SET THIS or ''
 
 save_dir = fullfile(save_base_dir, 'csf_effect');   % SET THIS
 

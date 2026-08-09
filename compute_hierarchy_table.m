@@ -28,22 +28,19 @@
 %                  solver. "Does the literature value chosen matter?"
 %                  Cross-solver conductivity comparisons are deliberately
 %                  left to analyse_bone_conductivity.
-%   coreg          BEM vs FEM on each repeated manual coregistration.
-%   warping        BEM vs FEM on each warped anatomy.
-%                  Both are CROSS-SOLVER on matched geometry. They do not ask
-%                  "how much does coregistration or body shape matter?" —
-%                  they ask whether BEM-FEM agreement holds up when the
-%                  anatomy changes underneath it. Read them for STABILITY
-%                  against the solver row, not for magnitude.
-%                  The within-solver spread is still computed and written to
-%                  all_comparisons.csv as coreg_within / warping_within, but
-%                  is kept out of the table: it answers a different question.
+%   warping        BEM vs FEM on each warped anatomy. CROSS-SOLVER on matched
+%                  geometry: it measures whether BEM-FEM agreement holds up
+%                  when the anatomy changes underneath it, so read it for
+%                  STABILITY against the solver row, not for magnitude.
+%                  The within-solver spread across warps is written to
+%                  all_comparisons.csv as warping_within, but is kept out of
+%                  the table: it answers a different question.
 %   solver         BEM vs FEM on matched geometry. The paper's core question.
 %
 % AGGREGATION
 %   Every comparison yields per-source metrics; those are reduced to a median
 %   over sources (edges trimmed, as everywhere else). A factor measured by
-%   several comparisons — conductivity, coreg, warping — is then summarised
+%   several comparisons — conductivity, warping — is then summarised
 %   by the median across those comparisons. Both levels are written out, so
 %   nothing is hidden behind an aggregate.
 %
@@ -97,28 +94,19 @@ save_dir = fullfile(save_base_dir, 'hierarchy');   % SET THIS
 % leadfields_organised.mat via forward_fields_base in config_models.
 
 % CSF sweep
-csf_dir        = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\CSF\fields\fem\geometries_anatom_full_realistic';  % SET THIS
+csf_dir        = dataset_dir(csf_fields, core_variant);
 csf_geom_short = 'anatom_full_realistic';                                            % SET THIS
 
 % Bone conductivity sweep
-cond_bem_dir    = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\bone_cond_change\bem\geometries_anatom_full_realistic';  % SET THIS
-cond_fem_dir    = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\bone_cond_change\fem\geometries_anatom_full_realistic';  % SET THIS
+cond_bem_dir    = dataset_dir(bone_cond_fields_bem, core_variant);
+cond_fem_dir    = dataset_dir(bone_cond_fields_fem, core_variant);
 cond_geom_short = 'anatom_full_realistic';                                                 % SET THIS
 
-% Replicate geometries (coreg + warping)
-rep_bem_base = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\replications\fields';   % SET THIS
-rep_fem_base = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\replications\fields';   % SET THIS
-coreg_ids    = arrayfun(@(k) sprintf('coreg_rep%02d', k), 1:5,  'uni', 0);
-warp_ids     = arrayfun(@(k) sprintf('warp%02d',      k), 1:30, 'uni', 0);
-
-% The two families were built on DIFFERENT bone variants: the coregistration
-% repeats use the canonical torso, which has no realistic bone mesh, so they
-% are toroidal; the warps are on the anatomical model with realistic bone.
-% Each family is therefore compared against the solver result on its OWN
-% variant in the report — comparing the realistic warps against a toroidal
-% solver baseline would confound bone model with anatomy.
-coreg_variant = 'inhomo';      % SET THIS
-warp_variant  = 'realistic';   % SET THIS
+% Warped replicate geometries
+rep_bem_base = warp_fields_bem;
+rep_fem_base = warp_fields_fem;
+warp_ids     = arrayfun(@(k) sprintf('warp%02d', k), 1:30, 'uni', 0);
+warp_variant = 'realistic';   % SET THIS: bone variant the warps were built on
 
 array_name    = core_array;   % from config_models — shared with every analysis
 headline_axis = 3;            % axis quoted in the LaTeX table
@@ -280,23 +268,22 @@ for m = {'bem','fem'}
     end
 end
 
-% ---- 5/6: replicates (coreg, warping) ---------------------------------
+% ---- 5: warped replicates --------------------------------------------
 %
 % CROSS-SOLVER, matched geometry. For each replicate the BEM and FEM are
 % run on the SAME anatomy and compared to each other. The question these
-% analyses answer is not "how much does coregistration matter?" but
+% analysis answers is not "how much does body shape matter?" but
 % "does BEM-FEM agreement survive a change of anatomy?" — so the table
 % row is a solver comparison repeated over many anatomies, and the
 % quantity to read is how STABLE it is across replicates, not its size.
 %
 % The within-solver pairwise spread is still computed and written to
-% all_comparisons.csv under the factors coreg_within / warping_within.
+% all_comparisons.csv under the factor warping_within.
 % It is genuinely informative — it is how far apart two independent
 % realisations land — but it is a different question from the one the
 % table asks, so it is deliberately not in factor_order.
 
-rep_specs = {'coreg',  'Solver, across coregistrations',  coreg_ids, coreg_variant; ...
-             'warping','Solver, across warped anatomies', warp_ids,  warp_variant};
+rep_specs = {'warping', 'Solver, across warped anatomies', warp_ids, warp_variant};
 
 for r = 1:size(rep_specs,1)
     fac = rep_specs{r,1}; lab = rep_specs{r,2};
@@ -445,10 +432,9 @@ fprintf('\nAll comparisons written.\n');
 % HIGH-LEVEL SUMMARY — EVERY SENSOR AXIS
 
 factor_order = {'segmentation','bone_detail','csf','organ_removal', ...
-                'conductivity','coreg','warping','solver'};
+                'conductivity','warping','solver'};
 factor_names = {'Bone segmentation','Bone geom. detail','CSF', ...
                 'Organ segmentation','Bone conductivity', ...
-                'Solver, across coregistrations', ...
                 'Solver, across warped anatomies','Solver choice'};
 
 axes_present = unique([Rall.axis]);
@@ -543,13 +529,11 @@ S = Hh(strcmp({Hh.factor},'solver'));
 if ~isempty(S)
     fprintf(fid, '\n%s\nDOES SOLVER AGREEMENT SURVIVE A CHANGE OF ANATOMY?\n%s\n', ...
         repmat('=',1,78), repmat('=',1,78));
-    fprintf(fid, ['The two replicate families sit on different bone variants, so\n' ...
-        'each is quoted against the single-anatomy solver result on its OWN\n' ...
-        'variant. Comparing across variants would confound bone model with\n' ...
-        'anatomy.\n\n']);
+    fprintf(fid, ['Quoted against the single-anatomy solver result on the SAME\n' ...
+        'bone variant; comparing across variants would confound bone model\n' ...
+        'with anatomy.\n\n']);
 
-    fam = {'coreg','Across coregistrations', coreg_variant; ...
-           'warping','Across warped anatomies', warp_variant};
+    fam = {'warping','Across warped anatomies', warp_variant};
 
     for q = 1:size(fam,1)
         sub = Hh(strcmp({Hh.factor}, fam{q,1}));
@@ -579,17 +563,17 @@ fprintf(fid, 'a thin CSF layer between cord and segmented vertebrae. Charging th
 fprintf(fid, 'BEM for that belongs in the Results, not in this table.\n');
 fprintf(fid, 'NOTE: organ removal is BEM-only and within-BEM only. The\n');
 fprintf(fid, 'cross-solver arm is in analyse_organ_removal.\n');
-fprintf(fid, ['NOTE: the coregistration and warping rows are CROSS-SOLVER —\n' ...
-    'BEM vs FEM run on the same anatomy, one comparison per replicate. They\n' ...
-    'are not a measure of how much coregistration or body shape matters.\n' ...
-    'They answer: does BEM-FEM agreement survive a change of anatomy? Read\n' ...
-    'them against the "Solver choice" row on the reference anatomy — if the\n' ...
-    'three are close, solver agreement does not depend on getting the\n' ...
+fprintf(fid, ['NOTE: the warping row is CROSS-SOLVER —\n' ...
+    'BEM vs FEM run on the same anatomy, one comparison per replicate. It\n' ...
+    'is not a measure of how much body shape matters.\n' ...
+    'It answers: does BEM-FEM agreement survive a change of anatomy? Read\n' ...
+    'it against the "Solver choice" row on the reference anatomy — if the\n' ...
+    'two are close, solver agreement does not depend on getting the\n' ...
     'anatomy right, which is the claim those analyses exist to support.\n' ...
     'The SPREAD across replicates carries the result, so use\n' ...
     'all_comparisons.csv, not the median alone.\n']);
 fprintf(fid, ['NOTE: within-solver spread between replicates is in\n' ...
-    'all_comparisons.csv as coreg_within / warping_within. It is kept out\n' ...
+    'all_comparisons.csv as warping_within. It is kept out\n' ...
     'of the table because it answers a different question.\n']);
 fclose(fid);
 

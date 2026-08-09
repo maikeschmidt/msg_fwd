@@ -22,18 +22,6 @@
 %   <save_base_dir>/re_cc_table_axis<N>.txt
 %   <save_base_dir>/re_cc_table_axis<N>.csv
 %
-% WHAT THIS TABLE ANSWERS FROM THE REVIEWS
-%   Reviewer 1: "Add a comprehensive summary table of all RE and r2 values
-%                (median, range, confidence intervals) for all comparisons."
-%                -> every row carries median, IQR, min, max and a
-%                   bootstrap 95% CI of the median.
-%   Reviewer 1: "Report confidence intervals for all RE and r2 values."
-%                -> see BOOTSTRAP below.
-%   Reviewer 3: "Two different relative difference metrics are used without
-%                much signposting."
-%                -> both are reported side by side, explicitly labelled,
-%                   with the manuscript Eq 13 value first.
-%
 % METRIC DEFINITIONS:
 %   All defined in lf_metrics.m. Under the default settings:
 %     RE     = ||L1 - L2||_2 / ||L1||_2 * 100        manuscript Eq 13

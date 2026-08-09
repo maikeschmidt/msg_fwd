@@ -4,12 +4,6 @@
 % difference measure (RDM) and log magnitude ratio (lnMAG) between a
 % reference leadfield vector and a comparison leadfield vector.
 %
-% EVERY script in msg_fwd, msg_pert and the simpler_models subfolder must
-% route through this function. Do not compute corrcoef() or norm() ratios
-% inline anywhere else — that is exactly the inconsistency Reviewer 3
-% flagged (main text Eq 13 vs Supplementary Table S3 using different
-% definitions of "percentage difference").
-%
 % USAGE:
 %   m = lf_metrics(vecA, vecB)
 %   m = lf_metrics(vecA, vecB, opts)

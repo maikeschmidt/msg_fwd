@@ -4,23 +4,6 @@
 % sweeping ONLY the vertebral bone conductivity across a deterministic
 % range. All other compartments keep their nominal values.
 %
-% WHY THIS EXISTS
-%   Reviewer 1: "Perform a sensitivity analysis for bone conductivity
-%                (range 0.004-0.02 S/m) to assess the robustness of
-%                findings."
-%   Reviewer 3: "No sensitivity analysis on bone conductivity itself. The
-%                paper explicitly notes literature estimates span
-%                0.004-0.02 S/m (a 5x range) but fixes one FieldTrip-default
-%                value (0.00825 S/m) throughout. Since the central claim is
-%                'geometry matters more than solver choice', it would
-%                strengthen the paper to show this conclusion is robust
-%                across that conductivity range."
-%
-%   The default sweep below spans 0.002-0.04 S/m, which BRACKETS the
-%   0.004-0.02 range the reviewers named, and explicitly includes 0.004,
-%   0.00825 (the manuscript value) and 0.02 as exact grid points so those
-%   comparisons can be quoted directly.
-%
 %   This differs from run_conductivity_perturbation.m, which randomly
 %   perturbs ALL compartments simultaneously to assess general robustness.
 %   Here the sweep is bone-only and deterministic, so the resulting curve
@@ -56,13 +39,15 @@ clearvars
 close all
 clc
 
+config_paths;
+
 fprintf('=== BEM bone conductivity sweep ===\n\n');
 
 
 % USER CONFIGURATION
 
-geoms_path   = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\og_geometries';        % SET THIS
-lf_save_path = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\bone_cond_change\bem';            % SET THIS
+geoms_path   = og_geoms;        % SET THIS
+lf_save_path = bone_cond_fields_bem;            % SET THIS
 filename     = 'geometries_anatom_full_realistic';           % SET THIS
 
 cd('D:\');          % SET THIS
@@ -74,9 +59,6 @@ cr_add_functions;
 % geometry carries an experimental array.
 sensor_arrays_wanted = {'back'};   % {'back'} or {'front','back'}
 
-% BONE CONDUCTIVITY SWEEP (S/m)
-% Brackets the reviewers' 0.004-0.02 range. Includes the manuscript value
-% 0.00825 and both reviewer endpoints as exact grid points.
 %
 % MUST MATCH run_bone_conductivity_fem.m exactly, or the matched-pair and
 % cross-conductivity analyses cannot be formed. If you shorten one, shorten

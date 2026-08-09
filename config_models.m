@@ -12,28 +12,13 @@
 %
 % VARIABLES DEFINED:
 %   Paths:
-%     forward_fields_base  - Path to leadfield .mat files
-%     geoms_path           - Path to geometry .mat files
-%     save_base_dir        - Base path for saving all output figures
+%     All filesystem locations come from config_paths, which this script
+%     calls. See that file for the full list.
 %
 %   Model configuration:
 %     model_names          - Cell array of geometry variant name strings
 %     model_types          - Cell array: 'bem', 'fem', or 'both' per model
 %     model_display        - Struct mapping model keys to display label strings
-%
-%   Core reference models (the MRI-realistic anatomical model):
-%     core_array           - Sensor array for the core models ('back')
-%     core_variant         - Reference geometry ('anatom_full_realistic')
-%     core_bem_key         - Key into leadfields_organised.mat for core BEM
-%     core_fem_key         - Key into leadfields_organised.mat for core FEM
-%     core_bem_fname       - Bare filename of the core BEM lead field
-%     core_fem_fname       - Bare filename of the core FEM lead field
-%     core_bem_file        - Full path to the core BEM lead field
-%     core_fem_file        - Full path to the core FEM lead field
-%
-%   Organ removal:
-%     organ_removal_base     - Parent folder holding the organ-removal runs
-%     organ_removal_variants - {subfolder, display label} per variant
 %
 %   Orientation labels:
 %     orientation_labels   - {'VD', 'RC', 'LR'} — internal field names
@@ -91,7 +76,7 @@
 %                                     SET THIS after running example_script_1.m
 %
 % NOTES:
-%   - Update the three path variables before running any analysis script
+%   - Paths are set in config_paths, not here
 %   - model_names and model_types must stay the same length and order
 %   - Uncomment the relevant model_names/model_types block for the analysis
 %     you want to run and comment out the others
@@ -116,12 +101,11 @@
 %   https://github.com/maikeschmidt/msg_coreg
 
 
-% PATHS — update these before running
+% PATHS
+% Every filesystem location comes from config_paths. Nothing path-related
+% should be set here.
 
-forward_fields_base = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\og_fields\';   % SET THIS: path to leadfield .mat files
-real_fields_base    = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\og_fields\geometries_anatom_full_realistic';
-geoms_path          = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\og_geometries';   % SET THIS: path to geometry .mat files
-save_base_dir       = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\replicates';   % SET THIS: base path for saving all figures
+config_paths;
 
 
 % MODEL NAMES AND TYPES
@@ -146,47 +130,6 @@ model_types = { ...
 % Safety reshape — guards against accidental 2D cell array definitions
 model_names = model_names(:)';
 model_types = model_types(:)';
-
-
-% CORE REFERENCE MODELS
-%
-% The MRI-realistic anatomical model on the back array is the reference for
-% the whole study. Defined once here so every analysis script means the same
-% thing by "the core model", instead of each script rebuilding the key with
-% its own sprintf. Use these anywhere a script needs the baseline BEM or FEM.
-
-core_array   = 'back';                    % SET THIS: sensor array
-core_variant = 'anatom_full_realistic';   % SET THIS: reference geometry
-
-% Keys into leadfields_organised.mat
-core_bem_key = sprintf('bem_%s_%s', core_variant, core_array);
-core_fem_key = sprintf('fem_%s_%s', core_variant, core_array);
-
-% Raw lead field files, for analyses that load outside the organised struct.
-% BEM files hold 'leadfield_cord'; FEM files hold 'leadfield_ft'.
-core_bem_fname = sprintf('leadfield_%s_bem_%s.mat',       core_variant, core_array);
-core_fem_fname = sprintf('cord_leadfield_%s_fem_%s.mat',  core_variant, core_array);
-core_bem_file  = fullfile(real_fields_base, core_bem_fname);
-core_fem_file  = fullfile(real_fields_base, core_fem_fname);
-
-
-% ORGAN REMOVAL (Reviewer 1: move this analysis into the Results)
-%
-% BEM lead fields recomputed on the SAME realistic anatomical model with
-% thoracic organs removed. Because the geometry variant is unchanged the
-% filenames are identical to core_bem_fname — only the folder differs, so
-% each variant is defined by its directory.
-%
-% Used by analyse_organ_removal and by compute_hierarchy_table.
-
-organ_removal_base = fullfile(forward_fields_base, 'forward_fields_heart_lungs');   % SET THIS
-
-% {subfolder, display label}. Comment out any variant you do not have.
-organ_removal_variants = { ...
-    'no_heart',       'No heart'; ...
-    'no_lungs',       'No lungs'; ...
-    'no_heart_lungs', 'No heart or lungs'; ...
-};
 
 
 % BONE MODEL VARIANTS

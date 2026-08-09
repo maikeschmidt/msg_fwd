@@ -5,21 +5,6 @@
 % boundary, in the space between cord and vertebral bone, to a new CSF
 % tissue label. Returns the updated tissue vector and a report.
 %
-% WHY THIS EXISTS
-%   Reviewer 1 called the omission of CSF a fatal flaw and asked for it in
-%   all volume conductor models. In the BEM this is genuinely hard: the
-%   formulation requires closed, non-intersecting nested surfaces, and a
-%   thin CSF shell threaded between the cord and the segmented vertebrae
-%   would intersect the bone surfaces almost everywhere. The FEM has no
-%   such constraint — tissue is assigned per tetrahedron — so CSF can be
-%   added there directly.
-%
-%   This function therefore supports an FEM-only CSF model, run on the
-%   original anatomical geometry, to quantify how much CSF actually
-%   changes the forward solution. That is the honest, tractable answer to
-%   the reviewer: rather than claiming CSF everywhere, show what its
-%   inclusion does, in the framework that can represent it.
-%
 % METHOD
 %   A tetrahedron becomes CSF if ALL of the following hold:
 %     1. It is not already cord (tissue ~= cord_label)
@@ -216,12 +201,6 @@ end
 
 function d = min_dist_to_points(query, ref)
 % Distance from each query point to its nearest reference point.
-%
-% Uses knnsearch when the Statistics and Machine Learning Toolbox is
-% available, and otherwise falls back to a chunked brute-force search.
-% The fallback exists so this function has no toolbox dependency: the
-% CSF layer is the response to a reviewer's central objection and should
-% not fail to run on a machine without a Statistics licence.
 %
 % Chunking keeps peak memory at roughly chunk x size(ref,1) doubles
 % rather than materialising the full query-by-ref distance matrix, which

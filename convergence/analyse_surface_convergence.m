@@ -58,8 +58,8 @@ fprintf('=== Surface-driven convergence: BEM vs FEM ===\n\n');
 % USER CONFIGURATION
 
 % Both must use the SAME sweep_all_surfaces setting and keep levels.
-bem_dir = 'D:\Simulations\Convergence\bem\convergence_allsurf';                  % SET THIS
-fem_dir = 'D:\Simulations\Convergence\fem\surface_convergence_allsurf';          % SET THIS
+bem_dir = convergence_bem_allsurf;                  % SET THIS
+fem_dir = convergence_fem_surface;          % SET THIS
 save_dir = fullfile(save_base_dir, 'surface_convergence');                       % SET THIS
 
 array_name    = 'back';

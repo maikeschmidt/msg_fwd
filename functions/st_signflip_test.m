@@ -3,8 +3,6 @@
 % Tests whether paired differences are centred above zero, without any
 % distributional assumption and without the Statistics Toolbox.
 %
-% Reviewer 1 asked specifically for permutation tests. This is that test.
-%
 % NULL HYPOTHESIS
 %   Under H0 the two paired conditions are exchangeable, so each observed
 %   difference was equally likely to have come out with the opposite sign.

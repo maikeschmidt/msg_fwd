@@ -28,10 +28,6 @@
 %               codebase and reported in Supplementary Table S3. Retained
 %               only to reproduce the old supplementary numbers.
 %
-%   Reviewer 3 point 3 flagged that the main text and Supplementary
-%   Table S3 reported two differently-defined percentage differences
-%   without signposting. Routing everything through this file is the fix.
-%
 % SQUARED CORRELATION (rsq_mode)
 %   'pearson'        r2 = (Pearson r)^2 — MANUSCRIPT Eq 14. DEFAULT.
 %                    Scale invariant: unit-normalising the leadfields

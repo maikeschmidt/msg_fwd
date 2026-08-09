@@ -1,8 +1,5 @@
 % st_boot_ci_median - Percentile bootstrap confidence interval of the median
 %
-% Reviewer 1 asked for confidence intervals on all RE and r2 values. This
-% provides them without the Statistics Toolbox.
-%
 % WHAT IS BEING RESAMPLED MATTERS
 %   The resampling unit determines what the CI means, and the two used in
 %   this toolbox answer different questions:

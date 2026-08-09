@@ -4,10 +4,6 @@
 % or sign-flip permutation test. A p-value says an effect is unlikely under
 % the null; this says how big it is.
 %
-% Reviewers who ask for significance testing generally expect an effect
-% size with it, and a p-value alone from a large number of replicates can
-% be significant while describing a negligible difference.
-%
 % DEFINITION
 %   r = (sum of positive ranks - sum of negative ranks) / total rank sum
 %   where ranks are over |d| and zero differences are discarded.

@@ -9,22 +9,12 @@
 %   script does not read the global sweep. The two tests answer different
 %   questions and neither result is allowed to depend on the other.
 %
-% WHAT IT ANSWERS (Reviewer 2, point 7.1)
-%   "...how would you conduct a systematic mesh convergence study to
-%    guarantee that potential singularities (related to the St. Venant
-%    approximation for dipoles) are stably resolved?"
-%
 %   Global refinement spends most of its elements far from the cord, where
 %   they contribute nothing to resolving the singular source. This sweep
 %   targets the elements that actually surround the dipoles. If the
 %   sensor-level lead fields stop changing as the cord mesh is refined, the
 %   St. Venant source model is stably resolved at the production mesh, and
 %   that can be stated as a measurement.
-%
-% ALSO ANSWERS (Reviewer 2, point 7.2)
-%   "What is the optimal trade-off observed in the literature between
-%    computation time and relative error when densifying the mesh around
-%    the spinal cord?"
 %
 %   Densifying AROUND THE CORD is precisely what this sweep does, and
 %   runtime is recorded per level, so the trade-off curve here is a more
@@ -64,7 +54,7 @@ fprintf('=== Cord-local refinement analysis ===\n\n');
 
 % USER CONFIGURATION
 
-cordref_dir = 'D:\Simulations\Convergence\fem\cord_refinement';   % SET THIS
+cordref_dir = convergence_fem_cord;   % SET THIS
 save_dir    = fullfile(save_base_dir, 'cord_refinement');         % SET THIS
 
 array_name    = 'back';
@@ -253,7 +243,7 @@ else
 end
 
 % Cost of local vs global refinement
-fprintf(fid, '\nCOST (Reviewer 2, point 7.2):\n');
+fprintf(fid, '\nACCURACY VS COMPUTATION TIME:\n');
 fprintf(fid, '  %10s %11s %11s %9s\n', 'cord mm^3', 'cord tets', 'total tets', 'time(s)');
 for i = 1:n_lvl
     L = have(i);

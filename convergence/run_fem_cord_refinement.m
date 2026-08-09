@@ -13,11 +13,6 @@
 %   analysis depends on the other. analyse_convergence.m does not read
 %   anything produced here.
 %
-% WHY IT MATTERS (Reviewer 2, point 7.1)
-%   "...how would you conduct a systematic mesh convergence study to
-%    guarantee that potential singularities (related to the St. Venant
-%    approximation for dipoles) are stably resolved?"
-%
 %   A current dipole is a singular source. Global refinement spends most of
 %   its elements far from the cord, where they do nothing for the
 %   singularity. Refining only the cord compartment targets exactly the
@@ -61,6 +56,8 @@ clearvars
 close all
 clc
 
+config_paths;
+
 fprintf('=== FEM local cord refinement ===\n\n');
 
 cd('D:\');          % SET THIS
@@ -70,11 +67,11 @@ cr_add_functions;
 
 % USER CONFIGURATION
 
-geoms_path  = 'D:\Simulations\Pertubations\geometries';   % SET THIS
-output_base = 'D:\Simulations\Convergence\fem';           % SET THIS
+geoms_path  = og_geoms;   % SET THIS
+output_base = convergence_fem_base;           % SET THIS
 filename    = 'geometries_original_source_original';      % SET THIS
 
-duneuro_binpath = 'C:\wtcnapps\duneuro';   % SET THIS
+duneuro_binpath = duneuro_binpath;   % SET THIS
 duneuro_exe = fullfile(duneuro_binpath, 'bst_duneuro_meeg_win64.exe');
 if ~isfile(duneuro_exe)
     error(['DUNEuro binary not found:\n  %s\n' ...

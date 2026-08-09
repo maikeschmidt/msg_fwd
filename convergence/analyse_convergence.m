@@ -1,31 +1,5 @@
 % analyse_convergence - Mesh convergence analysis for BEM and FEM
 %
-% Loads the refinement sweeps produced by run_fem_convergence.m and
-% run_bem_convergence.m and produces the convergence evidence the reviewers
-% asked for: error against element size, observed convergence order,
-% accuracy against compute time, and a recommended operating point.
-%
-% WHAT EACH REVIEWER POINT GETS
-%   Reviewer 1 ("demonstrate results are independent of mesh resolution")
-%     -> convergence curves plus an explicit statement of the error at the
-%        production setting relative to the finest mesh computed.
-%   Reviewer 2 point 7.1 ("systematic mesh convergence study... St. Venant
-%   singularities stably resolved")
-%     -> observed convergence order from a log-log fit, evaluated on the
-%        SENSOR-LEVEL field, which is the quantity the paper reports and
-%        the one that must become mesh independent.
-%   Reviewer 2 point 7.2 ("optimal trade-off between computation time and
-%   relative error")
-%     -> the accuracy-versus-runtime curve and the knee-point
-%        recommendation.
-%
-% NOT ANSWERED HERE, DELIBERATELY
-%   Reviewer 2 point 3.2 (impact of the 50% torso reduction) is answered by
-%   analyse_torso_decimation.m, and the St. Venant near-source question is
-%   answered by analyse_cord_refinement.m. Both use sweeps in which only one
-%   thing varies. They are kept separate so this general convergence result
-%   stands on its own and does not depend on either.
-%
 % THE REFERENCE SOLUTION
 %   Convergence is measured against the FINEST mesh in each sweep, since no
 %   analytic solution exists for this geometry. This is standard practice,
@@ -72,8 +46,8 @@ fprintf('=== Mesh convergence analysis ===\n\n');
 
 % USER CONFIGURATION
 
-fem_conv_dir = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\Convergence\fem\convergence';   % SET THIS
-bem_conv_dir = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\Convergence\bem\convergence_allsurf';   % SET THIS
+fem_conv_dir = convergence_fem_volume;   % SET THIS
+bem_conv_dir = convergence_bem_allsurf;   % SET THIS
 %   ^ The ALL-SURFACES sweep (sweep_all_surfaces = true). That is the one
 %     that supports the general claim "results are independent of mesh
 %     resolution", because every compartment varies.
@@ -268,7 +242,6 @@ if isfield(results, 'bem')
         save_dir, sprintf('convergence_bem_axis%d', target_axis), tol_pct);
 end
 
-% Combined accuracy vs runtime — the Reviewer 2 point 7.2 figure
 if isfield(results, 'fem') || isfield(results, 'bem')
     fig = figure('Color','w','Position',[80 80 800 560]); hold on;
     lg = {};

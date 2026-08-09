@@ -1,9 +1,5 @@
 % st_group_stats - Group-level statistics across replicate geometries
 %
-% Takes the group array from st_collect_replicates and produces the
-% significance tests, confidence intervals and multiple-comparison
-% correction that Reviewer 1 asked for.
-%
 % -------------------------------------------------------------------------
 % WHAT IS BEING TESTED, AND WHY THAT IS A SENSIBLE THING TO TEST
 % -------------------------------------------------------------------------
@@ -12,8 +8,7 @@
 % answer. A significance test needs a population and a sampling unit. Here
 % they are:
 %
-%   Sampling unit : one replicate GEOMETRY (a coregistration repeat or a
-%                   warped anatomy)
+%   Sampling unit : one replicate GEOMETRY (a warped anatomy)
 %   Population    : the set of plausible geometries a user of this pipeline
 %                   could end up with for a given participant
 %   Question      : is the effect of BONE GEOMETRY on the forward solution
@@ -33,28 +28,12 @@
 %   H0: the median of d is 0 (geometry and solver matter equally).
 %   H1: median of d > 0 (geometry matters more).
 %
-%   Primary test  : sign-flip permutation test on the paired differences.
-%                   Exact when 2^n is small enough to enumerate, otherwise
-%                   Monte Carlo. Requires no distributional assumption and
-%                   no toolbox. Reviewer 1 named permutation tests
-%                   explicitly.
-%   Secondary     : Wilcoxon signed-rank, reported when the Statistics
-%                   Toolbox is available, as a familiar cross-check.
-%   Effect size   : matched-pairs rank-biserial correlation, plus the
-%                   median paired difference with a bootstrap CI.
-%
 % MULTIPLE COMPARISONS
 %   The test is run independently at every source position along the cord,
 %   so p-values are corrected across sources with Benjamini-Hochberg FDR
 %   (q = 0.05) within each orientation. FDR rather than Bonferroni because
 %   neighbouring source positions are strongly dependent, which makes
 %   Bonferroni severely over-conservative here.
-%
-% CONFIDENCE INTERVALS
-%   Every reported median comes with a percentile bootstrap CI computed by
-%   resampling REPLICATES with replacement. This is the CI Reviewer 1 asked
-%   for, and the resampling unit is now a geometry rather than a source
-%   position, which is the meaningful level.
 %
 % USAGE:
 %   st_group_stats
@@ -138,7 +117,6 @@ n_src  = size(D, 4);
 dist   = G.distances_mm;
 
 fprintf('Replicates usable : %d of %d\n', n_rep, numel(G.replicate_names));
-fprintf('  coreg repeats   : %d\n', sum(strcmp(G.replicate_type(valid_rep),'coreg')));
 fprintf('  warped anatomies: %d\n', sum(strcmp(G.replicate_type(valid_rep),'warp')));
 fprintf('Metric tested     : %s\n', test_metric);
 fprintf('Contrast          : %s (effect) vs %s (baseline)\n\n', ...
@@ -151,9 +129,7 @@ fcsv = fopen(fullfile(save_dir, 'group_stats_results.csv'), 'w');
 
 fprintf(fid, '=== GROUP-LEVEL STATISTICS ACROSS REPLICATE GEOMETRIES ===\n');
 fprintf(fid, 'Generated  : %s\n', datestr(now));
-fprintf(fid, 'Replicates : %d (%d coregistration repeats, %d warped anatomies)\n', ...
-    n_rep, sum(strcmp(G.replicate_type(valid_rep),'coreg')), ...
-    sum(strcmp(G.replicate_type(valid_rep),'warp')));
+fprintf(fid, 'Replicates : %d warped anatomies\n', n_rep);
 fprintf(fid, 'Metric     : %s\n', test_metric);
 fprintf(fid, 'Test       : sign-flip permutation on paired differences\n');
 fprintf(fid, '             H1: %s effect > %s effect\n', contrast_effect, contrast_baseline);
@@ -335,7 +311,7 @@ end
 fig = figure('Color','w','Position',[80 80 1300 460]);
 tl  = tiledlayout(1, n_ori, 'TileSpacing','compact','Padding','loose');
 title(tl, sprintf(['Per-replicate cord-median %s (n = %d geometries)\n' ...
-    'coregistration repeats + warped anatomies'], upper(test_metric), n_rep), ...
+    'warped anatomies'], upper(test_metric), n_rep), ...
     'FontSize', 13, 'FontWeight','bold');
 
 for oi = 1:n_ori

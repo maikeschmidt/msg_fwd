@@ -2,36 +2,24 @@ function [tet, src, sens, Q] = fem_warp_volume(tet, src, sens, M, opts)
 % fem_warp_volume - Apply an affine warp to a tetrahedral mesh, not to the
 %                   surfaces it was built from
 %
-% WHY THIS EXISTS
-%   The usual route is: warp the surface meshes, then re-tetrahedralise each
-%   warped geometry. That puts TetGen in the loop 30 times, and TetGen is
-%   the fragile part — anisotropic scaling degrades triangle quality and the
-%   meshing fails with messages that name nothing useful.
+% WHAT IT DOES
+%   Applies an affine transform to a tetrahedral mesh, its sources and its
+%   sensors, so a replicate anatomy can be produced from an existing volume
+%   mesh instead of re-tetrahedralising a warped surface.
 %
-%   Warping the VOLUME mesh instead removes TetGen from the loop entirely.
-%   The base geometry is tetrahedralised ONCE, and each replicate is that
-%   mesh under an affine map.
+% VALIDITY
+%   An affine map with positive determinant multiplies every element's
+%   signed volume by det(A), so no element can invert: a valid mesh maps to
+%   a valid mesh. Element quality changes by at most the condition number of
+%   A, which is measured per call and returned in Q, so the degradation is a
+%   reported number rather than an assumption.
 %
-% WHY IT IS VALID
-%   An affine map with positive determinant cannot invert a tetrahedron: the
-%   signed volume of every element is multiplied by det(A), so if det(A) > 0
-%   every element keeps its orientation. A valid mesh maps to a valid mesh,
-%   with no meshing step that could refuse it. Element quality changes by a
-%   bounded amount — the condition number of A — which is reported below so
-%   the degradation is a number in the paper, not an assumption.
-%
-% WHY IT IS ALSO BETTER SCIENCE
-%   Every replicate then shares one discretisation. The tissue labels are
-%   inherited exactly, so the randomly-sampled region seeds — a source of
-%   run-to-run variation that has nothing to do with anatomy — stop varying
-%   between replicates. Node correspondence is preserved too, so lead fields
-%   stay row-matched across replicates by construction.
-%
-%   The trade-off, which belongs in the manuscript: mesh generation
-%   variability is no longer sampled across replicates. That is the right
-%   choice here because the question is whether BEM and FEM agree across
-%   ANATOMIES, and mesh variability is quantified separately by the
-%   convergence study. State it rather than leave it implicit.
+% CONSEQUENCE FOR A REPLICATE STUDY
+%   Every replicate shares one discretisation and one set of tissue labels,
+%   and node correspondence is preserved, so lead fields stay row-matched
+%   across replicates. Mesh generation variability is therefore not sampled
+%   across replicates — quantify that separately with the convergence study,
+%   and state it in the Methods.
 %
 % ORIENTATION
 %   Handled by fem_check_orientation, which uses

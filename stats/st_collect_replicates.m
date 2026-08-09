@@ -1,8 +1,7 @@
 % st_collect_replicates - Pool leadfield comparison metrics across replicates
 %
 % Loads BEM and FEM leadfields for a set of REPLICATE geometries — the
-% coregistration repeats from msg_coreg/repeatability and the warped
-% anatomies from msg_coreg/warping — and computes the standard metrics for
+% warped anatomies from msg_coreg/warping — and computes the standard metrics for
 % a set of named contrasts on each one. The result is a group array with a
 % genuine replicate dimension, which is what makes the statistics in
 % st_group_stats meaningful.
@@ -10,8 +9,6 @@
 % WHAT COUNTS AS A REPLICATE, AND WHAT DOES NOT
 %   Each replicate is an independent GEOMETRY, not an independent
 %   participant. Two sources of geometry variation are supported:
-%     'coreg' — repeated manual coregistrations of the canonical model.
-%               Bounds coregistration error.
 %     'warp'  — affine warps of the single anatomical model.
 %               Bounds body-shape variation, holding all non-affine
 %               anatomy fixed.
@@ -69,17 +66,16 @@ fprintf('=== Collecting replicate metrics ===\n\n');
 
 % Folders holding the BEM and FEM leadfields for the replicate geometries.
 % Each replicate is expected in its own subfolder named after the geometry.
-bem_base = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\replications\fields';   % SET THIS
-fem_base = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\replications\fields';   % SET THIS
+bem_base = warp_fields_bem;
+fem_base = warp_fields_fem;
 save_dir = fullfile(save_base_dir, 'group_stats');   % SET THIS
 
 % SET THIS: replicate IDENTIFIERS (no 'geometries_' prefix, no bone tag).
 % One replicate spans several geometry files, one per bone variant.
 replicate_ids = [ ...
-    arrayfun(@(k) sprintf('coreg_rep%02d', k), 1:5,  'uni', 0), ...
-    arrayfun(@(k) sprintf('warp%02d',      k), 1:30, 'uni', 0)  ...
+    arrayfun(@(k) sprintf('warp%02d', k), 1:30, 'uni', 0)  ...
 ];
-replicate_type = [repmat({'coreg'}, 1, 5), repmat({'warp'}, 1, 30)];
+replicate_type = repmat({'warp'}, 1, 30);
 
 % SET THIS: contrasts.
 % {name, ref_variant, ref_method, comp_variant, comp_method}
@@ -92,33 +88,16 @@ replicate_type = [repmat({'coreg'}, 1, 5), repmat({'warp'}, 1, 30)];
 %   FEM      : cord_leadfield_<replicate_id>_<variant>_fem_<array>.mat
 % This matches run_bem_leadfields.m and run_fem_leadfields.m exactly.
 %
-% THE BONE VARIANT DIFFERS BETWEEN THE TWO REPLICATE FAMILIES
-% The coregistration repeats were run on the CANONICAL torso, which has no
-% realistic bone mesh — cr_check_registration errors on that combination —
-% so they use 'inhomo' (toroidal). The warped anatomies were run on the
-% anatomical model with 'realistic' bone.
-%
-% Contrasts therefore name the variant with the token 'main', resolved per
-% replicate through variant_for_type below. Everything downstream is keyed
-% on the token, so the two families still go into ONE collection with
-% identical contrast names.
-variant_for_type = struct( ...
-    'coreg', 'inhomo', ...       % SET THIS: bone variant of the coreg repeats
-    'warp',  'realistic');       % SET THIS: bone variant of the warps
+% BONE VARIANT
+% Contrasts name the bone variant with the token 'main', resolved through
+% variant_for_type below, so the bone model can be changed in one place
+% rather than in every contrast.
+variant_for_type = struct('warp', 'realistic');   % SET THIS: bone variant of the warps
 
 contrasts = {
     'solver',   'main', 'bem', 'main', 'fem';   % BEM vs FEM, same geometry
     'geometry', 'main', 'bem', 'cont', 'bem';   % segmented vs continuous bone
 };
-
-% CAVEAT ON THE 'geometry' CONTRAST
-% Because 'main' resolves differently per family, the geometry contrast is
-% toroidal-vs-continuous for the coreg repeats and realistic-vs-continuous
-% for the warps. Those are not the same comparison, so pooling all 35
-% replicates for THAT contrast mixes two effects. The 'solver' contrast is
-% unaffected — it is BEM vs FEM on identical geometry either way, which is
-% the contrast the replicate analysis exists to test. If you report the
-% geometry contrast, split it by G.replicate_type first.
 
 array_name    = 'back';
 target_axis   = 3;
@@ -152,8 +131,7 @@ G.rdm       = [];
 G.lnmag     = [];
 G.ok        = false(n_con, n_rep);
 
-fprintf('Replicates : %d (%d coreg, %d warp)\n', n_rep, ...
-    sum(strcmp(replicate_type,'coreg')), sum(strcmp(replicate_type,'warp')));
+fprintf('Replicates : %d warped anatomies\n', n_rep);
 fprintf('Contrasts  : %s\n\n', strjoin(contrasts(:,1)', ', '));
 
 % Every (variant, method) pair any contrast needs

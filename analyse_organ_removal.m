@@ -4,10 +4,6 @@
 % organ-removal analysis, using the unified metrics so the numbers agree
 % with every other table in the paper.
 %
-% WHY THIS EXISTS
-%   Reviewer 1: "Move the organ-removal analysis from the discussion to the
-%                results section."
-%
 %   The analysis was previously run ad hoc and reported in Supplementary
 %   Note S3. Committing it as a script means it is reproducible, uses the
 %   same Eq 13 / Eq 14 definitions as everything else, and feeds the
