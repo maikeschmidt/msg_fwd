@@ -152,7 +152,7 @@ for r = 1:n_rep
 
     lf     = struct();
     absmax = struct();
-    loaded = true;
+    missing = {};
 
     for k = 1:size(needed, 1)
         variant_tok = needed{k, 1};
@@ -168,8 +168,7 @@ for r = 1:n_rep
                                method, array_name);
 
         if ~isfile(fpath)
-            warning('  Missing: %s', fpath);
-            loaded = false;
+            missing{end+1} = key; %#ok<SAGROW>
             continue;
         end
 
@@ -180,7 +179,7 @@ for r = 1:n_rep
         vi = find(cellfun(@(x) isstruct(d.(x)) && isfield(d.(x), 'leadfield'), fn), 1);
         if isempty(vi)
             warning('  No leadfield struct found in %s', fpath);
-            loaded = false;
+            missing{end+1} = key; %#ok<SAGROW>
             continue;
         end
 
@@ -189,8 +188,16 @@ for r = 1:n_rep
             key, us, orientation_labels, n_sensor_axes, is_meg);
     end
 
-    if ~loaded
-        fprintf('        incomplete — skipping replicate\n');
+    % A missing model disables only the contrasts that need it, not the
+    % whole replicate. The per-contrast isfield check below does that. This
+    % matters when a bone variant was never computed for the replicates:
+    % without it, one absent variant silently discards every contrast,
+    % including ones whose models are all present.
+    if ~isempty(missing)
+        fprintf('        not found: %s\n', strjoin(unique(missing), ', '));
+    end
+    if isempty(fieldnames(lf))
+        fprintf('        nothing loaded — skipping replicate\n');
         continue;
     end
 
