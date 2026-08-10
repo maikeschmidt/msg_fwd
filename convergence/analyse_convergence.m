@@ -151,6 +151,7 @@ if isfile(fem_manifest_file)
             'maxvol_mm3', 'n_nodes');
 
         results.fem     = R;
+        results.fem_lf  = lf;      % lf is reused by the BEM block below
         results.fem_man = man;
         results.fem_have = have;
         results.fem_ref  = ref_L;
@@ -208,6 +209,7 @@ if isfile(bem_manifest_file)
             'keep_fraction', 'n_vert_torso');
 
         results.bem      = R;
+        results.bem_lf   = lf;
         results.bem_man  = man;
         results.bem_have = have;
         results.bem_ref  = ref_L;
@@ -285,6 +287,136 @@ fprintf('Figures: %s\n', save_dir);
 %% ---------------------------------------------------------------------
 %% LOCAL FUNCTIONS
 %% ---------------------------------------------------------------------
+
+% AGAINST THE REPORTED MODELS
+%
+% The sweeps above measure each level against their own finest level, which
+% shows the sweep settled. This measures every level against the models the
+% paper reports, which shows what it settled ON.
+
+fprintf('\nComparing every level against the published models...\n');
+
+ref_opts = struct('orientation_labels', {orientation_labels}, ...
+                  'n_sensor_axes', n_sensor_axes, 'is_meg', is_meg, ...
+                  'bem_file', core_bem_file, 'fem_file', core_fem_file);
+
+sweep_spec = { ...
+    'fem', 'maxvol_mm3',    'Max tetrahedron volume (mm^3)'; ...
+    'bem', 'h_torso_mm',    'Torso mesh spacing h (mm)'};
+
+for s = 1:size(sweep_spec,1)
+    sw = sweep_spec{s,1};
+    if ~isfield(results, sw) || ~isfield(results, [sw '_lf']), continue; end
+
+    lf_sw = results.([sw '_lf']);
+    R_sw  = results.(sw);
+    man_s = results.([sw '_man']);
+    have_s = results.([sw '_have']);
+
+    [lf_sw, ~, refs] = load_original_references(lf_sw, struct(), ref_opts);
+    if isempty(refs), continue; end
+
+    n_lvl = numel(have_s);
+    EXT = struct('label', {refs.label}, ...
+                 're', repmat({nan(n_lvl, numel(orientation_labels))}, 1, numel(refs)));
+
+    for e = 1:numel(refs)
+        for i = 1:n_lvl
+            for oi = 1:numel(orientation_labels)
+                vo = struct('vector_mode','orientation', ...
+                            'orientation', orientation_labels{oi});
+                try
+                    [LA, LB] = lf_pair_vectors(lf_sw, refs(e).key, ...
+                        sprintf('%s_L%02d', sw, have_s(i)), target_axis, vo);
+                catch
+                    continue;
+                end
+                Mx = lf_metrics_series(LA, LB, metric_opts);
+                kp = 2:(size(LA,2)-1);
+                EXT(e).re(i,oi) = median(Mx.re(kp), 'omitnan');
+            end
+        end
+    end
+
+    xv = [man_s(have_s).(sweep_spec{s,2})];
+
+    plot_convergence_vs_reference(xv(:), EXT, struct( ...
+        'orientation_labels', {orientation_labels}, ...
+        'ori_titles', ori_titles, 'xlabel', sweep_spec{s,3}, ...
+        'title', sprintf('%s refinement against the reported models', upper(sw)), ...
+        'save_dir', save_dir, ...
+        'fname', sprintf('convergence_vs_original_%s', sw), ...
+        'reverse_x', true, 'log_x', true, 'colors', pair_colors, ...
+        'self_re', R_sw.re_med));
+end
+
+
+% LOCAL FUNCTIONS
+%% ---------------------------------------------------------------------
+
+% AGAINST THE REPORTED MODELS
+%
+% The sweeps above measure each level against their own finest level, which
+% shows the sweep settled. This measures every level against the models the
+% paper reports, which shows what it settled ON.
+
+fprintf('\nComparing every level against the published models...\n');
+
+ref_opts = struct('orientation_labels', {orientation_labels}, ...
+                  'n_sensor_axes', n_sensor_axes, 'is_meg', is_meg, ...
+                  'bem_file', core_bem_file, 'fem_file', core_fem_file);
+
+for sweep = {'fem','bem'}
+    sw = sweep{1};
+    if ~exist(sprintf('lf_%s', sw), 'var'), continue; end
+    lf_sw = eval(sprintf('lf_%s', sw));
+    if ~exist(sprintf('R_%s', sw), 'var'), continue; end
+    R_sw  = eval(sprintf('R_%s', sw));
+    if isempty(fieldnames(lf_sw)), continue; end
+
+    [lf_sw, ~, refs] = load_original_references(lf_sw, struct(), ref_opts);
+    if isempty(refs), continue; end
+
+    n_lvl = numel(R_sw.levels);
+    EXT = struct('label', {refs.label}, ...
+                 're', repmat({nan(n_lvl, numel(orientation_labels))}, 1, numel(refs)));
+
+    for e = 1:numel(refs)
+        for i = 1:n_lvl
+            for oi = 1:numel(orientation_labels)
+                vo = struct('vector_mode','orientation', ...
+                            'orientation', orientation_labels{oi});
+                try
+                    [LA, LB] = lf_pair_vectors(lf_sw, refs(e).key, ...
+                        sprintf('%s_L%02d', sw, R_sw.levels(i)), target_axis, vo);
+                catch
+                    continue;
+                end
+                Mx = lf_metrics_series(LA, LB, metric_opts);
+                kp = 2:(size(LA,2)-1);
+                EXT(e).re(i,oi) = median(Mx.re(kp), 'omitnan');
+            end
+        end
+    end
+
+    if strcmp(sw,'fem')
+        xv = [man_fem(R_sw.levels).maxvol_mm3];
+        xl = 'Max tetrahedron volume (mm^3)';
+    else
+        xv = [man_bem(R_sw.levels).h_torso_mm];
+        xl = 'Torso mesh spacing h (mm)';
+    end
+
+    plot_convergence_vs_reference(xv(:), EXT, struct( ...
+        'orientation_labels', {orientation_labels}, ...
+        'ori_titles', ori_titles, 'xlabel', xl, ...
+        'title', sprintf('%s refinement against the reported models', upper(sw)), ...
+        'save_dir', save_dir, ...
+        'fname', sprintf('convergence_vs_original_%s', sw), ...
+        'reverse_x', true, 'log_x', true, 'colors', pair_colors, ...
+        'self_re', R_sw.re_med));
+end
+
 
 function R = analyse_sweep(lf, ref_key, have, man, method, ...
     orientation_labels, target_axis, mopts, fid, fcsv, res_field, dof_field)

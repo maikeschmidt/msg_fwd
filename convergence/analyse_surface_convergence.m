@@ -237,6 +237,9 @@ for s = 1:size(specs, 1)
     end
 
     R.(meth) = Rm;
+    R.([meth '_lf'])   = lf;
+    R.([meth '_man'])  = man;
+    R.([meth '_have']) = have;
 end
 
 
@@ -279,6 +282,63 @@ end
 
 fclose(fid);
 fclose(fcsv);
+
+
+% AGAINST THE REPORTED MODELS
+%
+% Each sweep above is measured against its own finest level, which shows it
+% settled. This measures every level against the models the paper reports,
+% which shows what it settled on.
+
+ref_opts = struct('orientation_labels', {orientation_labels}, ...
+                  'n_sensor_axes', n_sensor_axes, 'is_meg', is_meg, ...
+                  'bem_file', core_bem_file, 'fem_file', core_fem_file);
+
+for s = 1:size(specs, 1)
+    meth = specs{s,1};
+    if ~isfield(R, meth) || ~isfield(R, [meth '_lf']), continue; end
+
+    lf_m   = R.([meth '_lf']);
+    Rm_m   = R.(meth);
+    man_m  = R.([meth '_man']);
+    have_m = R.([meth '_have']);
+
+    [lf_m, ~, refs] = load_original_references(lf_m, struct(), ref_opts);
+    if isempty(refs), continue; end
+
+    n_lvl = numel(have_m);
+    EXT = struct('label', {refs.label}, ...
+                 're', repmat({nan(n_lvl, n_ori)}, 1, numel(refs)));
+
+    for e = 1:numel(refs)
+        for i = 1:n_lvl
+            for oi = 1:n_ori
+                vo = struct('vector_mode','orientation', ...
+                            'orientation', orientation_labels{oi});
+                try
+                    [LA, LB] = lf_pair_vectors(lf_m, refs(e).key, ...
+                        sprintf('%s_L%02d', meth, have_m(i)), target_axis, vo);
+                catch
+                    continue;
+                end
+                Mx = lf_metrics_series(LA, LB, metric_opts);
+                kp = 2:(size(LA,2)-1);
+                EXT(e).re(i,oi) = median(Mx.re(kp), 'omitnan');
+            end
+        end
+    end
+
+    plot_convergence_vs_reference(Rm_m.keeps(:), EXT, struct( ...
+        'orientation_labels', {orientation_labels}, ...
+        'ori_titles', ori_titles, ...
+        'xlabel', 'Surface keep fraction', ...
+        'title', sprintf('%s surface refinement against the reported models', ...
+                 upper(meth)), ...
+        'save_dir', save_dir, ...
+        'fname', sprintf('surface_convergence_vs_original_%s', meth), ...
+        'reverse_x', false, 'log_x', false, 'colors', pair_colors, ...
+        'self_re', Rm_m.re));
+end
 
 
 % FIGURES

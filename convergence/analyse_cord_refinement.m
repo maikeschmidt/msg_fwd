@@ -302,6 +302,28 @@ if ~isempty(ext_refs)
     fprintf(fid, '  %-28s %-5s %9s %9s %9s %10s\n', ...
         'Reference', 'ori', 'RE(%)', 'r2', 'RDM', 'gain(%)');
 
+    % Per-LEVEL RE against each reference, so the figure can show the whole
+    % sweep rather than only the finest level.
+    EXT = struct('label', {ext_refs.label}, ...
+                 're', repmat({nan(n_lvl, n_ori)}, 1, numel(ext_refs)));
+    for e = 1:numel(ext_refs)
+        for i = 1:n_lvl
+            for oi = 1:n_ori
+                vo = struct('vector_mode','orientation', ...
+                            'orientation', orientation_labels{oi});
+                try
+                    [LA, LB] = lf_pair_vectors(lf, ext_refs(e).key, ...
+                        sprintf('fem_C%02d', have(i)), target_axis, vo);
+                catch
+                    continue;
+                end
+                Mx = lf_metrics_series(LA, LB, metric_opts);
+                kp = 2:(size(LA,2)-1);
+                EXT(e).re(i,oi) = median(Mx.re(kp), 'omitnan');
+            end
+        end
+    end
+
     for e = 1:numel(ext_refs)
         for oi = 1:n_ori
             vopts = struct('vector_mode','orientation', ...
@@ -329,6 +351,21 @@ if ~isempty(ext_refs)
                 median(M.rdm(keep),'omitnan'), (exp(ln)-1)*100);
         end
     end
+end
+
+% FIGURE: the sweep against the models the paper reports
+if exist('EXT','var') && ~isempty(EXT)
+    plot_convergence_vs_reference(cord_mm3, EXT, struct( ...
+        'orientation_labels', {orientation_labels}, ...
+        'ori_titles',  ori_titles, ...
+        'xlabel',      'Cord-local max tetrahedron volume (mm^3)', ...
+        'title',       'Cord refinement against the reported models', ...
+        'save_dir',    save_dir, ...
+        'fname',       'cord_refinement_vs_original', ...
+        'reverse_x',   true, ...
+        'log_x',       true, ...
+        'colors',      pair_colors, ...
+        'self_re',     R.re));
 end
 
 fclose(fid);
