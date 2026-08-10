@@ -298,15 +298,9 @@ for b = 1:n_bundles
 
             leadfield_cord = ft_prepare_leadfield(cfg);
 
-            % Scale T/nAm → fT/nAm
-            for src_i = 1:numel(leadfield_cord.leadfield)
-                if ~isempty(leadfield_cord.leadfield{src_i})
-                    leadfield_cord.leadfield{src_i} = ...
-                        leadfield_cord.leadfield{src_i} * 1e15;
-                end
-            end
-
-            leadfield_cord.units_out      = 'fT/nAm';
+            % Scale to fT/nAm. The factor is DETECTED, not hard-coded —
+            % see lf_scale_to_ftnam. units_out is set there.
+            leadfield_cord = lf_scale_to_ftnam(leadfield_cord);
             leadfield_cord.model          = 'bem_cond';
             leadfield_cord.geometry       = filename;
             leadfield_cord.array          = array_name;

@@ -229,7 +229,7 @@ physical value is O(0.1–10), so it is a wide margin, not a fine judgement.
 Written 1e9 too large **and** labelled `fT/nAm`, so the loader trusted the
 label. Within-BEM results were unaffected (the factor cancels); BEM-vs-FEM
 came out at RE = 100% with lnMAG = −20.7. Fix with
-`repair_bone_cond_bem_scale`, which measures the factor against the
+`repair_bem_scale`, which measures the factor against the
 published BEM rather than assuming it.
 
 **If you re-run `run_bone_conductivity_bem`, repeat that repair** — the bug

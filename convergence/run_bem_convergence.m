@@ -275,12 +275,11 @@ for L = 1:n_lvl
 
         leadfield_cord = ft_prepare_leadfield(cfg);
 
-        for src_i = 1:numel(leadfield_cord.leadfield)
-            if ~isempty(leadfield_cord.leadfield{src_i})
-                leadfield_cord.leadfield{src_i} = ...
-                    leadfield_cord.leadfield{src_i} * 1e15;   % T/nAm -> fT/nAm
-            end
-        end
+        % Scale to fT/nAm. The factor is DETECTED, not hard-coded: the
+        % BEM output carries one of two dipole-moment conventions that
+        % differ by 1e9, and assuming either one silently mis-scales the
+        % other while still labelling the file 'fT/nAm'.
+        leadfield_cord = lf_scale_to_ftnam(leadfield_cord);
 
         % NOTE: time_solve_s is written back into conv_info AFTER the loop
         % over arrays (see below). Without it, a resumed level restores

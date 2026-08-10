@@ -1,5 +1,5 @@
-function T = repair_bone_cond_bem_scale(S)
-% repair_bone_cond_bem_scale - Correct the BEM scale in the conductivity sweep
+function T = repair_bem_scale(S)
+% repair_bem_scale - Correct a 1e9 scale error in saved BEM lead fields
 %
 % The BEM lead fields written by run_bone_conductivity_bem are a constant
 % factor larger than the published BEM lead fields, while declaring
@@ -24,9 +24,9 @@ function T = repair_bone_cond_bem_scale(S)
 % USAGE:
 %   S.dir = fullfile(bone_cond_fields_bem, 'geometries_anatom_full_realistic');
 %   S.reference_bem = core_bem_file;      % published BEM, raw T/nAm
-%   T = repair_bone_cond_bem_scale(S);    % report only
+%   T = repair_bem_scale(S);    % report only
 %   S.execute = true;
-%   T = repair_bone_cond_bem_scale(S);    % rescale in place
+%   T = repair_bem_scale(S);    % rescale in place
 %
 % INPUT:
 %   S - struct:
@@ -55,9 +55,10 @@ if ~isfield(S,'ref_scale'),     S.ref_scale = 1e15; end
 if ~isfield(S,'execute'),       S.execute   = false; end
 if ~isfield(S,'factor'),        S.factor    = []; end
 
-files = dir(fullfile(S.dir, 'leadfield_*bonecond*.mat'));
+if ~isfield(S,'pattern'), S.pattern = 'leadfield_*bonecond*.mat'; end
+files = dir(fullfile(S.dir, S.pattern));
 if isempty(files)
-    error('No bonecond lead fields in %s', S.dir);
+    error('No files matching %s in %s', S.pattern, S.dir);
 end
 
 % Reference, brought to fT/nAm
@@ -84,7 +85,7 @@ if isempty(S.factor)
     fprintf('Measured ratio  : %.6g\n', measured);
     fprintf('Rounded factor  : %.0e\n', factor);
     if abs(log10(measured) - log10(factor)) > 0.15
-        warning('repair_bone_cond_bem_scale:notCleanPower', ...
+        warning('repair_bem_scale:notCleanPower', ...
             ['Measured ratio %.4g is not close to a power of ten. That is ' ...
              'not the signature of a units mistake — check the two files ' ...
              'are the same model before rescaling.'], measured);
