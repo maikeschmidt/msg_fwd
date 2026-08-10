@@ -107,7 +107,11 @@ table_models = [CMP_GROUPS(gi).members(:), CMP_GROUPS(gi).labels(:)];
 % Sensor axis to report. axis 3 is radial for a triaxial magnetometer;
 % on a two-axis sensor the radial channel is axis 2. Set radial_axis in
 % config_comparisons rather than here.
-target_axis = radial_axis;
+% Every sensor axis is produced. The radial axis carries the main text;
+% the tangential ones go to the supplement. One file per axis.
+axes_to_report = 1:n_sensor_axes_cfg;   % SET THIS to a subset if needed
+
+for target_axis = axes_to_report
 
 % Bootstrap settings
 n_boot   = 10000;
@@ -319,7 +323,12 @@ fprintf(fid, '      positions. For inter-subject variability see msg_fwd/stats/.
 fclose(fid);
 fclose(fcsv);
 
-fprintf('RE and r2 table saved to:\n  %s\n  %s\n', txt_file, csv_file);
+fprintf('RE and r2 table (axis %d) saved to:\n  %s\n  %s\n', ...
+    target_axis, txt_file, csv_file);
+
+end   % axes_to_report
+
+fprintf('\nAll %d sensor axes written.\n', numel(axes_to_report));
 
 
 % LOCAL FUNCTIONS

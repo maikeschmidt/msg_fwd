@@ -67,7 +67,12 @@ table_models = {
 };
 
 % SET THIS: sensor axis to report (3 = radial axis for OPM)
-target_axis = 3;
+% Every sensor axis is produced. The radial axis carries the main text;
+% the tangential ones go to the supplement. One file per axis.
+config_comparisons;
+axes_to_report = 1:n_sensor_axes_cfg;   % SET THIS to a subset if needed
+
+for target_axis = axes_to_report
 
 % Output file
 output_file = fullfile(save_base_dir, ...
@@ -168,3 +173,7 @@ fprintf(fid, 'Pos(mm) : Src@Max x %d mm along the spinal cord\n', src_spacing_mm
 
 fclose(fid);
 fprintf('Amplitude difference table saved to:\n  %s\n', output_file);
+
+end   % axes_to_report
+
+fprintf('\nAll %d sensor axes written.\n', numel(axes_to_report));
