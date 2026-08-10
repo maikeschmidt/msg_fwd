@@ -90,7 +90,7 @@ keep_fraction_levels = [0.25, 0.40, 0.50, 0.65, 0.80, 1.00];
 %   true  = all surfaces   -> compare with convergence_allsurf
 % Use TRUE for the general convergence claim: it also coarsens the cord
 % surface, which is the near-source region the volume sweep never touched.
-sweep_all_surfaces = true;
+sweep_all_surfaces = true;   % cord is excluded either way — see do_reduce
 
 % Volume bound held FIXED at the production value. The surface is the only
 % thing varying. Note the bound will not bind at coarse surface levels —
@@ -199,7 +199,18 @@ for L = 1:n_lvl
             pos = mesh_tmp.vertices;
             tri = mesh_tmp.faces;
 
-            do_reduce = (keep < 1) && (sweep_all_surfaces || ii == 5);
+            % Decide whether this compartment is decimated at this level.
+            %
+            % The CORD is never decimated, whatever sweep_all_surfaces says.
+            % Reducing its face count moves the surface relative to the
+            % source positions, and sources then fall outside the volume
+            % they are meant to sit in — the lead field is undefined rather
+            % than merely coarser. Excluding it means the sweep measures
+            % what it is meant to: resolving the volume conductor around a
+            % FIXED source space.
+            is_cord   = strcmp(ordering{ii}, 'wm');
+            do_reduce = (keep < 1) && ~is_cord && (sweep_all_surfaces || ii == 5);
+
             if do_reduce
                 patch_in.vertices = pos; patch_in.faces = tri;
                 patch_out = reducepatch(patch_in, keep);

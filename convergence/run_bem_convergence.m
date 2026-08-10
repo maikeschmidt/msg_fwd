@@ -74,7 +74,7 @@ keep_fraction_levels = [0.25, 0.40, 0.50, 0.65, 0.80, 1.00];
 %
 % RUN BOTH. They answer different questions and each takes only a handful
 % of BEM builds. Output folders are tagged by mode so they do not collide.
-sweep_all_surfaces = true;
+sweep_all_surfaces = true;   % cord is excluded either way — see do_reduce
 
 ordering_cord = {'wm', 'bone', 'heart', 'lungs', 'torso'};
 cratio  = 40;
@@ -200,8 +200,17 @@ for L = 1:n_lvl
         pos = mesh_tmp.vertices;
         tri = mesh_tmp.faces;
 
-        % Decide whether this compartment is decimated at this level
-        do_reduce = (keep < 1) && (sweep_all_surfaces || ii == 5);
+        % Decide whether this compartment is decimated at this level.
+        %
+        % The CORD (index 1) is never decimated, whatever sweep_all_surfaces
+        % says. Reducing its face count moves the surface inward relative to
+        % the source positions, and sources then fall outside the volume
+        % they are supposed to sit in — the lead field is undefined rather
+        % than merely coarser. Excluding it means the sweep measures what it
+        % is meant to: the effect of resolving the volume conductor around a
+        % FIXED source space.
+        is_cord   = strcmp(ordering_cord{ii}, 'wm');
+        do_reduce = (keep < 1) && ~is_cord && (sweep_all_surfaces || ii == 5);
 
         if do_reduce
             patch_in.vertices = pos;
