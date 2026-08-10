@@ -120,7 +120,7 @@ end
 
 fprintf('[2/14] Generating anatomical figures...\n');
 try
-    run('plot_anatomical_figures.m');
+    % run('plot_anatomical_figures.m');
     fprintf('[2/14] Complete.\n\n');
 catch err
     fprintf('WARNING: plot_anatomical_figures failed:\n  %s\n', err.message);
