@@ -16,7 +16,9 @@
 %   config_comparisons             — which comparisons to draw
 %   leadfields_organised.mat       — produced by load_and_organise_leadfields
 %
-% OUTPUTS (saved to <save_base_dir>/per_source_cc_re/):
+% OUTPUTS (saved to <save_base_dir>/per_source_cc_re/<set>/):
+%   One subfolder per selection in per_source_sets — tor_comp, bone_comp,
+%   solver, all_og — so each figure stays readable.
 %   per_source_cc_re_axis<N>_<ori>.png/.fig
 %   per_source_cc_re_overview_axis<N>.png/.fig
 %
@@ -80,10 +82,24 @@ load(fullfile(forward_fields_base, 'leadfields_organised.mat'), ...
 
 config_comparisons;
 
-model_pairs = cmp_select(CMP, 'dataset', 'og', 'complete');   % SET THIS
+sets_to_run = per_source_sets;   % SET THIS: subset of the rows if needed
 
-save_dir = fullfile(save_base_dir, 'per_source_cc_re');
+for set_i = 1:size(sets_to_run, 1)
+
+set_name    = sets_to_run{set_i, 1};
+model_pairs = cmp_select(CMP, sets_to_run{set_i, 2}{:}, 'complete');
+
+if isempty(model_pairs)
+    fprintf('  %s: no comparisons selected — skipped\n', set_name);
+    continue;
+end
+
+save_dir = fullfile(save_base_dir, 'per_source_cc_re', set_name);
 if ~exist(save_dir, 'dir'); mkdir(save_dir); end
+
+fprintf('\n=== per-source: %s (%d pairs) -> %s ===\n', ...
+    set_name, size(model_pairs,1), save_dir);
+
 
 % VALIDATE MODEL PAIRS
 
@@ -102,7 +118,8 @@ model_pairs = model_pairs(valid_pairs, :);
 n_pairs     = size(model_pairs, 1);
 
 if n_pairs == 0
-    error('No valid model pairs found. Check model_pairs key names.');
+    fprintf('  %s: no valid pairs after checking keys — skipped\n', set_name);
+    continue;
 end
 
 % Truncate colour/marker arrays to number of pairs
@@ -422,3 +439,7 @@ for ax = 1:n_axes
 end
 
 fprintf('Per-source CC and RE plots saved to: %s\n', save_dir);
+
+end   % sets_to_run
+
+fprintf('\nAll per-source sets complete.\n');
