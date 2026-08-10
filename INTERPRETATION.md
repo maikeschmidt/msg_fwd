@@ -243,18 +243,6 @@ differ in magnitude by more than 1000×.
 
 ---
 
-## 8. What to state in the manuscript
-
-- The metric definitions, once, with the note that RE is asymmetric and the
-  reference is named in every table.
-- That replicates are geometries, not participants.
-- That the tetrahedron volume bound was not the active constraint, with the
-  element-size numbers.
-- That the cord was excluded from surface decimation, and why.
-- That warped FEM replicates share one discretisation, so mesh-generation
-  variability is not resampled across replicates — it is quantified
-  separately by the convergence study.
-- The maximum transform residual and minimum element-quality ratio from
   `run_fem_leadfields_warped`, which bound how far the warped meshes
   degraded.
 - Methods correction: maximum tetrahedron volume was **500 mm³**, not 10.
