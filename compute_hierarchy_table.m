@@ -35,6 +35,14 @@
 %                  The within-solver spread across warps is written to
 %                  all_comparisons.csv as warping_within, but is kept out of
 %                  the table: it answers a different question.
+%   mesh_refinement    Coarsest against finest volume mesh in the resolution
+%                      sweep. How much the discretisation of the whole
+%                      volume moves the answer.
+%   source_refinement  Coarsest against finest refinement of the CORD
+%                      compartment only, global bound held fixed. Whether
+%                      the discretisation near the sources matters once the
+%                      rest of the volume is settled. Separate from
+%                      mesh_refinement because it is a different question.
 %   solver         BEM vs FEM on matched geometry. The paper's core question.
 %
 % AGGREGATION
@@ -268,6 +276,95 @@ for m = {'bem','fem'}
     end
 end
 
+% ---- mesh refinement -----------------------------------------------------
+% Effect of the volume mesh resolution: the coarsest level in the sweep
+% against the finest. That is the largest change resolution alone produces,
+% so it is the fair number to place beside the other modelling choices.
+try
+    mf = fullfile(convergence_fem_volume, 'fem_convergence_manifest.mat');
+    if ~isfile(mf)
+        fprintf('  mesh refinement: SKIPPED (no manifest in %s)\n', convergence_fem_volume);
+    else
+        Mm  = load(mf); man = Mm.manifest;
+        lfc = struct(); amc = struct(); got = [];
+        for L = 1:numel(man)
+            f = fullfile(convergence_fem_volume, ...
+                sprintf('cord_leadfield_conv_lvl%02d_%s.mat', L, array_name));
+            if ~isfile(f), continue; end
+            d  = load(f);
+            fn = fieldnames(d);
+            vi = find(cellfun(@(x) isstruct(d.(x)) && isfield(d.(x),'leadfield'), fn),1);
+            if isempty(vi), continue; end
+            us = lf_unit_scale(d.(fn{vi}), 'fem', is_meg);
+            [lfc, amc] = organise_leadfield(lfc, amc, d.(fn{vi}), ...
+                sprintf('L%02d', L), us, orientation_labels, n_sensor_axes, is_meg);
+            got(end+1) = L; %#ok<SAGROW>
+        end
+
+        if numel(got) < 2
+            fprintf('  mesh refinement: SKIPPED (only %d level(s))\n', numel(got));
+        else
+            % Finest level is the reference; coarsest is the comparison
+            vols = [man(got).maxvol_mm3];
+            [~, i_fine]   = min(vols);
+            [~, i_coarse] = max(vols);
+            C(end+1) = mk('mesh_refinement','Mesh refinement','FEM', ...
+                sprintf('FEM %g vs %g mm^3', vols(i_coarse), vols(i_fine)), ...
+                lfc, sprintf('L%02d', got(i_fine)), ...
+                     sprintf('L%02d', got(i_coarse))); %#ok<SAGROW>
+            fprintf('  mesh refinement: OK (%d levels, %g to %g mm^3)\n', ...
+                numel(got), vols(i_fine), vols(i_coarse));
+        end
+    end
+catch err
+    fprintf('  mesh refinement: SKIPPED (%s)\n', err.message);
+end
+
+% ---- source space refinement --------------------------------------------
+% Refining ONLY the cord compartment, where the sources sit, with the global
+% tetrahedron bound held fixed. Separated from mesh refinement because it
+% asks a different question: whether the discretisation near the source
+% matters once the rest of the volume is settled.
+try
+    cf = fullfile(convergence_fem_cord, 'cord_refinement_manifest.mat');
+    if ~isfile(cf)
+        fprintf('  source space refinement: SKIPPED (no manifest in %s)\n', ...
+            convergence_fem_cord);
+    else
+        Cm  = load(cf); cman = Cm.manifest;
+        lfr = struct(); amr = struct(); gotc = [];
+        for L = 1:numel(cman)
+            f = fullfile(convergence_fem_cord, ...
+                sprintf('cord_leadfield_cordref_lvl%02d_%s.mat', L, array_name));
+            if ~isfile(f), continue; end
+            d  = load(f);
+            fn = fieldnames(d);
+            vi = find(cellfun(@(x) isstruct(d.(x)) && isfield(d.(x),'leadfield'), fn),1);
+            if isempty(vi), continue; end
+            us = lf_unit_scale(d.(fn{vi}), 'fem', is_meg);
+            [lfr, amr] = organise_leadfield(lfr, amr, d.(fn{vi}), ...
+                sprintf('C%02d', L), us, orientation_labels, n_sensor_axes, is_meg);
+            gotc(end+1) = L; %#ok<SAGROW>
+        end
+
+        if numel(gotc) < 2
+            fprintf('  source space refinement: SKIPPED (only %d level(s))\n', numel(gotc));
+        else
+            cv = [cman(gotc).cord_maxvol_mm3];
+            [~, j_fine]   = min(cv);
+            [~, j_coarse] = max(cv);
+            C(end+1) = mk('source_refinement','Source space refinement','FEM', ...
+                sprintf('FEM cord %g vs %g mm^3', cv(j_coarse), cv(j_fine)), ...
+                lfr, sprintf('C%02d', gotc(j_fine)), ...
+                     sprintf('C%02d', gotc(j_coarse))); %#ok<SAGROW>
+            fprintf('  source space refinement: OK (%d levels, %g to %g mm^3)\n', ...
+                numel(gotc), cv(j_fine), cv(j_coarse));
+        end
+    end
+catch err
+    fprintf('  source space refinement: SKIPPED (%s)\n', err.message);
+end
+
 % ---- 5: warped replicates --------------------------------------------
 %
 % CROSS-SOLVER, matched geometry. For each replicate the BEM and FEM are
@@ -432,9 +529,11 @@ fprintf('\nAll comparisons written.\n');
 % HIGH-LEVEL SUMMARY — EVERY SENSOR AXIS
 
 factor_order = {'segmentation','bone_detail','csf','organ_removal', ...
-                'conductivity','warping','solver'};
+                'conductivity','mesh_refinement','source_refinement', ...
+                'warping','solver'};
 factor_names = {'Bone segmentation','Bone geom. detail','CSF', ...
                 'Organ segmentation','Bone conductivity', ...
+                'Mesh refinement','Source space refinement', ...
                 'Solver, across warped anatomies','Solver choice'};
 
 axes_present = unique([Rall.axis]);

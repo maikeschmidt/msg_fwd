@@ -114,21 +114,19 @@ ref_key   = sprintf('fem_C%02d', ref_L);
 %   the unrefined FEM realistic  — did refining the cord change the answer?
 %   the BEM realistic            — does the refined FEM agree with the BEM?
 %
-% Both are loaded from og_fields; either being absent is not fatal.
+% Both come from config_paths (core_fem_file, core_bem_file); either being
+% absent is reported and skipped rather than fatal.
 
 ext_refs = struct('key', {}, 'label', {});
 
+% core_bem_file and core_fem_file already resolve to the per-geometry
+% subfolder inside og_fields, so no path building is needed here.
 ext_specs = { ...
-    fullfile(dataset_dir(og_fields, core_variant), core_fem_fname), ...
-        'fem', 'fem_original', 'FEM realistic (unrefined)'; ...
-    fullfile(dataset_dir(og_fields, core_variant), core_bem_fname), ...
-        'bem', 'bem_original', 'BEM realistic'};
+    core_fem_file, 'fem', 'fem_original', 'FEM realistic (unrefined)'; ...
+    core_bem_file, 'bem', 'bem_original', 'BEM realistic'};
 
 for e = 1:size(ext_specs, 1)
     f = ext_specs{e,1};
-    if ~isfile(f)
-        f = fullfile(og_fields, ext_specs{e,2+0});   % flat layout fallback
-    end
     if ~isfile(f)
         fprintf('  external reference not found, skipped: %s\n', ext_specs{e,4});
         continue;
@@ -138,7 +136,7 @@ for e = 1:size(ext_specs, 1)
     vi = find(cellfun(@(x) isstruct(d.(x)) && isfield(d.(x),'leadfield'), fn), 1);
     if isempty(vi), continue; end
     us = lf_unit_scale(d.(fn{vi}), ext_specs{e,2}, is_meg);
-    [lf, amps] = organise_leadfield(lf, amps, d.(fn{vi}), ext_specs{e,3}, ...
+    [lf, am] = organise_leadfield(lf, am, d.(fn{vi}), ext_specs{e,3}, ...
         us, orientation_labels, n_sensor_axes, is_meg);
     ext_refs(end+1) = struct('key', ext_specs{e,3}, ...
                              'label', ext_specs{e,4}); %#ok<SAGROW>
