@@ -17,7 +17,7 @@
 %
 %   Applying the wrong factor is silent and catastrophic. Comparing a
 %   T/nAm BEM leadfield against an fT/nAm FEM leadfield makes the BEM
-%   effectively zero, and the Eq 13 relative error becomes
+%   effectively zero, and the relative error becomes
 %       ||L_FEM - ~0|| / ||L_FEM|| = EXACTLY 100%, flat across every source.
 %   The squared correlation looks completely normal at the same time,
 %   because Pearson r is scale invariant. A flat 100% RE alongside a

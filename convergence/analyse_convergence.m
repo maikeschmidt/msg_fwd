@@ -10,8 +10,8 @@
 %
 % METRICS
 %   Uses lf_metrics via lf_metrics_series, so the convergence errors are in
-%   the same units and definitions as every other number in the paper
-%   (Eq 13 relative error in percent, Eq 14 Pearson r2).
+%   the same units and definitions as every other number in the toolbox
+%   (relative error in percent, Pearson r2).
 %
 % USAGE:
 %   Set the paths, then run.
@@ -62,7 +62,7 @@ target_axis   = 3;
 n_sensor_axes = 3;
 is_meg        = true;
 % Convergence compares levels WITHIN one solver, so a common wrong scale
-% would cancel in the Eq 13 ratio. Resolved properly regardless, so the
+% would cancel in the RE ratio. Resolved properly regardless, so the
 % absolute amplitudes printed alongside are meaningful.
 
 
@@ -71,7 +71,7 @@ tol_pct = 1.0;
 
 % Production settings to call out explicitly in the report.
 % These are the settings that produced the published leadfields, so the
-% error reported at these levels is the number to quote in the manuscript
+% error reported at these levels is the discretisation error to quote
 % when stating that the results are mesh independent.
 fem_production_maxvol_mm3 = 500;    % see run_fem_leadfields.m
 bem_production_keep       = 0.50;   % 50% torso decimation
@@ -133,9 +133,9 @@ if isfile(fem_manifest_file)
         fprintf(fid, 'Reference level: maxvol = %g mm^3, %d nodes, %d tets\n\n', ...
             man(ref_L).maxvol_mm3, man(ref_L).n_nodes, man(ref_L).n_tets);
 
-        % Node counts against the manuscript's reported range — this is what
-        % settles which maxvol was actually used for the published results.
-        fprintf(fid, 'NODE COUNTS vs the 106,444-144,961 range reported in the paper:\n');
+        % Node counts per level, so the bound actually used can be
+        % reported alongside the mesh size it produced.
+        fprintf(fid, 'NODE COUNTS vs the production mesh range (106,444-144,961):\n');
         fprintf(fid, '  %10s %12s %12s %10s %10s\n', ...
             'maxvol', 'nodes', 'tets', 'h (mm)', 'in range?');
         for L = have
@@ -440,7 +440,7 @@ function R = analyse_sweep(lf, ref_key, have, man, method, ...
             vopts = struct('vector_mode','orientation','orientation',ori);
 
             % Reference is the FIRST argument: the finest mesh is the
-            % denominator of the Eq 13 relative error.
+            % denominator of the relative error.
             [LA, LB] = lf_pair_vectors(lf, ref_key, key, target_axis, vopts);
             M = lf_metrics_series(LA, LB, mopts);
 
@@ -567,10 +567,10 @@ function report_order_and_tradeoff(R, man, have, ref_L, label, ...
                 oris{oi}, R.re_med(ip,oi), R.re_max(ip,oi), ...
                 R.r2_med(ip,oi), R.r2_min(ip,oi));
         end
-        fprintf(fid, ['    Statement for the manuscript: at the production mesh the\n' ...
-                      '    sensor-level lead fields differ from the finest mesh computed\n' ...
-                      '    by a median of %.3f%%, i.e. the reported results are mesh\n' ...
-                      '    independent to within that tolerance.\n'], ...
+        fprintf(fid, ['    Summary: at the production mesh the sensor-level lead\n' ...
+                      '    fields differ from the finest mesh computed by a median of\n' ...
+                      '    %.3f%%, i.e. the results are mesh independent to within\n' ...
+                      '    that tolerance.\n'], ...
                       max(R.re_med(ip,:)));
     end
 end

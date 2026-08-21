@@ -4,18 +4,16 @@
 %
 %   (B) MATCHED-PAIR BEM vs FEM ACROSS THE SWEEP
 %       BEM(sigma) vs FEM(sigma) at every sigma.
-%       Answers: "does the BEM-FEM agreement reported in the paper hold
-%       across the whole conductivity range, or only at 0.00825 S/m?"
-%       This is the robustness claim the paper actually needs.
+%       Answers: does BEM-FEM agreement hold across the whole
+%       conductivity range, or only at the reference value?
 %
 %   (C) FULL CROSS-CONDUCTIVITY MATRIX
 %       BEM(sigma_i) vs FEM(sigma_j) for every pair, including mismatched
 %       pairs such as BEM at 0.004 against FEM at 0.02.
-%       Answers: "how does solver choice compare against conductivity
-%       misspecification?" If the off-diagonal cross-conductivity
-%       disagreement dwarfs the on-diagonal solver disagreement, that is
-%       direct quantitative support for the paper's central claim that
-%       modelling assumptions matter more than solver choice.
+%       Answers: how does solver choice compare against conductivity
+%       misspecification? If the off-diagonal (cross-conductivity)
+%       disagreement dwarfs the on-diagonal (solver) disagreement, the
+%       conductivity assumption matters more than the solver.
 %
 % USAGE:
 %   Set the paths below, then run.
@@ -63,7 +61,7 @@ is_meg        = true;
 % NOTE: unit scaling is NOT a single constant. BEM and FEM leadfields are
 % saved in different units depending on which script produced them, so the
 % factor is resolved per file by lf_unit_scale. A hardcoded 1 makes BEM
-% leadfields 1e15x too small, giving an Eq 13 relative error of exactly
+% leadfields 1e15x too small, giving a relative error of exactly
 % 100% flat across every source while r2 still looks healthy.
 
 
@@ -90,7 +88,7 @@ if isempty(ref_idx)
 end
 
 fprintf('Sweep: %d values, %.4f to %.4f S/m\n', n_vals, min(sigma), max(sigma));
-fprintf('Reference (manuscript) value: %.5f S/m (index %d)\n\n', sig_ref, ref_idx);
+fprintf('Reference value: %.5f S/m (index %d)\n\n', sig_ref, ref_idx);
 
 
 % LOAD AND ORGANISE LEADFIELDS
@@ -148,7 +146,7 @@ fprintf(fid, '=== BONE CONDUCTIVITY SENSITIVITY ===\n');
 fprintf(fid, 'Generated : %s\n', datestr(now));
 fprintf(fid, 'Array     : %s   Sensor axis: %d\n', array_name, target_axis);
 fprintf(fid, 'Sweep     : %s S/m\n', mat2str(sigma, 4));
-fprintf(fid, 'Reference : %.5f S/m (manuscript value)\n', sig_ref);
+fprintf(fid, 'Reference : %.5f S/m\n', sig_ref);
 fprintf(fid, 'Metrics   : re_mode=%s  rsq_mode=%s (see lf_metrics.m)\n\n', ...
     metric_opts.re_mode, metric_opts.rsq_mode);
 
@@ -237,7 +235,7 @@ for m = 1:2
     end
 end
 
-% Headline numbers for the manuscript
+% Headline numbers
 fprintf(fid, '\n  HEADLINE (across the full %.3f-%.3f S/m range):\n', ...
     min(sigma), max(sigma));
 for m = 1:2
@@ -367,7 +365,7 @@ for oi = 1:n_ori
     plot(sigma, squeeze(A_re(2,oi,:)), '--s', 'LineWidth', 2, ...
         'Color', ratio_colors(2,:), 'DisplayName', 'FEM');
     xline(sig_ref, ':k', 'LineWidth', 1.5, 'Alpha', 0.6, ...
-        'Label', 'manuscript', 'HandleVisibility','off');
+        'Label', 'reference', 'HandleVisibility','off');
     set(gca, 'XScale', 'log');
     grid on; xlabel('Bone conductivity (S/m)');
     if oi == 1, ylabel('RE (%)'); end
@@ -417,7 +415,7 @@ end
 save_fig(fig, save_dir, sprintf('bone_cond_cross_matrix_axis%d', target_axis));
 
 
-%% DECOMPOSITION FIGURE — extreme conductivities vs the manuscript value
+%% DECOMPOSITION FIGURE — extreme conductivities vs the reference value
 % Shows whether changing bone conductivity rescales the field or reshapes
 % it, in the same four-row layout as plot_decomposition.m and
 % analyse_csf_effect.m so all three are directly comparable.
@@ -447,7 +445,7 @@ for m = 1:2
         'orientation_labels', {orientation_labels}, ...
         'ori_titles',         ori_titles, ...
         'title',              sprintf(['%s: extreme bone conductivities vs ' ...
-                                       'the manuscript value %.5f S/m — axis %d'], ...
+                                       'the reference value %.5f S/m — axis %d'], ...
                                        upper(meth), sig_ref, target_axis), ...
         'colors',             ratio_colors, ...
         'save_dir',           save_dir, ...

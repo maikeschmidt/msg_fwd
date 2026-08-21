@@ -62,7 +62,7 @@ target_axis   = 3;
 n_sensor_axes = 3;
 is_meg        = true;
 
-production_keep = 0.50;   % the value used throughout the manuscript
+production_keep = 0.50;   % the decimation level used for production runs
 
 n_boot   = 10000;
 ci_level = 0.95;
@@ -234,7 +234,7 @@ end
 
 i_prod = find(abs(keeps - production_keep) < 1e-9, 1);
 
-fprintf(fid, '\n%s\nANSWER TO REVIEWER 2, POINT 3.2\n%s\n', ...
+fprintf(fid, '\n%s\nHEADLINE: EFFECT OF THE PRODUCTION DECIMATION LEVEL\n%s\n', ...
     repmat('=',1,78), repmat('=',1,78));
 
 if isempty(i_prod)
@@ -320,7 +320,7 @@ for k = 1:3
             'MarkerFaceColor', 'auto', 'DisplayName', ori_titles.(orientation_labels{oi}));
     end
     xline(ax, production_keep, '--k', 'Alpha', 0.6, ...
-        'Label', 'manuscript', 'HandleVisibility','off');
+        'Label', 'production', 'HandleVisibility','off');
     grid(ax,'on'); xlabel(ax, 'Fraction of torso faces kept');
     ylabel(ax, metrics{k,2});
     if k == 1, legend(ax, 'Location','best','FontSize',9); end

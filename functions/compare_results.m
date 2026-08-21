@@ -20,7 +20,7 @@
 %           need not be the same across cells — matrices are truncated to
 %           the minimum size before comparison.
 %   opts - (optional) metric options passed to lf_metrics:
-%             .re_mode   'eq13' (default) | 'symmetric'
+%             .re_mode   'reference' (default) | 'symmetric'
 %             .rsq_mode  'pearson' (default) | 'determination'
 %           Pass config_models' metric_opts to stay consistent with the
 %           rest of the pipeline.
@@ -38,25 +38,24 @@
 %
 % METRIC DEFINITIONS:
 %   See lf_metrics.m — the single source of truth. Under the default
-%   'eq13' mode:
+%   'reference' mode:
 %
 %   RE(s) = norm(vecA - vecB, 2) / norm(vecA, 2) * 100
-%           MANUSCRIPT Eq 13. L2 norm, normalised by the REFERENCE
+%           L2 norm, normalised by the REFERENCE
 %           leadfield alone. Unbounded above.
 %
-%   CC(s) = (Pearson r)^2                      MANUSCRIPT Eq 14.
+%   CC(s) = (Pearson r)^2                      Scale invariant.
 %
 % IMPORTANT — ASYMMETRY:
-%   The Eq 13 RE is asymmetric: re(i,j) ~= re(j,i), because the
+%   The RE is asymmetric: re(i,j) ~= re(j,i), because the
 %   denominator is the norm of the row model. The returned matrix is
 %   therefore NOT symmetric and heatmaps must be read row-wise, with the
-%   row understood as the reference. This differs from the previous
-%   symmetric L1 metric, which produced a symmetric matrix.
+%   row understood as the reference. The alternative symmetric L1 metric
+%   ('symmetric' mode) does produce a symmetric matrix.
 %
 % IMPORTANT — UNITS:
 %   re is returned in PERCENT, not as a fraction. Do not multiply by 100
-%   again in plotting code. The previous version returned a 0-0.5
-%   fraction.
+%   again in plotting code.
 %
 % NOTES:
 %   - Truncation to minimum sensors/sources is printed to the command
@@ -119,8 +118,8 @@ cc    = zeros(n_models, n_models);
 rdm   = zeros(n_models, n_models);
 lnmag = zeros(n_models, n_models);
 
-% Compute pairwise metrics. Row index is the REFERENCE model (Eq 13 L1),
-% column index the COMPARISON model (Eq 13 L2). Under the Eq 13 RE this
+% Compute pairwise metrics. Row index is the REFERENCE model, column
+% index the COMPARISON model. Under the reference-normalised RE this
 % matrix is ASYMMETRIC — re(i,j) ~= re(j,i) — because the denominator is
 % the reference leadfield norm. Read heatmaps row-wise.
 for ii = 1:n_models

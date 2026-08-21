@@ -9,22 +9,14 @@
 %   turns it into the convergence curves, the observed convergence order
 %   and the accuracy-versus-runtime trade-off curve.
 %
-% IT ALSO CONFIRMS THE REPORTED MESH SIZE
-%   The submitted manuscript prints a maximum tetrahedron volume of
-%   10 mm^3, but the published leadfields were computed at 500 mm^3
-%   (5e-7 m^3). The methods text is being corrected to 500 mm^3; see
-%   run_fem_leadfields.m for the reasoning.
-%
-%   A volume argument already supports this. The registered torso encloses
-%   roughly 3.75e7 mm^3, so a 10 mm^3 bound forces at least 3.75 million
-%   tetrahedra (order 7e5 nodes), while a 500 mm^3 bound forces at least
-%   75,000 (order 1e5 nodes once quality constraints are applied). The
-%   106,444-144,961 nodes reported in the manuscript match the latter.
-%
-%   This sweep turns that estimate into a measurement: it prints the node
-%   count at every bound and flags any level landing inside the reported
-%   range. Use it to state the corrected figure with confidence, and to
-%   bound the discretisation error at the 500 mm^3 production setting.
+% IT ALSO REPORTS MESH SIZE PER LEVEL
+%   The volume bound and the resulting mesh size are related but not
+%   interchangeable: a torso enclosing roughly 3.75e7 mm^3 forces at least
+%   3.75 million tetrahedra under a 10 mm^3 bound, but only about 75,000
+%   under a 500 mm^3 bound. This sweep prints element and node counts at
+%   every bound, so the bound actually used can be reported alongside the
+%   mesh size it produced, and the discretisation error at the production
+%   setting can be bounded.
 %
 %   The complementary test — hold the global bound fixed and refine ONLY
 %   around the cord — is run_fem_cord_refinement.m. It is deliberately a
@@ -101,7 +93,7 @@ filename    = 'geometries_anatom_full_realistic';      % SET THIS
 
 % REFINEMENT LEVELS — maximum tetrahedron volume in mm^3.
 % Coarsest first so partial runs are still useful.
-% Spans the previously committed 500 mm^3 and the manuscript's 10 mm^3,
+% Spans the 500 mm^3 production setting and a much finer 10 mm^3 bound,
 % and continues finer so that a genuine asymptote can be demonstrated
 % rather than assumed.
 maxvol_mm3_levels = [1000, 500, 200, 100, 50];
@@ -259,7 +251,7 @@ M = struct( ...
     'completed',    repmat({false}, 1, n_lvl));
 
 fprintf('Refinement levels (mm^3): %s\n', mat2str(maxvol_mm3_levels));
-fprintf('Manuscript states 10 mm^3; previous committed value was 500 mm^3.\n\n');
+fprintf('Production setting is 500 mm^3; the sweep spans 10 mm^3 upwards.\n\n');
 
 for L = 1:n_lvl
 
@@ -338,10 +330,10 @@ for L = 1:n_lvl
         M(L).n_nodes, M(L).n_tets, M(L).n_tets_cord, ...
         M(L).mean_vol_mm3, M(L).h_mm, M(L).time_mesh_s);
 
-    % Flag the levels that bracket the manuscript's reported node counts
+    % Flag the levels that land in the node range of the production mesh
     if M(L).n_nodes >= 100000 && M(L).n_nodes <= 150000
-        fprintf(['    >>> This level falls in the 106,444-144,961 node range\n' ...
-                 '        reported in the manuscript. <<<\n']);
+        fprintf(['    >>> This level lands in the same node range as the\n' ...
+                 '        production mesh (order 1e5 nodes). <<<\n']);
     end
 
     t1 = tic;

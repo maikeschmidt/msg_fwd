@@ -23,8 +23,8 @@
 %   per_source_cc_re_overview_axis<N>.png/.fig
 %
 % METRIC DEFINITIONS:
-%   RE(s) = norm(A-B,2) / norm(A,2) * 100           [manuscript Eq 13]
-%   CC(s) = (Pearson r)^2                           [manuscript Eq 14]
+%   RE(s) = norm(A-B,2) / norm(A,2) * 100           [reference-normalised]
+%   CC(s) = (Pearson r)^2                           [scale invariant]
 %   Both are computed by lf_metrics.m and selected by metric_re_mode /
 %   metric_rsq_mode in config_models.m. Never redefine them here.
 %   RE is returned in PERCENT — do not rescale when plotting.
@@ -72,7 +72,7 @@ load(fullfile(forward_fields_base, 'leadfields_organised.mat'), ...
 % Change WHICH comparisons are drawn by editing config_comparisons.m, or by
 % changing the filter below.
 %
-%   cmp_select(CMP, 'dest','main')                    main-text figures
+%   cmp_select(CMP, 'dest','main')                    headline figures
 %   cmp_select(CMP, 'dataset','og','kind','within_bem')   bone models, BEM
 %   cmp_select(CMP, 'dataset','og','kind','cross_solver') BEM vs FEM
 %
@@ -156,8 +156,8 @@ for ax = 1:n_axes
         re_per_source = nan(n_pairs, n_src_ref);
 
         for p = 1:n_pairs
-            key_a = model_pairs{p, 1};   % reference (Eq 13 L1)
-            key_b = model_pairs{p, 2};   % comparison (Eq 13 L2)
+            key_a = model_pairs{p, 1};   % reference (RE denominator)
+            key_b = model_pairs{p, 2};   % comparison
 
             vopts = struct('vector_mode', 'orientation', ...
                            'orientation',  ori, ...
@@ -286,8 +286,8 @@ for ax = 1:n_axes
         re_per_source = nan(n_pairs, n_src_ref);
 
         for p = 1:n_pairs
-            key_a = model_pairs{p, 1};   % reference (Eq 13 L1)
-            key_b = model_pairs{p, 2};   % comparison (Eq 13 L2)
+            key_a = model_pairs{p, 1};   % reference (RE denominator)
+            key_b = model_pairs{p, 2};   % comparison
 
             vopts = struct('vector_mode', 'orientation', ...
                            'orientation',  ori, ...

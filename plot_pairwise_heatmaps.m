@@ -19,8 +19,8 @@
 %   One figure per sensor axis
 %
 % METRIC DEFINITIONS (from compare_results):
-%   RE(s)  = norm(A-B,2) / norm(A,2) * 100             [manuscript Eq 13]
-%   CC(s)  = (Pearson r)^2                             [manuscript Eq 14]
+%   RE(s)  = norm(A-B,2) / norm(A,2) * 100             [reference-normalised]
+%   CC(s)  = (Pearson r)^2                             [scale invariant]
 %   Both are computed by lf_metrics.m and selected by metric_re_mode /
 %   metric_rsq_mode in config_models.m. Never redefine them here.
 %   The RE matrix is ASYMMETRIC (row = reference model).
@@ -155,7 +155,7 @@ for ax = 1:n_axes
     fig = figure('Color', 'w', 'Units', 'inches', 'Position', [1, 1, 14, 6]);
 
     % ── Relative Error heatmap
-    % NOTE: under the manuscript Eq 13 definition this matrix is
+    % NOTE: under the relative error definition this matrix is
     % ASYMMETRIC — the row model is the reference (denominator ||L1||).
     % Read row-wise: cell (r,c) is the RE of model c against reference r.
     subplot(1, 2, 1);

@@ -67,7 +67,7 @@ target_axis   = 3;
 n_sensor_axes = 3;
 is_meg        = true;
 
-production_keep = 0.50;   % the value used throughout the manuscript
+production_keep = 0.50;   % the decimation level used for production runs
 tol_pct         = 1.0;
 
 n_boot   = 10000;
@@ -287,7 +287,7 @@ fclose(fcsv);
 % AGAINST THE REPORTED MODELS
 %
 % Each sweep above is measured against its own finest level, which shows it
-% settled. This measures every level against the models the paper reports,
+% settled. This measures every level against the production models,
 % which shows what it settled on.
 
 ref_opts = struct('orientation_labels', {orientation_labels}, ...

@@ -13,12 +13,9 @@
 %   they contribute nothing to resolving the singular source. This sweep
 %   targets the elements that actually surround the dipoles. If the
 %   sensor-level lead fields stop changing as the cord mesh is refined, the
-%   St. Venant source model is stably resolved at the production mesh, and
-%   that can be stated as a measurement.
-%
-%   Densifying AROUND THE CORD is precisely what this sweep does, and
-%   runtime is recorded per level, so the trade-off curve here is a more
-%   direct answer to that question than the global sweep is.
+%   St. Venant source model is stably resolved at the production mesh.
+%   Runtime is recorded per level, so the accuracy-versus-cost trade-off
+%   can be read off directly.
 %
 % REFERENCE
 %   The FINEST cord bound in the sweep. No analytic solution exists, so
@@ -110,7 +107,7 @@ ref_key   = sprintf('fem_C%02d', ref_L);
 %
 % The sweep compares refinement levels against the finest level, which shows
 % self-convergence. Two further references say whether the refined result
-% agrees with the models the paper reports:
+% agrees with the production models:
 %   the unrefined FEM realistic  — did refining the cord change the answer?
 %   the BEM realistic            — does the refined FEM agree with the BEM?
 %
@@ -264,7 +261,7 @@ for oi = 1:n_ori
 end
 
 worst = max(R.re(i_prod, :));
-fprintf(fid, '\nSTATEMENT FOR THE MANUSCRIPT:\n');
+fprintf(fid, '\nSUMMARY:\n');
 if worst <= tol_pct
     fprintf(fid, ['Refining the mesh around the spinal cord by a factor of %.0f in\n' ...
         'element volume changed the sensor-level lead fields by at most\n' ...
@@ -297,7 +294,7 @@ if ~isempty(ext_refs)
     fprintf(fid, '\n%s\nFINEST REFINEMENT vs THE REPORTED MODELS\n%s\n', ...
         repmat('=',1,74), repmat('=',1,74));
     fprintf(fid, ['Refining the cord only matters if it moves the answer away\n' ...
-                  'from what the paper reports. Compared here at the finest\n' ...
+                  'from the production models. Compared here at the finest\n' ...
                   'cord bound.\n\n']);
     fprintf(fid, '  %-28s %-5s %9s %9s %9s %10s\n', ...
         'Reference', 'ori', 'RE(%)', 'r2', 'RDM', 'gain(%)');
@@ -353,7 +350,7 @@ if ~isempty(ext_refs)
     end
 end
 
-% FIGURE: the sweep against the models the paper reports
+% FIGURE: the sweep against the production models
 if exist('EXT','var') && ~isempty(EXT)
     plot_convergence_vs_reference(cord_mm3, EXT, struct( ...
         'orientation_labels', {orientation_labels}, ...

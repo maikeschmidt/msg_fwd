@@ -269,10 +269,6 @@ src_spacing_mm = 5;
 % lf_metrics() / lf_pair_vectors(), so the tables and the figures cannot
 % drift apart.
 %
-% This addresses Reviewer 3 point 3: the main text (Eq 13) and
-% Supplementary Table S3 previously reported two differently-defined
-% "percentage differences" without signposting.
-%
 % >>> TO CHANGE A METRIC, EDIT functions/metric_defaults.m, NOT HERE. <<<
 % That file is the single definition point and carries the full
 % explanation of each option. It is exposed here as loose variables only
@@ -283,9 +279,9 @@ metric_re_mode     = metric_opts.re_mode;
 metric_rsq_mode    = metric_opts.rsq_mode;
 metric_vector_mode = metric_opts.vector_mode;
 
-% Reference model for asymmetric metrics (Eq 13 RE, determination R2).
-% The manuscript uses the MRI-derived realistic bone model as the
-% reference in all cross-geometry comparisons.
+% Reference model for the asymmetric metrics (reference-normalised RE,
+% determination R2). By convention here the MRI-derived realistic bone
+% model is the reference in all cross-geometry comparisons.
 metric_reference_key = 'bem_anatom_full_realistic_back';
 
 

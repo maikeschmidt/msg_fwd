@@ -3,15 +3,13 @@
 %
 % For each configured model pair, plots per-source relative error alongside
 % its decomposition into an amplitude component and a topography component,
-% and the squared correlation, using the published leadfields.
+% together with the squared correlation.
 %
 % PURPOSE
-%   The paper reports that segmented bone models raise LR-oriented field
-%   amplitudes by 35-72% relative to the continuous model. Relative error
-%   alone cannot say whether that is the field being RESCALED or being
-%   RESHAPED, and those have different consequences: a pure rescaling
-%   changes amplitude estimates but leaves source localisation intact,
-%   whereas reshaping affects both.
+%   Relative error alone cannot say whether a difference between two models
+%   is the field being RESCALED or being RESHAPED, and those have different
+%   consequences: a pure rescaling changes amplitude estimates but leaves
+%   source localisation intact, whereas reshaping affects both.
 %
 %   compute_re_cc_table reports the same decomposition as numbers, with
 %   confidence intervals. This script shows where along the cord it happens.
@@ -28,10 +26,10 @@
 %   decomposition_summary_axis<N>.png/.fig       gain vs RDM across pairs
 %
 % METRICS:
-%   RE        manuscript Eq 13, percent
+%   RE        relative error, percent
 %   Amplitude (exp(lnMAG) - 1) * 100, gain only
 %   RDM       topography only
-%   r2        manuscript Eq 14
+%   r2        squared Pearson correlation
 %   All from lf_metrics, so these figures agree with every table.
 %
 % -------------------------------------------------------------------------
@@ -60,7 +58,7 @@ if ~exist(save_dir, 'dir'); mkdir(save_dir); end
 
 % SET THIS: figure groups. Each group becomes one figure containing the
 % listed comparisons. {reference_key, comparison_key, legend_label}
-% Reference is the Eq 13 denominator.
+% Reference is the RE denominator.
 groups = {
   'bone_geometry_bem', 'Bone geometry effect (BEM)', {
       'bem_anatom_full_realistic_back', 'bem_anatom_full_cont_back',   'Realistic vs Continuous'

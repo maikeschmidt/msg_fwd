@@ -1,13 +1,13 @@
 % test_lf_metrics - Regression test for the shared leadfield metric core
 %
-% Verifies the properties the manuscript relies on:
+% Verifies the properties the toolbox relies on:
 %   - identical leadfields give RE = 0, r2 = 1, RDM = 0, lnMAG = 0
-%   - a pure gain change gives Eq 13 RE = 100%, r2 = 1, RDM = 0
-%     (i.e. Eq 13 RE is sensitive to gain, r2 and RDM are not)
-%   - Eq 13 RE is ASYMMETRIC: 100% one way, 50% the other
-%   - the legacy Supplementary Table S3 metric IS symmetric
+%   - a pure gain change gives RE = 100%, r2 = 1, RDM = 0
+%     (i.e. RE is sensitive to gain, r2 and RDM are not)
+%   - RE is ASYMMETRIC: 100% one way, 50% the other
+%   - the symmetric ('symmetric' mode) metric IS symmetric
 %   - Pearson r2 is scale invariant, so 'normalising by the leadfields'
-%     provably changes nothing under manuscript Eq 14
+%     provably changes nothing under the squared Pearson correlation
 %   - 'determination' mode tracks 1 - RDM^2 and can go negative
 %   - degenerate (zero-norm) leadfields return NaN, never Inf
 %   - lf_metrics_series agrees with elementwise lf_metrics
@@ -16,8 +16,8 @@
 %   Run from the msg_fwd root, or with msg_fwd/functions on the path:
 %     test_lf_metrics
 %
-% Every line should report OK. Any *** FAIL *** means a metric changed
-% behaviour and the published numbers can no longer be reproduced.
+% Every line should report OK. Any *** FAIL *** means a metric has changed
+% behaviour, and previously computed numbers will not reproduce.
 %
 % -------------------------------------------------------------------------
 % Copyright (c) 2026 University College London
@@ -40,14 +40,14 @@ function_check('identical: r2',          m.rsq,   1,   1e-12);
 function_check('identical: RDM',         m.rdm,   0,   1e-12);
 function_check('identical: lnMAG',       m.lnmag, 0,   1e-12);
 
-% 2. Pure gain change B = 2A. Eq13 RE = ||A-2A||/||A|| = 1 -> 100%
+% 2. Pure gain change B = 2A. RE = ||A-2A||/||A|| = 1 -> 100%
 m = lf_metrics(A, 2*A);
 function_check('gain x2: RE (%)',        m.re,    100, 1e-9);
 function_check('gain x2: r2 (Pearson)',  m.rsq,   1,   1e-12);
 function_check('gain x2: RDM (topo)',    m.rdm,   0,   1e-12);
 function_check('gain x2: lnMAG',         m.lnmag, log(2), 1e-12);
 
-% 3. Asymmetry of Eq 13: RE(A->2A)=100%, RE(2A->A)=50%
+% 3. Asymmetry of RE: RE(A->2A)=100%, RE(2A->A)=50%
 m1 = lf_metrics(A, 2*A);
 m2 = lf_metrics(2*A, A);
 function_check('asymmetry: RE(2A ref)',  m2.re,   50,  1e-9);

@@ -1,32 +1,27 @@
 % analyse_organ_removal - Effect of removing thoracic organs on the lead field
 %
-% Recomputes the two comparison families the manuscript reports for the
-% organ-removal analysis, using the unified metrics so the numbers agree
-% with every other table in the paper.
-%
-%   The analysis was previously run ad hoc and reported in Supplementary
-%   Note S3. Committing it as a script means it is reproducible, uses the
-%   same Eq 13 / Eq 14 definitions as everything else, and feeds the
-%   hierarchy table alongside the other modelling factors.
+% Quantifies how much removing the heart and/or the lungs from the torso
+% model changes the lead field. Uses the same RE / r² definitions as every
+% other analysis in the toolbox, and feeds the hierarchy table alongside
+% the other modelling factors.
 %
 % THE TWO FAMILIES
 %
 %   (A) WITHIN-BEM — does removing an organ perturb the lead field?
-%       BEM original (reference) vs BEM with heart removed / lungs removed /
-%       both removed. The manuscript reports r2 > 0.969 for VD and median
-%       RE < 4.5% with r2 > 0.993 for RC and LR.
+%       BEM original (reference) vs BEM with heart removed / lungs removed
+%       / both removed. Tells you whether the thoracic organs need
+%       segmenting at all.
 %
 %   (B) CROSS-SOLVER — does organ removal explain the VD divergence?
 %       FEM original (reference) vs each BEM variant, INCLUDING the BEM
-%       original so the baseline is in the same table. The manuscript
-%       reports that removing both organs made the matched-pair median RE
-%       WORSE, 21.4% -> 27.1%, which is the key negative result: the
-%       BEM-FEM divergence in the quasi-radial zone is not caused by
-%       conductivity assignment to the organs.
+%       original so the baseline is in the same table. Tells you whether
+%       organ segmentation explains any BEM-FEM divergence, by checking
+%       whether removing the organs moves the BEM towards the FEM or
+%       away from it.
 %
-%   Family (A) is the one that belongs in the hierarchy table — it is a
+%   Family (A) is the one that feeds the hierarchy table — it is a
 %   within-solver modelling choice like the others. Family (B) is a
-%   mechanistic result about the divergence and belongs in the Results text.
+%   mechanistic result about where BEM and FEM disagree.
 %
 % REQUIRES
 %   Organ-removal BEM lead fields, one folder per variant. Because the
@@ -290,7 +285,7 @@ if have_fem && any(~isnan(B_re(:)))
         end
         fprintf(fid, '\n');
     end
-    % State what the data actually show — do not assert the manuscript's
+    % State what the data actually show — do not assert the expected
     % direction if this run disagrees with it.
     base = B_re(1,   :, vd);
     last = B_re(end, :, vd);

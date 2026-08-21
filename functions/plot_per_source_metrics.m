@@ -17,7 +17,8 @@ function plot_per_source_metrics(lf, pairs, opts)
 % INPUTS:
 %   lf     Organised leadfield struct (from organise_leadfield)
 %   pairs  [n x 3] cell: {key_a, key_b, legend_label}. key_a is the
-%          reference — RE is Eq 13, which is asymmetric, so the order of
+%          reference — RE is normalised by this model and is asymmetric,
+%          so the order of
 %          the columns matters.
 %   opts   struct:
 %     .save_dir            (required) output folder

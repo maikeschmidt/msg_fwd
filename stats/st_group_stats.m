@@ -1,12 +1,8 @@
 % st_group_stats - Group-level statistics across replicate geometries
 %
-% -------------------------------------------------------------------------
-% WHAT IS BEING TESTED, AND WHY THAT IS A SENSIBLE THING TO TEST
-% -------------------------------------------------------------------------
-% The objection "this is a physics problem, there is no empirical data, so
-% what would I even bootstrap?" is a fair one, and it has a specific
-% answer. A significance test needs a population and a sampling unit. Here
-% they are:
+% WHAT IS BEING TESTED
+%   A forward-modelling study has no empirical measurements to resample,
+%   so the population and the sampling unit have to be stated explicitly:
 %
 %   Sampling unit : one replicate GEOMETRY (a warped anatomy)
 %   Population    : the set of plausible geometries a user of this pipeline
@@ -15,11 +11,9 @@
 %                   reliably larger than the effect of SOLVER CHOICE,
 %                   across that population?
 %
-% That is precisely the paper's central claim ("the dominant distinction
-% was between continuous and segmented bone representations rather than
-% between... solver"), and it is testable. It is NOT a claim about
-% physiology or about between-subject variability, and the manuscript
-% should say so explicitly.
+%   The result is therefore a statement about robustness to geometric
+%   variation. It is NOT a claim about physiology or about between-subject
+%   variability — report it as such.
 %
 % THE TEST
 %   Both contrasts are measured on EVERY replicate, so they are paired.
@@ -258,8 +252,8 @@ end   % paired_mode
 % Paired only — skipped when a single contrast was collected.
 if paired_mode
 
-% One test per orientation on the per-replicate cord-median, which is the
-% single headline number for the manuscript.
+% One test per orientation on the per-replicate cord-median — the single
+% headline number per orientation.
 
 fprintf(fid, '\n%s\nWHOLE-CORD SUMMARY (one value per replicate)\n%s\n', ...
     repmat('=',1,78), repmat('=',1,78));

@@ -66,7 +66,7 @@ sensor_arrays_wanted = {'back'};   % {'back'} or {'front','back'}
 bone_cond_values = [0.002, 0.00825, 0.010, ...
                     0.020, 0.040];
 
-% Index of the manuscript value within the sweep — used as the reference
+% Index of the reference conductivity within the sweep — used as the reference
 % in the analysis script
 ref_cond_value = 0.00825;
 
@@ -204,7 +204,7 @@ if ~exist(outdir, 'dir'); mkdir(outdir); end
 
 fprintf('Bone conductivity sweep: %d values from %.4f to %.4f S/m\n', ...
     n_vals, min(bone_cond_values), max(bone_cond_values));
-fprintf('Manuscript value %.5f S/m is grid point %d\n\n', ...
+fprintf('Reference value %.5f S/m is grid point %d\n\n', ...
     ref_cond_value, find(abs(bone_cond_values - ref_cond_value) < 1e-9, 1));
 
 % Record the sweep alongside the leadfields so the analysis script can

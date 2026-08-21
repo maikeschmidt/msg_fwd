@@ -61,7 +61,7 @@ load(fullfile(forward_fields_base, 'leadfields_organised.mat'), ...
 % CONFIGURATION
 
 % Geometry variants to process, without method prefix or array suffix.
-% All four are produced: realistic for the main text, the rest for the
+% All four are produced: realistic is usually the headline, the rest for
 % supplement. This is the front-vs-back comparison — the two arrays have
 % different sensors, so an amplitude RATIO is the meaningful quantity
 % rather than RE or r-squared between them.

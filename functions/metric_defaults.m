@@ -14,36 +14,33 @@
 %
 % OUTPUT:
 %   opts - struct with fields:
-%            .re_mode      'eq13' | 'symmetric'
+%            .re_mode      'reference' | 'symmetric'
 %            .rsq_mode     'pearson' | 'determination'
 %            .vector_mode  'orientation' | 'concat'
 %
 % RELATIVE ERROR (re_mode)
-%   'eq13'      RE = ||L1 - L2||_2 / ||L1||_2 * 100
-%               MANUSCRIPT Eq 13. L2 norm, normalised by the reference
-%               leadfield alone. Asymmetric. DEFAULT — keep this for
-%               resubmission.
+%   'reference' RE = ||L1 - L2||_2 / ||L1||_2 * 100
+%               L2 norm, normalised by the reference leadfield alone.
+%               Asymmetric. DEFAULT.
 %   'symmetric' RE = ||L1 - L2||_1 / (||L1||_1 + ||L2||_1) * 100
-%               Legacy metric, previously hard coded throughout the
-%               codebase and reported in Supplementary Table S3. Retained
-%               only to reproduce the old supplementary numbers.
+%               L1 norm, symmetric denominator, bounded [0, 50]%.
+%               Order-independent alternative.
 %
 % SQUARED CORRELATION (rsq_mode)
-%   'pearson'        r2 = (Pearson r)^2 — MANUSCRIPT Eq 14. DEFAULT.
+%   'pearson'        r2 = (Pearson r)^2 — DEFAULT.
 %                    Scale invariant: unit-normalising the leadfields
 %                    before this metric changes nothing at all.
 %   'determination'  R2 = 1 - ||b_hat - a_hat||^2 / ||a_hat - mean||^2 on
 %                    unit-normalised leadfields. Asymmetric, can go
 %                    negative, approximately 1 - RDM^2.
-%                    WARNING: does NOT match manuscript Eq 14. Selecting
-%                    it requires updating Eq 14 in the paper and changes
-%                    every reported r2 value including those in the
-%                    abstract (0.998, 0.97).
+%                    WARNING: a different quantity from 'pearson', not a
+%                    rescaling of it — switching modes changes every
+%                    reported r2 value.
 %
 % COMPARISON VECTOR (vector_mode)
 %   'orientation'  One vector per source per dipole orientation. DEFAULT.
-%                  Preserves the orientation-specific effects the paper
-%                  reports (e.g. VD instability at 260-290 mm).
+%                  Preserves orientation-specific effects, which are
+%                  often the interesting ones.
 %   'concat'       One vector per source = [LR; RC; VD] stacked. Fewer
 %                  numbers, but averages away orientation-specific
 %                  behaviour.
@@ -66,7 +63,7 @@
 function opts = metric_defaults()
 
 opts = struct( ...
-    're_mode',     'eq13', ...
+    're_mode',     'reference', ...
     'rsq_mode',    'pearson', ...
     'vector_mode', 'orientation');
 

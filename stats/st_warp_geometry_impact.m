@@ -22,8 +22,8 @@
 %
 %     TEST 2     RE between BEM and FEM on the SAME geometry.
 %                Asks whether the solver difference is small compared
-%                with the geometry difference. This is the paper's claim,
-%                stated as a comparison of two distributions.
+%                with the geometry difference, as a comparison of two
+%                distributions.
 %
 % ON MULTIPLE COMPARISONS
 %   Not needed for the headline count. "How many of the 30 warps exceed the
@@ -201,7 +201,7 @@ fprintf(fid, '=== GEOMETRY IMPACT ON THE LEAD FIELD ===\n');
 fprintf(fid, 'Generated : %s\n', datestr(now));
 fprintf(fid, 'Warps     : %d BEM, %d FEM, %d matched\n', ...
     numel(have_bem), numel(have_fem), numel(both));
-fprintf(fid, 'Axis      : %d   Metric: RE (Eq 13), per source\n', target_axis);
+fprintf(fid, 'Axis      : %d   Metric: RE (reference-normalised), per source\n', target_axis);
 fprintf(fid, 'Reference : RE between two different warps, within a solver\n\n');
 
 for si = 1:2
@@ -281,9 +281,9 @@ end
 % CROSS-SOLVER against the geometry reference
 fprintf(fid, '\n\n%s\nSOLVER DIFFERENCE AGAINST THE GEOMETRY REFERENCE\n%s\n', ...
     repmat('=',1,74), repmat('=',1,74));
-fprintf(fid, ['The paper''s claim in one comparison: if BEM-vs-FEM on one\n' ...
-              'anatomy is smaller than warp-vs-warp within a solver, then\n' ...
-              'anatomy matters more than solver choice.\n']);
+fprintf(fid, ['The comparison in one line: if BEM-vs-FEM on one anatomy is\n' ...
+              'smaller than warp-vs-warp within a solver, then anatomy\n' ...
+              'matters more than solver choice.\n']);
 
 for oi = 1:n_ori
     ori = orientation_labels{oi};

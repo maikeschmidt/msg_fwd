@@ -67,7 +67,7 @@ table_models = {
 };
 
 % SET THIS: sensor axis to report (3 = radial axis for OPM)
-% Every sensor axis is produced. The radial axis carries the main text;
+% Every sensor axis is produced. The radial axis is usually the headline;
 % the tangential ones go to the supplement. One file per axis.
 config_comparisons;
 axes_to_report = 1:n_sensor_axes_cfg;   % SET THIS to a subset if needed

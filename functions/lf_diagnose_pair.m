@@ -29,7 +29,7 @@ function D = lf_diagnose_pair(lf, key_a, key_b, ax, opts)
 %
 % INPUT:
 %   lf      organised leadfield struct
-%   key_a   reference key (Eq 13 denominator)
+%   key_a   reference model key (the RE denominator)
 %   key_b   comparison key
 %   ax      sensor axis (default 3)
 %   opts    optional; .orientations (default all), .verbose (default true)

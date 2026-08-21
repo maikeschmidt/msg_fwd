@@ -97,8 +97,8 @@ clc
 
 % USER CONFIGURATION — set these paths before running
 
-geoms_path  = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\replications\geometries';   % SET THIS: path to folder containing geometry .mat files
-lf_save_path = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\replications\fields';  % SET THIS: path to folder where leadfield .mat files will be saved
+geoms_path   = 'D:\Simulations\msg_fwd\geometries';   % SET THIS: folder containing geometry .mat files
+lf_save_path = 'D:\Simulations\msg_fwd\fields';       % SET THIS: folder to save leadfield .mat files into
                     %           (can be different from geoms_path; subfolders are
                     %            created automatically per geometry variant)
 

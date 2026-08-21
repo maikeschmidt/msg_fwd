@@ -355,7 +355,7 @@ function [cc_vec, re_vec] = compute_metrics_sm(lf, key_A, key_B, ori, ...
     ax, src_range, min_sensors)
 % Delegates to the shared metric implementation so the simpler-model
 % figures use exactly the same RE and r2 definitions as the main
-% analysis. key_A is the reference (manuscript Eq 13 L1).
+% analysis. key_A is the reference (the RE reference, L1).
 % re_vec is returned in PERCENT.
     [cc_vec, re_vec] = compute_metrics(lf, key_A, key_B, ori, ax, ...
         src_range, min_sensors, metric_defaults());

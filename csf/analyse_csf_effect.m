@@ -1,29 +1,27 @@
 % analyse_csf_effect - Quantify the effect of including a CSF compartment
 %
-%   The productive response is not to claim CSF everywhere, but to measure
-%   what its omission actually costs. Because run_fem_leadfields_csf solves
-%   both variants on ONE identical tetrahedral mesh, the difference reported
-%   here is attributable to the CSF compartment alone and not to meshing
-%   variability.
+%   Measures what omitting a CSF compartment actually costs. Because
+%   run_fem_leadfields_csf solves both variants on ONE identical
+%   tetrahedral mesh, the difference reported here is attributable to the
+%   CSF compartment alone and not to meshing variability.
 %
 % THE THREE COMPARISONS
 %
 %   (A) CSF EFFECT WITHIN THE FEM
 %       FEM+CSF (reference) vs FEM-no-CSF.
-%       Answers: "how much does omitting CSF change the predicted field?"
-%       This is the headline number for the response letter.
+%       Answers: how much does omitting CSF change the predicted field?
+%       This is the headline number.
 %
 %   (B) BEM AGAINST THE BEST AVAILABLE MODEL      [optional]
 %       FEM+CSF (reference) vs BEM (which cannot represent CSF).
-%       Answers: "does the BEM remain a good approximation once the
-%       reference model includes CSF?" This is the honest test of the
-%       paper's conclusion, because it charges the BEM for the CSF it
-%       cannot model.
+%       Answers: does the BEM remain a good approximation once the
+%       reference model includes CSF? This is the stricter test, because
+%       it charges the BEM for the CSF it cannot model.
 %
 %   (C) SOLVER EFFECT WITHOUT CSF                  [optional]
 %       FEM-no-CSF (reference) vs BEM.
-%       The comparison the paper already reports. Included so (B) and (C)
-%       can be read side by side: if (B) is not much worse than (C), the
+%       The standard solver comparison. Included so (B) and (C) can be
+%       read side by side: if (B) is not much worse than (C), the
 %       BEM's inability to model CSF costs little beyond what the CSF
 %       omission already costs both frameworks equally.
 %
@@ -79,7 +77,7 @@ is_meg        = true;
 % NOTE: unit scaling is NOT a single constant. BEM and FEM leadfields are
 % saved in different units depending on which script produced them, so the
 % factor is resolved per file by lf_unit_scale. Hardcoding 1 here made the
-% BEM leadfield 1e15x too small, which produced an Eq 13 relative error of
+% BEM leadfield 1e15x too small, which produced a relative error of
 % exactly 100% flat across every source while leaving r2 looking healthy.
 
 n_boot   = 10000;
@@ -140,7 +138,7 @@ fprintf('Loaded: FEM+CSF, FEM-noCSF%s\n\n', ternary_str(have_bem, ', BEM', ''));
 
 % DEFINE COMPARISONS
 
-% {label, reference_key (Eq 13 L1), comparison_key, description}
+% {label, reference_key (RE denominator), comparison_key, description}
 comparisons = {
     'A_csf_effect',  'fem_CSF',   'fem_noCSF', 'CSF effect within the FEM';
 };
@@ -233,9 +231,9 @@ for c = 1:n_cmp
 end
 
 
-% HEADLINE STATEMENT FOR THE RESPONSE LETTER
+% HEADLINE STATEMENT
 
-fprintf(fid, '\n%s\nSTATEMENT FOR THE RESPONSE LETTER\n%s\n', ...
+fprintf(fid, '\n%s\nHEADLINE: WHAT OMITTING CSF COSTS\n%s\n', ...
     repmat('=',1,78), repmat('=',1,78));
 
 reA = S.A_csf_effect.re;
@@ -257,8 +255,8 @@ if have_bem
         median(reB(:),'omitnan') - median(reC(:),'omitnan'));
     fprintf(fid, ['\nInterpret with care: if that penalty is small, the BEM remains\n' ...
                   'a reasonable approximation even against a more complete reference.\n' ...
-                  'If it is large, the paper should say so plainly and restrict its\n' ...
-                  'BEM recommendation accordingly.\n']);
+                  'If it is large, any BEM recommendation should be qualified\n' ...
+                  'accordingly.\n']);
 end
 
 fclose(fid);

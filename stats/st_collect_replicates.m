@@ -12,14 +12,14 @@
 %     'warp'  — affine warps of the single anatomical model.
 %               Bounds body-shape variation, holding all non-affine
 %               anatomy fixed.
-%   Neither is a substitute for scanning more participants, and the
-%   manuscript must say so. What they legitimately support is the claim
-%   that the BEM-FEM comparison is stable across plausible geometric
-%   variation rather than being a property of one particular mesh.
+%   This is not a substitute for scanning more participants — say so when
+%   reporting it. What it does support is the claim that a comparison is
+%   stable across plausible geometric variation, rather than being a
+%   property of one particular mesh.
 %
 % CONTRASTS
 %   A contrast is a named pair of models compared within each replicate.
-%   The two that matter for the paper's central claim are:
+%   The two defined by default are:
 %     solver   — BEM(realistic) vs FEM(realistic): how much does the
 %                choice of numerical method change the answer?
 %     geometry — BEM(realistic) vs BEM(continuous): how much does the
@@ -79,7 +79,7 @@ replicate_type = repmat({'warp'}, 1, 30);
 
 % SET THIS: contrasts.
 % {name, ref_variant, ref_method, comp_variant, comp_method}
-% The reference is the Eq 13 L1 (the denominator of the relative error).
+% The reference model is the denominator of the relative error.
 %
 % NAMING: a geometry file carries ONE bone mesh, so the bone variant is
 % part of the GEOMETRY NAME, not a suffix on the leadfield filename:
@@ -116,7 +116,7 @@ is_meg        = true;
 % NOTE: unit scaling is NOT a single constant. BEM and FEM leadfields are
 % saved in different units depending on which script produced them, so the
 % factor is resolved per file by lf_unit_scale. A hardcoded 1 makes BEM
-% leadfields 1e15x too small, giving an Eq 13 relative error of exactly
+% leadfields 1e15x too small, giving a relative error of exactly
 % 100% flat across every source while r2 still looks healthy.
 
 

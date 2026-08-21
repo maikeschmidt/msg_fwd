@@ -67,7 +67,7 @@ filename     = 'geometries_anatom_full_realistic';      % SET THIS
 
 % REFINEMENT LEVELS — fraction of faces KEPT by reducepatch.
 % Coarsest first. 1.0 = undecimated = the convergence reference.
-% 0.5 is the value used throughout the manuscript.
+% 0.5 is the decimation level used for production runs.
 keep_fraction_levels = [0.25, 0.40, 0.50, 0.65, 0.80, 1.00];
 
 % WHICH SURFACES ARE REFINED
@@ -163,7 +163,7 @@ M = struct( ...
 
 fprintf('Keep-fraction levels : %s\n', mat2str(keep_fraction_levels));
 fprintf('Sweep all surfaces   : %d\n', sweep_all_surfaces);
-fprintf('Manuscript uses 0.50 for the torso; 1.00 is the reference.\n\n');
+fprintf('Production runs use 0.50 for the torso; 1.00 is the reference.\n\n');
 
 for L = 1:n_lvl
 

@@ -9,13 +9,13 @@
 %   m = lf_metrics(vecA, vecB, opts)
 %
 % INPUT:
-%   vecA  - [n x 1] REFERENCE leadfield vector (L1 in paper Eq 13)
-%   vecB  - [n x 1] COMPARISON leadfield vector (L2 in paper Eq 13)
+%   vecA  - [n x 1] REFERENCE leadfield vector (the RE denominator)
+%   vecB  - [n x 1] COMPARISON leadfield vector
 %   opts  - (optional) struct with fields:
-%             .re_mode   'eq13'   (default) | 'symmetric'
-%             .rsq_mode  'pearson' (default) | 'determination'
-%           Omit to use the manuscript definitions. The defaults are also
-%           supplied by config_models.m as metric_re_mode / metric_rsq_mode.
+%             .re_mode   'reference' (default) | 'symmetric'
+%             .rsq_mode  'pearson'   (default) | 'determination'
+%           Omit to use the toolbox defaults, which are also supplied by
+%           config_models.m as metric_re_mode / metric_rsq_mode.
 %
 % OUTPUT:
 %   m     - struct with fields:
@@ -26,29 +26,26 @@
 %                      Pure topography error, independent of gain.
 %             .lnmag   log(||vecB|| / ||vecA||). Pure gain error.
 %                      0 = identical magnitude, >0 = B larger than A.
-%             .re_eq13 RE under Eq 13 regardless of re_mode (for reporting
-%                      both conventions side by side in tables)
-%             .re_sym  RE under the symmetric convention regardless of
-%                      re_mode (legacy Supplementary Table S3 metric)
+%             .re_ref  RE under the reference-normalised convention,
+%                      regardless of re_mode (so both conventions can be
+%                      reported side by side in a table)
+%             .re_sym  RE under the symmetric convention, regardless of
+%                      re_mode
 %
 % RE MODES:
-%   'eq13'      RE = ||vecA - vecB||_2 / ||vecA||_2 * 100
-%               MANUSCRIPT Eq 13. L2 norm, normalised by the reference
-%               leadfield alone. ASYMMETRIC — swapping vecA and vecB
-%               changes the result. Unbounded above.
-%               This is the definition used in the main text and Table S4.
+%   'reference' RE = ||vecA - vecB||_2 / ||vecA||_2 * 100
+%               L2 norm, normalised by the reference leadfield alone.
+%               ASYMMETRIC — swapping vecA and vecB changes the result.
+%               Unbounded above. This is the toolbox default.
 %
 %   'symmetric' RE = ||vecA - vecB||_1 / (||vecA||_1 + ||vecB||_1) * 100
 %               L1 norm, symmetric denominator. Bounded [0, 50]%.
-%               This is the legacy definition that was previously hard
-%               coded throughout the codebase, and the one reported in
-%               Supplementary Table S3. Retained so the old supplementary
-%               numbers can still be reproduced, but it is NOT the
-%               manuscript default.
+%               A more forgiving, order-independent alternative; retained
+%               so results computed under it can still be reproduced.
 %
 % R2 MODES:
 %   'pearson'        r2 = (Pearson correlation of vecA, vecB)^2
-%                    MANUSCRIPT Eq 14. Bounded [0, 1]. Scale invariant:
+%                    Bounded [0, 1]. Scale invariant:
 %                    unit-normalising the inputs does NOT change this
 %                    value, so 'normalising by the leadfields' is a no-op
 %                    for this metric.
@@ -61,9 +58,9 @@
 %                    Because a_hat and b_hat are unit vectors this is
 %                    very close to 1 - RDM^2, so it penalises topography
 %                    error on the same scale as RDM.
-%                    NOTE: this does NOT match manuscript Eq 14. Selecting
-%                    it requires updating Eq 14 in the paper and will
-%                    change every reported r2 value.
+%                    NOTE: this is a different quantity from 'pearson',
+%                    not a rescaling of it — switching modes changes
+%                    every reported r2 value.
 %
 % NOTES:
 %   - Both vectors must be the same length; truncate to a common sensor
@@ -72,9 +69,9 @@
 %     NaN rather than Inf/0-divide warnings.
 %   - Constant (zero-variance) vectors return NaN for rsq, since Pearson
 %     correlation is undefined.
-%   - Argument ORDER MATTERS for 'eq13' and 'determination'. In this
-%     manuscript the MRI-derived realistic bone model is the reference
-%     (vecA) in all cross-geometry comparisons.
+%   - Argument ORDER MATTERS for 'reference' and 'determination'. Pass
+%     the model you are measuring against as vecA, and keep that choice
+%     consistent across every comparison you report.
 %
 % EXAMPLE:
 %   m = lf_metrics(L_realistic(:, s), L_toroidal(:, s));
@@ -100,7 +97,7 @@
 function m = lf_metrics(vecA, vecB, opts)
 
 if nargin < 3, opts = struct(); end
-if ~isfield(opts, 're_mode'),  opts.re_mode  = 'eq13';    end
+if ~isfield(opts, 're_mode'),  opts.re_mode  = 'reference'; end
 if ~isfield(opts, 'rsq_mode'), opts.rsq_mode = 'pearson'; end
 
 vecA = vecA(:);
@@ -113,7 +110,7 @@ if numel(vecA) ~= numel(vecB)
 end
 
 m = struct('re', NaN, 'rsq', NaN, 'rdm', NaN, 'lnmag', NaN, ...
-           're_eq13', NaN, 're_sym', NaN);
+           're_ref', NaN, 're_sym', NaN);
 
 nA2 = norm(vecA, 2);
 nB2 = norm(vecB, 2);
@@ -125,20 +122,20 @@ end
 
 % RELATIVE ERROR — both conventions always computed
 
-% Eq 13: L2 norm, normalised by the reference leadfield alone
-m.re_eq13 = norm(vecA - vecB, 2) / nA2 * 100;
+% Reference-normalised: L2 norm, divided by the reference leadfield alone
+m.re_ref = norm(vecA - vecB, 2) / nA2 * 100;
 
-% Legacy: L1 norm, symmetric denominator (Supplementary Table S3)
-m.re_sym  = norm(vecA - vecB, 1) / (norm(vecA, 1) + norm(vecB, 1)) * 100;
+% Symmetric: L1 norm, symmetric denominator
+m.re_sym = norm(vecA - vecB, 1) / (norm(vecA, 1) + norm(vecB, 1)) * 100;
 
 switch lower(opts.re_mode)
-    case 'eq13'
-        m.re = m.re_eq13;
+    case {'reference', 'eq13'}   % 'eq13' accepted for backwards compatibility
+        m.re = m.re_ref;
     case 'symmetric'
         m.re = m.re_sym;
     otherwise
         error('lf_metrics:badREMode', ...
-            'Unknown re_mode "%s". Valid: eq13 | symmetric.', opts.re_mode);
+            'Unknown re_mode "%s". Valid: reference | symmetric.', opts.re_mode);
 end
 
 % GAIN AND TOPOGRAPHY — unit-normalised vectors
@@ -153,7 +150,7 @@ m.lnmag = log(nB2 / nA2);
 
 switch lower(opts.rsq_mode)
     case 'pearson'
-        % Manuscript Eq 14. Undefined if either vector is constant.
+        % Squared Pearson correlation. Undefined if either vector is constant.
         if std(vecA) < eps || std(vecB) < eps
             m.rsq = NaN;
         else

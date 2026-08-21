@@ -67,7 +67,7 @@ for k = 1:2:numel(varargin)
     have = arrayfun(@(c) c.(field), CMP, 'UniformOutput', false);
 
     % 'both' matches any requested value for the fields where it is
-    % meaningful, so a main-text selection also picks up entries reported in
+    % meaningful, so a headline selection also picks up entries reported in
     % both places.
     match = cellfun(@(h) any(strcmp(h, want)) || strcmp(h, 'both'), have);
     keep  = keep & match;

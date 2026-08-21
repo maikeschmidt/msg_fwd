@@ -10,11 +10,11 @@
 %   M = lf_metrics_series(LA, LB, opts)
 %
 % INPUT:
-%   LA    - [n x n_src] REFERENCE leadfield matrix (Eq 13 L1)
-%   LB    - [n x n_src] COMPARISON leadfield matrix (Eq 13 L2)
+%   LA    - [n x n_src] REFERENCE leadfield matrix (the RE denominator)
+%   LB    - [n x n_src] COMPARISON leadfield matrix
 %           Both are typically produced by lf_pair_vectors().
 %   opts  - (optional) struct passed straight through to lf_metrics:
-%             .re_mode   'eq13' (default) | 'symmetric'
+%             .re_mode   'reference' (default) | 'symmetric'
 %             .rsq_mode  'pearson' (default) | 'determination'
 %
 % OUTPUT:
@@ -23,8 +23,8 @@
 %             .rsq      Squared correlation per source
 %             .rdm      Relative difference measure per source
 %             .lnmag    Log magnitude ratio per source
-%             .re_eq13  RE under Eq 13 (always present)
-%             .re_sym   RE under the symmetric convention (always present)
+%             .re_ref   RE under the reference-normalised convention
+%             .re_sym   RE under the symmetric convention
 %           Degenerate sources yield NaN and are safe to aggregate with
 %           median(..., 'omitnan').
 %
@@ -32,7 +32,7 @@
 %   - Column order is source order; no edge trimming is applied here.
 %     Callers trim (typically 2:end-1) after this call, consistently.
 %   - Argument order matters: LA is the reference for the asymmetric
-%     Eq 13 RE and for the 'determination' r2 mode.
+%     RE and for the 'determination' r2 mode.
 %
 % EXAMPLE:
 %   [LA, LB] = lf_pair_vectors(leadfields, ref_key, comp_key, 3, vopts);
@@ -92,7 +92,7 @@ end
 
 n_src = min(size(LA, 2), size(LB, 2));
 
-fields = {'re', 'rsq', 'rdm', 'lnmag', 're_eq13', 're_sym'};
+fields = {'re', 'rsq', 'rdm', 'lnmag', 're_ref', 're_sym'};
 for f = 1:numel(fields)
     M.(fields{f}) = nan(1, n_src);
 end

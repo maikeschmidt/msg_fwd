@@ -3,14 +3,12 @@ function plot_topoplot_eeg(electrode_pos, values, clim)
 %
 % Deliberately mirrors plot_topoplot_meg: same white-at-zero diverging
 % colormap, same contour overlay, same sensor dots. Only the colourbar unit
-% differs (uV/nAm rather than fT/nAm). ESG and MSG panels appear side by side
-% in the same figures, so rendering them differently would make the two look
-% unlike each other for purely cosmetic reasons — exactly the confound the
-% MSG-vs-ESG comparison is trying to avoid.
+% differs (uV/nAm rather than fT/nAm). Electric and magnetic panels appear
+% side by side in the same figures, so rendering them differently would
+% make them look unlike each other for purely cosmetic reasons.
 %
-% clim is optional. plot_topoplot_publication has always passed it, but this
-% signature previously declared only two inputs, so every EEG topoplot failed
-% with "Too many input arguments" — the EEG path had never been exercised.
+% clim is optional; omit it (or pass []) to use symmetric limits derived
+% from the data.
 
     if nargin < 3 || isempty(clim)
         clim = [];

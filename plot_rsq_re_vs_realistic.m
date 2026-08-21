@@ -21,11 +21,11 @@
 %   <save_base_dir>/fem/re_vs_realistic/re_vs_realistic_axis<N>_allori.png/.fig
 %
 % METRIC DEFINITIONS:
-%   RE(s) = norm(A-B,2) / norm(A,2) * 100           [manuscript Eq 13]
-%   CC(s) = (Pearson r)^2                           [manuscript Eq 14]
+%   RE(s) = norm(A-B,2) / norm(A,2) * 100           [reference-normalised]
+%   CC(s) = (Pearson r)^2                           [scale invariant]
 %   Both are computed by lf_metrics.m and selected by metric_re_mode /
 %   metric_rsq_mode in config_models.m. Never redefine them here.
-%   The realistic bone model is the reference (Eq 13 denominator).
+%   The realistic bone model is the reference (the RE denominator).
 %   Reference model A = realistic bone; comparison model B = variant.
 %
 % CONFIGURATION (set in this script):
@@ -136,7 +136,7 @@ for method_cell = {'bem', 'fem'}
                 end
 
                 % Per-source RE and CC — realistic bone is the reference
-                % (Eq 13 L1), so it is the FIRST argument.
+                % (the RE denominator), so it is the FIRST argument.
                 M = lf_metrics_series(L_ref(1:n_sens_use, :), ...
                                       L_comp(1:n_sens_use, :), metric_opts);
 

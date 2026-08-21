@@ -11,27 +11,26 @@
 %
 % INPUT:
 %   lf          - organised leadfields struct
-%   key_A       - REFERENCE model key (Eq 13 L1)
-%   key_B       - COMPARISON model key (Eq 13 L2)
+%   key_A       - REFERENCE model key (the RE denominator)
+%   key_B       - COMPARISON model key
 %   ori         - orientation field name: 'VD' | 'RC' | 'LR'
 %   ax          - sensor axis index
 %   src_range   - vector of source indices to evaluate
 %   min_sensors - cap on sensor count
 %   opts        - (optional) metric options, see lf_metrics. Defaults to
-%                 the manuscript definitions (Eq 13 RE, Eq 14 Pearson r2).
+%                 the toolbox defaults (reference-normalised RE,
+%                 Pearson r2).
 %
 % OUTPUT:
 %   cc_vec  - [1 x numel(src_range)] squared correlation per source
 %   re_vec  - [1 x numel(src_range)] relative error per source
 %   M       - full metric struct from lf_metrics_series (re, rsq, rdm,
-%             lnmag, re_eq13, re_sym)
+%             lnmag, re_ref, re_sym)
 %
-% BEHAVIOUR CHANGE (2026 revision):
-%   re_vec is now the MANUSCRIPT Eq 13 relative error expressed as a
-%   PERCENTAGE (0-100+, asymmetric, normalised by ||L1||). It was
-%   previously the symmetric L1 fraction on a 0-0.5 scale.
-%   Callers must NOT multiply by 100 again. Use M.re_sym if the old
-%   convention is needed.
+% UNITS:
+%   re_vec is the reference-normalised relative error expressed as a
+%   PERCENTAGE (0-100+, asymmetric, normalised by ||L1||), so callers must
+%   NOT multiply by 100 again. Use M.re_sym for the symmetric convention.
 %
 % SEE ALSO:
 %   lf_metrics, lf_metrics_series, lf_pair_vectors

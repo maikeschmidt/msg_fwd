@@ -1,5 +1,5 @@
 % analyse_convergence_all - Every refinement sweep, against each other and
-%                           against the published models
+%                           against the production models
 %
 % The individual analyse_* scripts each measure one sweep against its own
 % finest level, which answers "did this sweep settle". This answers the
@@ -8,13 +8,13 @@
 %   Does the FEM volume sweep agree with the BEM surface sweep?
 %   Does the FEM surface sweep agree with the BEM surface sweep?
 %   Does refining the cord move the answer relative to any of them?
-%   Does any of it move away from the models the paper reports?
+%   Does any of it move away from the production models?
 %
 % Every sweep contributes its FINEST level — its best available estimate of
 % the truth — and those are compared against each other and against the
-% published BEM and FEM in one matrix. A sweep that has converged to the
-% same answer as the others, and to the published model, is evidence the
-% published model was already resolved.
+% production BEM and FEM in one matrix. A sweep that has converged to the
+% same answer as the others, and to the production model, is evidence the
+% production model was already resolved.
 %
 % SWEEPS READ (any missing one is skipped, not fatal)
 %   fem_volume    tetrahedron volume bound          convergence_fem_volume
@@ -194,7 +194,7 @@ fclose(fcsv);
 fid = fopen(fullfile(save_dir,'convergence_all_report.txt'), 'w');
 fprintf(fid, '=== ALL REFINEMENT SWEEPS, CROSS-COMPARED ===\n');
 fprintf(fid, 'Generated : %s\n', datestr(now));
-fprintf(fid, 'Axis      : %d   Metric: RE (Eq 13), median across sources\n', target_axis);
+fprintf(fid, 'Axis      : %d   Metric: RE (reference-normalised), median across sources\n', target_axis);
 fprintf(fid, ['Each sweep contributes its FINEST level. The cord is never\n' ...
               'decimated in the surface sweeps, so those vary the volume\n' ...
               'conductor around a fixed source space; only the cord sweep\n' ...

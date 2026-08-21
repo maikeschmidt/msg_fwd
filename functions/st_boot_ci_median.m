@@ -13,7 +13,7 @@
 %        plausible geometry?"
 %
 %   Neither is a between-subject CI. State which one is being reported
-%   whenever a CI appears in the manuscript.
+%   whenever a CI is quoted.
 %
 % USAGE:
 %   ci = st_boot_ci_median(v)

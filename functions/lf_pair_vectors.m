@@ -6,10 +6,10 @@
 % here so that tables, heatmaps and per-source figures are guaranteed to
 % be computing over identical data.
 %
-% This exists because the codebase previously used two different vector
-% conventions: the summary table and heatmaps concatenated all three
-% dipole orientations into one vector, while every per-source figure used
-% one orientation at a time. The two cannot produce matching numbers.
+% Two vector conventions are possible — all three dipole orientations
+% concatenated into one vector, or one orientation at a time — and they do
+% not give matching numbers. Choosing one here, via opts.vector_mode, is
+% what keeps every output consistent.
 %
 % USAGE:
 %   [LA, LB, info] = lf_pair_vectors(leadfields, keyA, keyB, ax)
@@ -18,8 +18,8 @@
 % INPUT:
 %   leadfields - organised leadfields struct from
 %                load_and_organise_leadfields.m
-%   keyA       - model key for the REFERENCE model (Eq 13 L1)
-%   keyB       - model key for the COMPARISON model (Eq 13 L2)
+%   keyA       - model key for the REFERENCE model (the RE denominator)
+%   keyB       - model key for the COMPARISON model
 %   ax         - sensor axis index (3 = radial for OPM)
 %   opts       - (optional) struct with fields:
 %                  .vector_mode  'concat' | 'orientation' (default 'concat')
@@ -42,13 +42,12 @@
 % VECTOR MODES:
 %   'concat'       Each source vector is [LR; RC; VD] stacked, so a single
 %                  metric summarises the source across all three dipole
-%                  orientations. Fewer numbers, and the orientation-specific
-%                  behaviour the paper reports (e.g. VD instability around
-%                  260-290 mm) is averaged away.
+%                  orientations. Fewer numbers, but orientation-specific
+%                  behaviour is averaged away.
 %
 %   'orientation'  Each source vector is one dipole orientation. Preserves
-%                  the per-orientation curves in Figures 5 and 7. Requires
-%                  opts.orientation to be set.
+%                  the per-orientation curves. Requires opts.orientation
+%                  to be set.
 %
 % NOTES:
 %   - Truncation is to the minimum sensor count across BOTH models, further
@@ -56,7 +55,7 @@
 %   - Edge sources are NOT trimmed here — callers trim consistently
 %     (typically 2:end-1) after computing metrics.
 %   - Argument order matters downstream: keyA is the reference for the
-%     asymmetric Eq 13 RE.
+%     asymmetric RE.
 %
 % EXAMPLE:
 %   opts.vector_mode = 'orientation';

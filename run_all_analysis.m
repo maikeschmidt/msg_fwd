@@ -25,6 +25,7 @@
 %   11. compute_amplitude_diff_table   amplitude % difference text report
 %   12. compute_re_cc_table            RE and r² summary text report
 %   13. plot_decomposition             amplitude vs topography split
+%   14. analyse_organ_removal          effect of removing heart / lungs
 %
 % NOTE — PERTURBATION ANALYSIS:
 %   Systematic perturbations (source-space and sensor-array shifts) are
@@ -62,10 +63,10 @@
 %     warping/       FEM lead fields on warped anatomies
 %
 % NOTE — METRIC DEFINITIONS:
-%   All RE and r² values everywhere in this toolbox now come from
+%   All RE and r² values everywhere in this toolbox come from
 %   functions/lf_metrics.m, selected by functions/metric_defaults.m.
-%   Defaults are the manuscript definitions: Eq 13 relative error
-%   (L2 norm, normalised by the reference leadfield) and Eq 14 Pearson r².
+%   Defaults are the reference-normalised relative error (L2 norm,
+%   divided by the reference leadfield) and the squared Pearson r.
 %   RE is returned IN PERCENT — plotting code must not rescale it.
 %   Verify with: tests/test_lf_metrics
 %

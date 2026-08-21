@@ -3,7 +3,7 @@ function plot_convergence_vs_reference(X, R, opts)
 %
 % A convergence sweep plotted against its own finest level shows
 % SELF-consistency: it says the sweep settled, but not what it settled on.
-% Plotting the same sweep against the models the paper reports says whether
+% Plotting the same sweep against the production models says whether
 % refinement moves the answer away from what was published, which is the
 % question a reader actually has.
 %

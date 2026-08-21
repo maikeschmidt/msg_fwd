@@ -1,4 +1,4 @@
-% config_comparisons - Every comparison the study reports, declared once
+% config_comparisons - Every comparison the pipeline reports, declared once
 %
 % The single place that says WHICH models are compared against which. Scripts
 % read this registry and filter it; none of them carries its own hard-coded
@@ -11,7 +11,7 @@
 %
 % USAGE
 %   config_comparisons;                       % defines CMP and CMP_GROUPS
-%   P = cmp_select(CMP, 'dest', 'main');      % main-text pairs only
+%   P = cmp_select(CMP, 'dest', 'main');      % headline pairs only
 %   P = cmp_select(CMP, 'dataset', 'og', 'kind', 'within_bem');
 %
 %   cmp_select returns an [n x 3] cell array {key_a, key_b, label}, the form
@@ -21,12 +21,13 @@
 % FIELDS
 %   id        short slug, unique
 %   label     display label for legends and tables
-%   dest      'main' | 'supp' | 'both' — where the result is reported
+%   dest      'main' | 'supp' | 'both' — headline result, supporting
+%             result, or both. Used only to filter; nothing depends on it
 %   dataset   'og' | 'warp' | 'csf' | 'bone_cond' | 'convergence' |
 %             'cord_refine' | 'organ'
 %   kind      'within_bem' | 'within_fem' | 'cross_solver'
-%   ref       reference model key. RE is Eq 13, which is asymmetric, so this
-%             is the denominator and the order matters.
+%   ref       reference model key. RE is normalised by this model and is
+%             asymmetric, so the order matters.
 %   cmp       comparison model key
 %   array     'back' | 'front'
 %
@@ -216,16 +217,16 @@ per_source_sets = { ...
 
 % SENSOR AXES
 % All three axes are computed everywhere. These name which is which so the
-% supplementary tangential-axis results can be selected by name rather than
+% tangential-axis results can be selected by name rather than
 % by remembering an index.
 
 % Arrays each comparison is reported on. Every 'og' comparison above is run
 % once per array listed here, so front-vs-back coverage comes from reporting
 % both rather than from differencing them.
 arrays_to_report      = {'back', 'front'};   % SET THIS
-arrays_main_text      = {'back'};            % the rest go to the supplement
-bone_variants_main    = {'realistic'};       % front/back in the main text
-bone_variants_supp    = {'cont','homo','inhomo'};
+arrays_main_text      = {'back'};            % headline array
+bone_variants_main    = {'realistic'};       % headline bone variant
+bone_variants_supp    = {'cont','homo','inhomo'};   % supporting variants
 
 
 % axis 3 is the radial channel on a triaxial magnetometer. On a two-axis
@@ -243,8 +244,8 @@ else
     radial_axis  = 2;
 end
 
-main_axis = radial_axis;                          % main text
-supp_axes = setdiff(1:n_sensor_axes_cfg, radial_axis);   % tangential, supplement
+main_axis = radial_axis;                                 % headline axis
+supp_axes = setdiff(1:n_sensor_axes_cfg, radial_axis);   % tangential axes
 
 
 if ~exist('config_comparisons_quiet', 'var') || ~config_comparisons_quiet

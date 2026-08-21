@@ -261,7 +261,7 @@ if has_both
         for ax = 1:n_ax_n
             % Build matched matrices over the plotted source range, then
             % delegate to the shared metric implementation so this figure
-            % agrees with the tables. ref_key_n is the reference (Eq 13 L1).
+            % agrees with the tables. ref_key_n is the RE reference.
             LA = zeros(n_sens_use, n_src_plot_normal);
             LB = zeros(n_sens_use, n_src_plot_normal);
             for si = 1:n_src_plot_normal

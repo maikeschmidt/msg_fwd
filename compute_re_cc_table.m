@@ -4,7 +4,7 @@
 % squared correlation (r2), relative difference measure (RDM) and log
 % magnitude ratio (lnMAG), and writes:
 %   - a human-readable .txt report
-%   - a machine-readable .csv suitable for pasting straight into the paper
+%   - a machine-readable .csv
 %
 % Every metric is produced by lf_metrics() via lf_metrics_series(), the
 % same code path used by every figure in the toolbox, so the table and the
@@ -24,9 +24,9 @@
 %
 % METRIC DEFINITIONS:
 %   All defined in lf_metrics.m. Under the default settings:
-%     RE     = ||L1 - L2||_2 / ||L1||_2 * 100        manuscript Eq 13
-%     RE_sym = ||L1 - L2||_1 / (||L1||_1+||L2||_1)*100  legacy Table S3
-%     r2     = (Pearson r)^2                          manuscript Eq 14
+%     RE     = ||L1 - L2||_2 / ||L1||_2 * 100        reference-normalised
+%     RE_sym = ||L1 - L2||_1 / (||L1||_1+||L2||_1)*100  symmetric variant
+%     r2     = (Pearson r)^2                          scale invariant
 %     RDM    = ||L2/||L2|| - L1/||L1||||              topography only
 %     lnMAG  = log(||L2|| / ||L1||)                   gain only
 %
@@ -37,14 +37,14 @@
 %     ALL          — concatenated [LR; RC; VD] per source. This is what
 %                    the pairwise heatmaps show.
 %   Reporting both means the table can be read against any figure in the
-%   paper without a convention mismatch.
+%   toolbox without a convention mismatch.
 %
 % ASYMMETRY:
-%   The Eq 13 RE and the 'determination' r2 mode are asymmetric: the
+%   The RE and the 'determination' r2 mode are asymmetric: the
 %   denominator is the reference leadfield. Both directions (A as
 %   reference, and B as reference) are therefore reported for every pair.
-%   The manuscript convention is that the MRI-derived realistic bone model
-%   is the reference.
+%   By convention here the MRI-derived realistic bone model is the
+%   reference.
 %
 % BOOTSTRAP:
 %   Confidence intervals are percentile bootstrap CIs of the MEDIAN,
@@ -107,7 +107,7 @@ table_models = [CMP_GROUPS(gi).members(:), CMP_GROUPS(gi).labels(:)];
 % Sensor axis to report. axis 3 is radial for a triaxial magnetometer;
 % on a two-axis sensor the radial channel is axis 2. Set radial_axis in
 % config_comparisons rather than here.
-% Every sensor axis is produced. The radial axis carries the main text;
+% Every sensor axis is produced. The radial axis is usually the headline;
 % the tangential ones go to the supplement. One file per axis.
 axes_to_report = 1:n_sensor_axes_cfg;   % SET THIS to a subset if needed
 
@@ -181,9 +181,9 @@ fprintf(fid, 'Edges     : first and last source excluded\n');
 fprintf(fid, 'Bootstrap : %d draws, %.0f%% percentile CI of the median,\n', ...
     n_boot, ci_level * 100);
 fprintf(fid, '            resampling SOURCE POSITIONS with replacement\n\n');
-fprintf(fid, 'RE      = ||L1-L2||_2 / ||L1||_2 * 100          [manuscript Eq 13]\n');
-fprintf(fid, 'RE_sym  = ||L1-L2||_1 / (||L1||_1+||L2||_1)*100 [legacy Table S3]\n');
-fprintf(fid, 'r2      = (Pearson r)^2                          [manuscript Eq 14]\n');
+fprintf(fid, 'RE      = ||L1-L2||_2 / ||L1||_2 * 100          [reference-normalised]\n');
+fprintf(fid, 'RE_sym  = ||L1-L2||_1 / (||L1||_1+||L2||_1)*100 [symmetric]\n');
+fprintf(fid, 'r2      = (Pearson r)^2                          [scale invariant]\n');
 fprintf(fid, 'RDM     = || L2/||L2|| - L1/||L1|| ||            [topography only]\n');
 fprintf(fid, 'lnMAG   = log( ||L2|| / ||L1|| )                 [gain only]\n\n');
 fprintf(fid, 'Active settings: re_mode=%s  rsq_mode=%s\n', ...
@@ -209,14 +209,14 @@ for ii = 1:n_tbl
         if ii == jj, continue; end
 
         % Only skip the mirrored pair when the metrics are symmetric.
-        % Under Eq 13 RE they are not, so both directions are reported.
+        % Under RE they are not, so both directions are reported.
         if jj < ii && strcmpi(metric_opts.re_mode, 'symmetric') ...
                    && strcmpi(metric_opts.rsq_mode, 'pearson')
             continue;
         end
 
-        key_a = valid_keys{ii};    % reference (Eq 13 L1)
-        key_b = valid_keys{jj};    % comparison (Eq 13 L2)
+        key_a = valid_keys{ii};    % reference (RE denominator)
+        key_b = valid_keys{jj};    % comparison
 
         fprintf(fid, '\n%s\n', divider);
         fprintf(fid, 'REFERENCE  (L1) : %s\n', valid_names{ii});
@@ -271,7 +271,7 @@ for ii = 1:n_tbl
             fprintf(fid, '    RE (%%)   median %7.3f   95%% CI [%7.3f, %7.3f]   IQR [%7.3f, %7.3f]   range [%7.3f, %7.3f]   max at %d mm\n', ...
                 re_s.med, re_s.ci(1), re_s.ci(2), re_s.iqr(1), re_s.iqr(2), ...
                 re_s.min, re_s.max, re_max_mm);
-            fprintf(fid, '    RE_sym   median %7.3f   (legacy Supplementary Table S3 definition)\n', ...
+            fprintf(fid, '    RE_sym   median %7.3f   (symmetric definition)\n', ...
                 median(resym, 'omitnan'));
             fprintf(fid, '    r2       median %7.4f   95%% CI [%7.4f, %7.4f]   IQR [%7.4f, %7.4f]   range [%7.4f, %7.4f]   min at %d mm\n', ...
                 r2_s.med, r2_s.ci(1), r2_s.ci(2), r2_s.iqr(1), r2_s.iqr(2), ...

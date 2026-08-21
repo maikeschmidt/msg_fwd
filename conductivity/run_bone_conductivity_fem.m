@@ -104,12 +104,11 @@ cond_nominal = [0.33, 0.00825, 0.62, 0.05, 0.23];
 bone_idx     = 2;
 
 % Meshing parameters — MUST match run_fem_leadfields.m so the sweep sits on
-% the same mesh as the published results.
+% the same mesh as the main results.
 % Volume bound is given in mm^3 and converted, because the mesh is in
-% metres: 500 mm^3 = 5e-7 m^3. See run_fem_leadfields.m for why this is no
-% longer written as a raw m^3 literal, and why 500 rather than the 10 mm^3
-% printed in the submitted manuscript.
-tetgen_maxvol_mm3   = 500;                       % produced the published results
+% metres: 500 mm^3 = 5e-7 m^3. See run_fem_leadfields.m for why the bound
+% is not written as a raw m^3 literal.
+tetgen_maxvol_mm3   = 500;                       % match run_fem_leadfields.m
 tetgen_maxvol       = tetgen_maxvol_mm3 * 1e-9;  % mm^3 -> m^3
 surf2mesh_opt_scale = 1;
 

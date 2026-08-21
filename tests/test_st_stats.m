@@ -2,8 +2,8 @@
 %
 % Checks the permutation test, FDR correction, bootstrap CI and effect
 % size against cases with known analytic answers. These functions produce
-% the p-values and confidence intervals that go into the manuscript, so
-% they must be verified rather than assumed.
+% every p-value and confidence interval the toolbox reports, so they are
+% verified rather than assumed.
 %
 % USAGE:
 %   test_st_stats

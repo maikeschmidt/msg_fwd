@@ -42,10 +42,8 @@
 %   tetgen_maxvol_mm3   = 500   (maximum tetrahedron volume, mm^3;
 %                                converted to m^3 in the script — the mesh
 %                                is in metres, so 500 mm^3 = 5e-7 m^3.
-%                                The submitted manuscript prints 10 mm^3;
-%                                that is a reporting error being corrected
-%                                in the text — see the note at the
-%                                parameter itself)
+%                                See the note at the parameter itself
+%                                before changing it)
 %   surf2mesh_opt_scale = 1     (mesh quality optimisation scale)
 %   Torso mesh downsampled by 50% for anatomical models only
 %
@@ -140,8 +138,8 @@ cr_add_functions;   % initialise MSG toolbox and HBF library paths
 
 % USER CONFIGURATION — set these paths before running
 
-geoms_path  = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\og_geometries';   % SET THIS: path to folder containing geometry .mat files
-output_base = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\replications\fields';   % SET THIS: base path for DUNEuro working dirs and output
+geoms_path  = 'D:\Simulations\msg_fwd\geometries';   % SET THIS: folder containing geometry .mat files
+output_base = 'D:\Simulations\msg_fwd\fields';       % SET THIS: base path for DUNEuro working dirs and output
 
 % DUNEuro binary location
 % -------------------------------------------------------------------------
@@ -185,47 +183,37 @@ filenames = { ...                                                               
 %
 % UNITS — READ THIS BEFORE CHANGING THE VALUE
 %   The boundary meshes are converted to METRES before meshing, so TetGen
-%   expects the volume bound in m^3. Writing it as a raw m^3 literal is how
-%   the earlier confusion arose: the value 5e-7 m^3 is 500 mm^3, which does
-%   not visibly correspond to any number in the manuscript.
-%
-%   The bound is therefore written in mm^3 and converted here, so the
-%   number in this file can be read straight against the number in the
-%   paper. Do not reintroduce a raw m^3 literal.
+%   expects the volume bound in m^3. A raw m^3 literal is easy to misread
+%   (5e-7 m^3 is 500 mm^3), so the bound is written in mm^3 and converted
+%   here. Do not reintroduce a raw m^3 literal.
 %
 %     1 mm^3 = 1e-9 m^3
-%     500 mm^3 -> 5e-7 m^3   (current setting; produced the published results)
-%      10 mm^3 -> 1e-8 m^3   (figure printed in the submitted manuscript)
+%     500 mm^3 -> 5e-7 m^3   (current setting)
+%      10 mm^3 -> 1e-8 m^3
 %
 % NOTE: this is an UPPER BOUND, not the mean element volume. Actual
 % tetrahedra are typically smaller, especially near fine surface features,
 % so the achieved element count is not simply volume/bound.
 %
-% WHY 500 AND NOT THE 10 mm^3 PRINTED IN THE SUBMITTED MANUSCRIPT
-%   The registered torso encloses roughly 3.75e7 mm^3 (mri_torso.stl is
-%   1.03e7 mm^3 and the anatomical transform scales lengths by 1.5385, so
-%   volume by 1.5385^3 = 3.64). Since maxvol is an upper bound, that gives
-%   a LOWER bound on the element count:
+% CHOOSING THE BOUND
+%   The registered torso encloses roughly 3.75e7 mm^3, so the bound sets a
+%   LOWER bound on the element count:
 %
 %     bound 500 mm^3 -> at least  75,000 tets; in practice a few hundred
 %                       thousand once surface features and quality
 %                       constraints are respected, i.e. of order 1e5 nodes
 %     bound  10 mm^3 -> at least 3,750,000 tets, i.e. of order 7e5 nodes
 %
-%   The manuscript reports 106,444-144,961 nodes, which matches the
-%   500 mm^3 bound and is five to seven times smaller than 10 mm^3 would
-%   give. The published leadfields were therefore computed at 500 mm^3 and
-%   the "10 mm^3" in the submitted text is a reporting error.
+%   500 mm^3 gives meshes of order 1e5 nodes, which is the setting used
+%   for the lead fields distributed with this toolbox. Changing it
+%   invalidates every existing lead field and forces a full recompute, so
+%   always report the value you actually ran with.
 %
-%   ACTION: the METHODS TEXT is being corrected to state 500 mm^3. This
-%   parameter is correct as it stands and must NOT be changed to 10, which
-%   would invalidate every existing leadfield and force a full recompute.
-%
-%   convergence/run_fem_convergence.m confirms this empirically: it prints
-%   the node count at every bound and flags any level landing inside the
-%   106,444-144,961 range.
+%   convergence/run_fem_convergence.m measures the effect of this choice:
+%   it prints element and node counts at every bound and the resulting
+%   change in the lead fields.
 
-tetgen_maxvol_mm3    = 500;                       % produced the published results
+tetgen_maxvol_mm3    = 500;                       % see the note above
 tetgen_maxvol        = tetgen_maxvol_mm3 * 1e-9;  % mm^3 -> m^3
 surf2mesh_opt_scale  = 1;
 

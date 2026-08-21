@@ -5,10 +5,10 @@
 % convention), and writes:
 %
 %   1. A high-level hierarchy table (LaTeX) placing all modelling factors on
-%      one scale, for the manuscript — at the headline sensor axis, plus one
-%      table per sensor axis for the supplementary.
+%      one scale, at the headline sensor axis, plus one table per sensor
+%      axis.
 %   2. Full per-comparison tables (CSV) covering every combination, axis and
-%      orientation, so any number in the paper can be extracted from one file.
+%      orientation, so any single number can be extracted from one file.
 %
 % THE FACTORS
 %   segmentation   Continuous vs MRI-realistic bone, within a solver.
@@ -16,15 +16,15 @@
 %   bone_detail    Toroidal vs MRI-realistic bone, within a solver.
 %                  "How anatomically detailed does the bone need to be?"
 %   csf            FEM with CSF vs FEM without, on one identical mesh.
-%                  Within the FEM only — the BEM cannot represent CSF, and
-%                  charging it for that belongs in the Results, not here.
+%                  Within the FEM only — the BEM cannot represent CSF, so
+%                  including it here would not be a like-for-like row.
 %   organ_removal  BEM with heart / lungs / both removed vs the intact BEM.
 %                  "Do the thoracic organs need segmenting at all?" Within
 %                  the BEM only. The cross-solver arm of this analysis —
-%                  whether organ removal explains the BEM-FEM divergence for
-%                  quasi-radial sources, which it does not — is a mechanistic
-%                  result and lives in analyse_organ_removal, not here.
-%   conductivity   Each bone conductivity vs the manuscript value, within a
+%                  whether organ removal explains any BEM-FEM divergence —
+%                  is a mechanistic result and lives in
+%                  analyse_organ_removal, not here.
+%   conductivity   Each bone conductivity vs the reference value, within a
 %                  solver. "Does the literature value chosen matter?"
 %                  Cross-solver conductivity comparisons are deliberately
 %                  left to analyse_bone_conductivity.
@@ -43,7 +43,7 @@
 %                      the discretisation near the sources matters once the
 %                      rest of the volume is settled. Separate from
 %                      mesh_refinement because it is a different question.
-%   solver         BEM vs FEM on matched geometry. The paper's core question.
+%   solver         BEM vs FEM on matched geometry.
 %
 % AGGREGATION
 %   Every comparison yields per-source metrics; those are reduced to a median
@@ -53,8 +53,8 @@
 %   nothing is hidden behind an aggregate.
 %
 % METRICS (all from lf_metrics, so these agree with every other output)
-%   RE      manuscript Eq 13, percent. Magnitude AND shape.
-%   r2      manuscript Eq 14. Shape only, scale invariant.
+%   RE      relative error, percent. Magnitude AND shape.
+%   r2      squared Pearson correlation. Shape only, scale invariant.
 %   RDM     shape only, on unit-normalised fields.
 %   lnMAG   magnitude only; reported also as gain% = (exp(lnMAG)-1)*100.
 %
@@ -67,11 +67,11 @@
 %   Set the paths below, then run.
 %
 % OUTPUTS (to save_dir):
-%   hierarchy_table.tex            LaTeX, factors as columns (manuscript)
+%   hierarchy_table.tex            LaTeX, factors as columns
 %   hierarchy_table_rows.tex       LaTeX, factors as rows (easier to read)
-%   hierarchy_table_axis<N>.tex        per-axis, columns  (supplementary)
-%   hierarchy_table_rows_axis<N>.tex   per-axis, rows     (supplementary)
-%   hierarchy_table_all_axes.tex   all three axes side by side (supplementary)
+%   hierarchy_table_axis<N>.tex        per-axis, columns
+%   hierarchy_table_rows_axis<N>.tex   per-axis, rows
+%   hierarchy_table_all_axes.tex   all three axes side by side
 %   hierarchy_summary.csv          the high-level numbers, every axis
 %   all_comparisons.csv            EVERY comparison x axis x orientation
 %   hierarchy_report.txt           human-readable, with provenance
@@ -542,14 +542,14 @@ fid = fopen(fullfile(save_dir, 'hierarchy_report.txt'), 'w');
 fprintf(fid, '=== MODELLING FACTOR HIERARCHY ===\n');
 fprintf(fid, 'Generated : %s\n', datestr(now));
 fprintf(fid, 'Array     : %s   Vector convention: %s\n', array_name, headline_mode);
-fprintf(fid, 'Headline  : sensor axis %d (main-text table)\n', headline_axis);
+fprintf(fid, 'Headline  : sensor axis %d\n', headline_axis);
 fprintf(fid, 'Metrics   : re_mode=%s  rsq_mode=%s\n\n', ...
     metric_opts.re_mode, metric_opts.rsq_mode);
 fprintf(fid, ['Each factor is summarised by the MEDIAN across its constituent\n' ...
               'comparisons, each of which is itself a median across source\n' ...
               'positions. Per-comparison values are in all_comparisons.csv.\n' ...
-              'All three sensor axes are reported; the supplementary tables\n' ...
-              'carry the same numbers in LaTeX form.\n\n']);
+              'All three sensor axes are reported; the per-axis tables carry\n' ...
+              'the same numbers in LaTeX form.\n\n']);
 
 fsum = fopen(fullfile(save_dir, 'hierarchy_summary.csv'), 'w');
 fprintf(fsum, ['axis,orientation,factor,factor_label,solver,n_comparisons,' ...
@@ -563,7 +563,7 @@ for ax = axes_present
     H   = Rall(sel);
 
     fprintf(fid, '\n%s\nSENSOR AXIS %d%s\n%s\n', repmat('=',1,78), ax, ...
-        ternary(ax == headline_axis, '   <-- main-text table', ''), ...
+        ternary(ax == headline_axis, '   <-- headline table', ''), ...
         repmat('=',1,78));
     fprintf(fid, '%-20s %-10s %5s %9s %9s %9s %10s\n', ...
         'Factor', 'Solver', 'n', 'RE(%)', 'r2', 'RDM', '|gain|(%)');
@@ -611,7 +611,7 @@ for ax = axes_present
 
     vals_by_axis{ax} = vals;
 
-    % Supplementary LaTeX for this axis
+    % Per-axis LaTeX
     write_latex_cols(fullfile(save_dir, sprintf('hierarchy_table_axis%d.tex', ax)), ...
         factor_order, factor_names, vals, headline_mode, ax, ...
         sprintf('hierarchy_axis%d', ax), ax == headline_axis);
@@ -677,11 +677,11 @@ fprintf(fid, ['NOTE: within-solver spread between replicates is in\n' ...
 fclose(fid);
 
 
-% LATEX — MAIN TEXT (headline axis) AND THE ALL-AXES SUPPLEMENTARY TABLE
+% LATEX — HEADLINE AXIS, AND THE COMBINED ALL-AXES TABLE
 
 if isempty(vals_by_axis) || headline_axis > numel(vals_by_axis) || ...
         isempty(vals_by_axis{headline_axis})
-    warning('Headline axis %d has no data; main-text table not written.', headline_axis);
+    warning('Headline axis %d has no data; headline table not written.', headline_axis);
 else
     write_latex_cols(fullfile(save_dir,'hierarchy_table.tex'), ...
         factor_order, factor_names, vals_by_axis{headline_axis}, ...
@@ -695,7 +695,7 @@ write_latex_all_axes(fullfile(save_dir,'hierarchy_table_all_axes.tex'), ...
     factor_order, factor_names, vals_by_axis, axes_present, headline_mode);
 
 fprintf('\n=== Complete ===\n');
-fprintf('Main text   : %s\n', fullfile(save_dir,'hierarchy_table.tex'));
+fprintf('Headline    : %s\n', fullfile(save_dir,'hierarchy_table.tex'));
 fprintf('              %s\n', fullfile(save_dir,'hierarchy_table_rows.tex'));
 fprintf('Supplement  : hierarchy_table_axis<N>.tex, hierarchy_table_rows_axis<N>.tex\n');
 fprintf('              %s\n', fullfile(save_dir,'hierarchy_table_all_axes.tex'));
@@ -728,7 +728,7 @@ function f = fmt(v, dp)
 end
 
 function write_latex_cols(path, order, names, vals, mode, ax, lbl, is_main)
-% Factors as columns — matches the manuscript's existing table style.
+% Factors as columns.
     fid = fopen(path, 'w');
     fprintf(fid, '%% Generated by compute_hierarchy_table.m\n');
     fprintf(fid, '\\begin{table}[ht]\n\\centering\n');
@@ -815,7 +815,7 @@ function write_latex_rows(path, order, names, vals, mode, ax, lbl, is_main)
 end
 
 function write_latex_all_axes(path, order, names, vals_by_axis, axes_present, mode)
-% One supplementary table carrying all three sensor axes side by side.
+% One table carrying all three sensor axes side by side.
 % Factors as rows; a column group per axis, four metrics within each.
 % Sorted by the mean RE across axes so the ordering is not axis-specific.
     fid = fopen(path, 'w');

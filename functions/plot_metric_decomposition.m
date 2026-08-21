@@ -4,7 +4,7 @@
 % error, and its decomposition into an amplitude part and a topography
 % part, plus pattern similarity. Used by the main analysis, the CSF
 % analysis and the bone-conductivity analysis so every decomposition figure
-% in the paper looks and reads the same way.
+% in the toolbox looks and reads the same way.
 %
 % WHY FOUR ROWS
 %   RE alone cannot distinguish "the model predicts the same field pattern
@@ -13,10 +13,11 @@
 %   amplitude estimates but not source localisation, the second affects
 %   both. The rows separate them:
 %
-%     1. RE (%)      total error, manuscript Eq 13. Everything.
+%     1. RE (%)      total error: magnitude and shape together.
 %     2. Amplitude   (exp(lnMAG) - 1) * 100. GAIN only, blind to shape.
 %     3. RDM         topography only, blind to amplitude.
-%     4. r2          pattern similarity, manuscript Eq 14. Blind to amplitude.
+%     4. r2          pattern similarity (squared Pearson r). Blind to
+%                    amplitude.
 %
 %   Read rows 2 and 3 together against row 1. If row 2 accounts for row 1
 %   and row 3 is near zero, the difference is a pure rescaling.
@@ -87,10 +88,10 @@ if ~isfield(opts, 'styles') || isempty(opts.styles)
 end
 
 rows = {
-    're',   'RE (%)',            'Total error (Eq 13)';
+    're',   'RE (%)',            'Total error';
     'gain', 'Amplitude (%)',     'Gain only';
     'rdm',  'RDM',               'Topography only';
-    'rsq',  'r^2',               'Pattern similarity (Eq 14)';
+    'rsq',  'r^2',               'Pattern similarity';
 };
 n_rows = size(rows, 1);
 
