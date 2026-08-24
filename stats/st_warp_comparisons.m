@@ -38,7 +38,10 @@
 %   warp_comparisons_report.txt
 %   warp_comparisons_pairs.csv      every pair, every family, every orientation
 %   warp_comparisons_summary.csv    family medians with CIs
-%   warp_comparisons_<ori>.png/.fig distributions per orientation
+%   warp_bem_vs_fem_hist_axis<N>.png/.fig
+%       One figure per sensor axis, three subplots (one per dipole
+%       orientation), each a histogram of the BEM-vs-FEM difference across
+%       the warped anatomies.
 %
 % -------------------------------------------------------------------------
 % Copyright (c) 2026 University College London
@@ -273,40 +276,146 @@ fclose(fsum);
 
 
 % FIGURES
+%
+% One figure per SENSOR AXIS, three subplots — one per dipole orientation.
+% Each subplot is a histogram of the BEM-vs-FEM difference across the warped
+% anatomies.
+%
+% PER-SOURCE, POOLED ACROSS WARPS is the default rather than one median per
+% warp. Thirty medians make a histogram with more bins than data; pooling
+% every source of every warp gives a distribution with real shape, and it is
+% the same quantity the scatter showed, just not pre-averaged. Set
+% hist_per_source = false to histogram the per-warp medians instead.
 
-for oi = 1:n_ori
-    ori = orientation_labels{oi};
-    fig = figure('Color','w','Position',[100 100 900 520]);
-    hold on;
+hist_per_source = true;    % SET THIS
+overlay_within  = false;   % SET THIS: add the within-solver families as
+                           % outlines, for context rather than as the subject
 
-    data = {}; labs = {};
-    for f = 1:3
-        v = F(f).re(:,oi); v = v(~isnan(v));
+hist_axes = 1:n_sensor_axes;
+
+fprintf('\nHistograms of the BEM-vs-FEM difference...\n');
+
+for ax = hist_axes
+
+    % Collect the cross-solver difference at this axis
+    Hx = cell(1, n_ori);
+    Hb = cell(1, n_ori);
+    Hf = cell(1, n_ori);
+
+    for oi = 1:n_ori
+        vo = struct('vector_mode','orientation', ...
+                    'orientation', orientation_labels{oi});
+
+        acc = [];
+        for a = 1:numel(have_both)
+            try
+                [LA, LB] = lf_pair_vectors(lf, ['bem_' have_both{a}], ...
+                    ['fem_' have_both{a}], ax, vo);
+            catch
+                continue;
+            end
+            M  = lf_metrics_series(LA, LB, metric_opts);
+            kp = 2:(size(LA,2)-1);
+            if hist_per_source
+                acc = [acc, M.re(kp)];                  %#ok<AGROW>
+            else
+                acc(end+1) = median(M.re(kp),'omitnan'); %#ok<AGROW>
+            end
+        end
+        Hx{oi} = acc(~isnan(acc));
+
+        if overlay_within
+            for who = 1:2
+                if who == 1, pool = have_bem; pre = 'bem';
+                else,        pool = have_fem; pre = 'fem'; end
+                acc2 = [];
+                for a = 1:numel(pool)
+                    for b = a+1:numel(pool)
+                        try
+                            [LA, LB] = lf_pair_vectors(lf, [pre '_' pool{a}], ...
+                                [pre '_' pool{b}], ax, vo);
+                        catch
+                            continue;
+                        end
+                        M  = lf_metrics_series(LA, LB, metric_opts);
+                        kp = 2:(size(LA,2)-1);
+                        if hist_per_source
+                            acc2 = [acc2, M.re(kp)];                  %#ok<AGROW>
+                        else
+                            acc2(end+1) = median(M.re(kp),'omitnan'); %#ok<AGROW>
+                        end
+                    end
+                end
+                if who == 1, Hb{oi} = acc2(~isnan(acc2));
+                else,        Hf{oi} = acc2(~isnan(acc2)); end
+            end
+        end
+    end
+
+    if all(cellfun(@isempty, Hx)), continue; end
+
+    % Shared x-limits across the three panels, so the orientations are
+    % directly comparable rather than each rescaled to its own spread.
+    allv = [Hx{:}];
+    if overlay_within, allv = [allv, Hb{:}, Hf{:}]; end
+    xhi = prctile_local(allv, 99.5);
+    if ~isfinite(xhi) || xhi <= 0, xhi = max(allv); end
+
+    fig = figure('Color','w','Position',[100 100 1500 440]);
+    tl  = tiledlayout(1, n_ori, 'TileSpacing','compact','Padding','loose');
+    title(tl, sprintf(['BEM vs FEM on matched warped anatomies — ' ...
+        'sensor axis %d'], ax), 'FontSize', 14, 'FontWeight','bold');
+
+    for oi = 1:n_ori
+        axh = nexttile(tl); hold(axh,'on');
+        v = Hx{oi};
         if isempty(v), continue; end
-        data{end+1} = v;  labs{end+1} = F(f).label; %#ok<SAGROW>
+
+        histogram(axh, v, 'BinLimits', [0 xhi], 'NumBins', 40, ...
+            'Normalization', 'probability', ...
+            'FaceColor', pair_colors(1,:), 'FaceAlpha', 0.65, ...
+            'EdgeColor', 'none');
+
+        if overlay_within
+            if ~isempty(Hb{oi})
+                histogram(axh, Hb{oi}, 'BinLimits', [0 xhi], 'NumBins', 40, ...
+                    'Normalization','probability', 'DisplayStyle','stairs', ...
+                    'EdgeColor', pair_colors(2,:), 'LineWidth', 1.4);
+            end
+            if ~isempty(Hf{oi})
+                histogram(axh, Hf{oi}, 'BinLimits', [0 xhi], 'NumBins', 40, ...
+                    'Normalization','probability', 'DisplayStyle','stairs', ...
+                    'EdgeColor', pair_colors(3,:), 'LineWidth', 1.4);
+            end
+        end
+
+        md = median(v);
+        xline(axh, md, '--k', 'LineWidth', 1.8, ...
+            'Label', sprintf('%.2f%%', md), 'LabelOrientation','horizontal', ...
+            'LabelVerticalAlignment','top', 'FontSize', 10);
+
+        xlim(axh, [0 xhi]);
+        grid(axh,'on'); box(axh,'off');
+        set(axh, 'FontSize', 11, 'TickDir','out', 'LineWidth', 1.1);
+        xlabel(axh, 'Relative error (%)', 'FontSize', 12);
+        if oi == 1
+            ylabel(axh, ternary_str_wc(hist_per_source, ...
+                'Proportion of sources', 'Proportion of warps'), 'FontSize', 12);
+        end
+        title(axh, sprintf('%s   (n = %d)', ...
+            ori_titles.(orientation_labels{oi}), numel(v)), 'FontSize', 12);
+
+        if oi == n_ori && overlay_within
+            lg = legend(axh, {'BEM vs FEM','within BEM','within FEM'}, ...
+                'Location','northeast','FontSize',10); lg.Box = 'off';
+        end
     end
 
-    for k = 1:numel(data)
-        x = k + (rand(numel(data{k}),1) - 0.5) * 0.25;
-        scatter(x, data{k}, 14, pair_colors(k,:), 'filled', ...
-            'MarkerFaceAlpha', 0.45);
-        m  = median(data{k});
-        plot([k-0.3 k+0.3], [m m], 'k-', 'LineWidth', 2.5);
-    end
-
-    set(gca, 'XTick', 1:numel(labs), 'XTickLabel', labs, 'FontSize', 11, ...
-        'TickDir','out', 'LineWidth', 1.2);
-    xtickangle(15);
-    xlim([0.5, numel(labs)+0.5]);
-    ylabel('Median RE (%)', 'FontSize', 13);
-    title(sprintf('%s — %s, sensor axis %d', ori_titles.(ori), ...
-        'warp comparisons', target_axis), 'FontSize', 14, 'FontWeight','bold');
-    grid on; box off;
-
-    f_out = sprintf('warp_comparisons_%s', ori);
+    f_out = sprintf('warp_bem_vs_fem_hist_axis%d', ax);
     exportgraphics(fig, fullfile(save_dir,[f_out '.png']), 'Resolution', 600);
     saveas(fig,          fullfile(save_dir,[f_out '.fig']));
     close(fig);
+    fprintf('  axis %d -> %s.png\n', ax, f_out);
 end
 
 fprintf('\n=== Complete ===\n');
@@ -376,4 +485,8 @@ function a = radial_axis_or(default_ax)
     catch
         a = default_ax;
     end
+end
+
+function s = ternary_str_wc(c, a, b)
+    if c, s = a; else, s = b; end
 end

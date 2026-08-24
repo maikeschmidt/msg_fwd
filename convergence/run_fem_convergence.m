@@ -96,7 +96,9 @@ filename    = 'geometries_anatom_full_realistic';      % SET THIS
 % Spans the 500 mm^3 production setting and a much finer 10 mm^3 bound,
 % and continues finer so that a genuine asymptote can be demonstrated
 % rather than assumed.
-maxvol_mm3_levels = [1000, 500, 200, 100, 50];
+% Starts at the production bound and decreases. 1000 was dropped: it is
+% coarser than production and answers nothing the finer levels do not.
+maxvol_mm3_levels = [500, 200, 100, 50, 20];
 
 surf2mesh_opt_scale = 1;
 ordering = {'wm', 'bone', 'heart', 'lungs', 'torso'};

@@ -87,7 +87,11 @@ global_maxvol_mm3 = 500;
 % CORD-LOCAL bounds in mm^3, coarsest first. The first entry should equal
 % global_maxvol_mm3 so the sweep starts from "no local refinement" and the
 % effect is measured against a genuine baseline.
-cord_maxvol_mm3_levels = [500, 200, 50, 10, 2, 0.5];
+% Spans BOTH directions about the global bound: levels above 500 coarsen
+% the cord relative to the rest of the volume, levels below refine it. A
+% one-sided sweep can only show that refining changes nothing; it cannot
+% show whether the production resolution was already finer than needed.
+cord_maxvol_mm3_levels = [2000, 1000, 500, 200, 50, 10, 2, 0.5];
 
 surf2mesh_opt_scale = 1;
 ordering = {'wm', 'bone', 'heart', 'lungs', 'torso'};

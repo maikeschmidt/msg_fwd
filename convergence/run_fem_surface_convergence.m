@@ -90,7 +90,13 @@ keep_fraction_levels = [0.25, 0.40, 0.50, 0.65, 0.80, 1.00];
 %   true  = all surfaces   -> compare with convergence_allsurf
 % Use TRUE for the general convergence claim: it also coarsens the cord
 % surface, which is the near-source region the volume sweep never touched.
-sweep_all_surfaces = true;   % cord is excluded either way — see do_reduce
+% WHICH SURFACES ARE DECIMATED
+%   true  : every compartment except the cord   (the general surface sweep)
+%   false : the torso only                      (matches the BEM torso sweep,
+%                                                so the two are comparable)
+% The cord is excluded in both cases — decimating it moves the boundary
+% relative to fixed source positions.
+sweep_all_surfaces = true;   % SET THIS
 
 % Volume bound held FIXED at the production value. The surface is the only
 % thing varying. Note the bound will not bind at coarse surface levels —
