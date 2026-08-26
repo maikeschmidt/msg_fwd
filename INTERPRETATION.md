@@ -188,6 +188,35 @@ exactly. That is a useful null check, not a bug: `analyse_cord_refinement`
 reports the fraction of cord tetrahedra actually subdivided at each level,
 so you can see where real refinement starts.
 
+### Torso decimation: the reference is the production mesh
+
+`analyse_torso_decimation` compares everything against the **keep = 0.50
+level of the same sweep** — the decimation used for production. Each number
+therefore answers "what would change if the torso had been meshed at this
+resolution instead", which is the question a reader actually has. The
+reference is taken from inside the sweep rather than from the separately
+generated production lead field so that mesh generation, solver settings and
+sensor array are identical across levels and torso resolution is the only
+thing varying.
+
+The keep = 0.50 row of a within-solver family is the reference against
+itself and is zero by construction — not a result.
+
+Three families are reported:
+
+| Family | Reference | Question |
+|---|---|---|
+| within BEM | BEM at 0.50 | has the BEM converged in torso resolution? |
+| within FEM | FEM at 0.50 | has the FEM converged? |
+| BEM vs FEM | BEM at that level | do the solvers disagree, and does it depend on the mesh? |
+
+**The comparison that matters** is the third against the first two. If the
+cross-solver curve is flatter than either within-solver curve, the solver
+difference is a property of the formulations, not of how finely the torso
+happens to be meshed. If the cross-solver gap shrinks as the mesh is refined,
+part of what looks like a solver difference is discretisation error and
+should be reported as such. The report states which of the two it is.
+
 ### Reading `analyse_convergence_all`
 
 Sweeps that agree with each other **and** with the production model have

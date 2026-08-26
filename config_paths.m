@@ -110,6 +110,7 @@ convergence_fem_base = fullfile(data_root, 'Convergence', 'fem');
 
 convergence_fem_volume  = fullfile(convergence_fem_base, 'convergence');
 convergence_fem_surface = fullfile(convergence_fem_base, 'surface_convergence_allsurf');
+convergence_fem_torso   = fullfile(convergence_fem_base, 'surface_convergence_torso');
 convergence_fem_cord    = fullfile(convergence_fem_base, 'cord_refinement');
 convergence_bem_allsurf = fullfile(convergence_bem_base, 'convergence_allsurf');
 convergence_bem_torso   = fullfile(convergence_bem_base, 'convergence_torso');
