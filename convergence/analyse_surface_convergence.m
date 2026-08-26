@@ -154,16 +154,51 @@ for s = 1:size(specs, 1)
 
     [~, imax] = max(keeps);
     ref_L     = have(imax);
-    ref_key   = sprintf('%s_L%02d', meth, ref_L);
+
+    % REFERENCE: the published model for THIS solver.
+    %
+    % Each sweep is reported against its own published lead field — the BEM
+    % sweep against the published BEM, the FEM sweep against the published
+    % FEM. Referencing the finest level of the sweep answers "did the sweep
+    % settle"; referencing the published model answers "how far is each
+    % level from the result the paper reports", which is on a scale the
+    % reader already has from every other analysis.
+    %
+    % Falls back to the finest level if the published file is missing, and
+    % says so in the report rather than silently changing meaning.
+    ref_opts = struct('orientation_labels', {orientation_labels}, ...
+                      'n_sensor_axes', n_sensor_axes, 'is_meg', is_meg, ...
+                      'bem_file', core_bem_file, 'fem_file', core_fem_file, ...
+                      'which', {{meth}});
+    [lf, ~, refs] = load_original_references(lf, struct(), ref_opts);
+
+    if isempty(refs)
+        ref_key   = sprintf('%s_L%02d', meth, ref_L);
+        ref_label = sprintf('finest level in this sweep (keep = %.2f)', ...
+                            man(ref_L).keep_fraction);
+        using_og  = false;
+        warning(['%s: published lead field not found, so levels are ' ...
+                 'reported against the finest level of the sweep. That ' ...
+                 'shows the sweep settled, not what it settled on.'], upper(meth));
+    else
+        ref_key   = refs(1).key;
+        ref_label = refs(1).label;
+        using_og  = true;
+    end
 
     n_lvl = numel(have);
     Rm = struct('re', nan(n_lvl, n_ori), 'r2', nan(n_lvl, n_ori), ...
                 'keeps', keeps, 'h', h_srf, 'dof', dofs, 'time', tms, ...
+                'ref_key', ref_key, 'ref_label', ref_label, ...
+                'using_og', using_og, ...
                 'ref_keep', man(ref_L).keep_fraction);
 
     fprintf(fid, '\n%s\n%s SURFACE CONVERGENCE\n%s\n', ...
         repmat('=',1,78), upper(meth), repmat('=',1,78));
-    fprintf(fid, 'Reference: keep = %.2f\n', man(ref_L).keep_fraction);
+    fprintf(fid, 'Reference: %s\n', ref_label);
+    if ~using_og
+        fprintf(fid, '  (published model unavailable — self-convergence only)\n');
+    end
     if strcmp(meth, 'fem')
         fprintf(fid, 'Volume bound held fixed at %g mm^3.\n', ...
             man(have(1)).tetgen_maxvol_mm3);
@@ -226,13 +261,30 @@ for s = 1:size(specs, 1)
         end
     end
 
-    % Error at the production setting
+    % Error at the production setting. With the published model as reference
+    % this row is informative — it says how closely the sweep at the
+    % production decimation reproduces the published lead field, which is
+    % also a check that the sweep and production runs agree. Only when the
+    % reference falls back to the finest level of the sweep does the
+    % production row need excluding, and then only if it IS that level.
     ip = find(abs(keeps - production_keep) < 1e-9, 1);
-    if ~isempty(ip) && have(ip) ~= ref_L
+    if ~isempty(ip) && (using_og || have(ip) ~= ref_L)
         fprintf(fid, '\n  At the production setting (keep = %.2f):\n', production_keep);
         for oi = 1:n_ori
             fprintf(fid, '    [%s] RE = %.3f%%   r2 = %.5f\n', ...
                 orientation_labels{oi}, Rm.re(ip,oi), Rm.r2(ip,oi));
+        end
+        if using_og
+            worst_prod = max(Rm.re(ip,:));
+            if worst_prod < 1
+                fprintf(fid, '    -> reproduces the published %s to within %.3f%%.\n', ...
+                    upper(meth), worst_prod);
+            else
+                fprintf(fid, ['    -> differs from the published %s by up to %.3f%%. ' ...
+                    'The sweep and\n       production runs differ in something ' ...
+                    'other than surface resolution;\n       check before quoting ' ...
+                    'the other levels.\n'], upper(meth), worst_prod);
+            end
         end
     end
 
@@ -284,15 +336,21 @@ fclose(fid);
 fclose(fcsv);
 
 
-% AGAINST THE REPORTED MODELS
+% SELF-CONVERGENCE, AS A SECONDARY CHECK
 %
-% Each sweep above is measured against its own finest level, which shows it
-% settled. This measures every level against the production models,
-% which shows what it settled on.
+% The tables above are against each solver's published model. This measures
+% every level against the finest level of its own sweep, which answers the
+% narrower question of whether the sweep settled. The finest level is zero
+% here by construction.
+%
+% Plotted behind the published-model curve so the two scales are visible
+% together: a sweep that has settled but sits at a constant offset from the
+% published model has converged to a different answer, and only the pair of
+% curves shows that.
 
-ref_opts = struct('orientation_labels', {orientation_labels}, ...
-                  'n_sensor_axes', n_sensor_axes, 'is_meg', is_meg, ...
-                  'bem_file', core_bem_file, 'fem_file', core_fem_file);
+fid2 = fopen(fullfile(save_dir, 'surface_convergence_selfcheck.txt'), 'w');
+fprintf(fid2, '=== SELF-CONVERGENCE (vs the finest level of each sweep) ===\n');
+fprintf(fid2, 'Generated : %s\n\n', datestr(now));
 
 for s = 1:size(specs, 1)
     meth = specs{s,1};
@@ -300,45 +358,49 @@ for s = 1:size(specs, 1)
 
     lf_m   = R.([meth '_lf']);
     Rm_m   = R.(meth);
-    man_m  = R.([meth '_man']);
     have_m = R.([meth '_have']);
+    n_lvl  = numel(have_m);
 
-    [lf_m, ~, refs] = load_original_references(lf_m, struct(), ref_opts);
-    if isempty(refs), continue; end
+    [~, imx]   = max(Rm_m.keeps);
+    self_key   = sprintf('%s_L%02d', meth, have_m(imx));
+    R_self     = nan(n_lvl, n_ori);
 
-    n_lvl = numel(have_m);
-    EXT = struct('label', {refs.label}, ...
-                 're', repmat({nan(n_lvl, n_ori)}, 1, numel(refs)));
+    fprintf(fid2, '%s: reference = keep %.2f\n', upper(meth), Rm_m.keeps(imx));
+    fprintf(fid2, '  %6s %5s %9s\n', 'keep', 'ori', 'RE(%)');
 
-    for e = 1:numel(refs)
-        for i = 1:n_lvl
-            for oi = 1:n_ori
-                vo = struct('vector_mode','orientation', ...
-                            'orientation', orientation_labels{oi});
-                try
-                    [LA, LB] = lf_pair_vectors(lf_m, refs(e).key, ...
-                        sprintf('%s_L%02d', meth, have_m(i)), target_axis, vo);
-                catch
-                    continue;
-                end
-                Mx = lf_metrics_series(LA, LB, metric_opts);
-                kp = 2:(size(LA,2)-1);
-                EXT(e).re(i,oi) = median(Mx.re(kp), 'omitnan');
+    for i = 1:n_lvl
+        for oi = 1:n_ori
+            vo = struct('vector_mode','orientation', ...
+                        'orientation', orientation_labels{oi});
+            try
+                [LA, LB] = lf_pair_vectors(lf_m, self_key, ...
+                    sprintf('%s_L%02d', meth, have_m(i)), target_axis, vo);
+            catch
+                continue;
             end
+            Ms = lf_metrics_series(LA, LB, metric_opts);
+            kp = 2:(size(LA,2)-1);
+            R_self(i,oi) = median(Ms.re(kp), 'omitnan');
+            fprintf(fid2, '  %6.2f %5s %9.3f\n', Rm_m.keeps(i), ...
+                orientation_labels{oi}, R_self(i,oi));
         end
     end
+    fprintf(fid2, '\n');
 
+    EXT = struct('label', {Rm_m.ref_label}, 're', {Rm_m.re});
     plot_convergence_vs_reference(Rm_m.keeps(:), EXT, struct( ...
         'orientation_labels', {orientation_labels}, ...
         'ori_titles', ori_titles, ...
         'xlabel', 'Surface keep fraction', ...
-        'title', sprintf('%s surface refinement against the reported models', ...
+        'title', sprintf('%s surface refinement against the published model', ...
                  upper(meth)), ...
         'save_dir', save_dir, ...
         'fname', sprintf('surface_convergence_vs_original_%s', meth), ...
         'reverse_x', false, 'log_x', false, 'colors', pair_colors, ...
-        'self_re', Rm_m.re));
+        'self_re', R_self));
 end
+
+fclose(fid2);
 
 
 % FIGURES

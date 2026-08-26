@@ -149,6 +149,47 @@ Cross-solver comparisons in this sweep may need a scale repair (§7).
 Several sweeps, measuring different things. `analyse_convergence_all`
 cross-compares them all, plus both production models.
 
+### What every sweep is measured against
+
+Each sweep reports levels against the **published model for its own solver**
+— the BEM sweeps against the published BEM, the FEM sweeps against the
+published FEM. An error is then a distance from the result the paper
+reports, on the same scale as every other comparison in the toolbox, rather
+than a distance from a reference that only exists inside that one sweep.
+
+Self-convergence against the sweep's own finest level is still reported, in
+a separate section of each report and as the faint curve behind the main one
+in the `*_vs_original_*` figures. The two answer different questions:
+
+| Reference | Question answered |
+|---|---|
+| sweep's finest level | did the sweep settle? |
+| published model | what did it settle on? |
+
+Both are needed. A sweep can settle cleanly and still sit at a constant
+offset from the published model — that means it converged to a *different*
+answer, and only the two curves together reveal it. If the published file is
+missing, each script falls back to the finest level and says so in the
+report rather than changing meaning silently.
+
+The exception is `analyse_torso_decimation`, which references the keep = 0.50
+level of its own sweep — see below for why.
+
+### Cord refinement reports two references
+
+`analyse_cord_refinement` measures every level against **both** published
+models, and the pair is the analysis:
+
+- **vs the published FEM** — did refining the cord change the FEM's answer?
+- **vs the published BEM** — did refining the cord move the FEM towards the
+  BEM?
+
+The report states which. If the distance to the BEM barely moves while the
+cord is refined by orders of magnitude, the BEM–FEM difference is a property
+of the two formulations, not a near-source meshing artefact. If it closes
+appreciably, part of what was read as a solver difference was
+discretisation, and that has to be said.
+
 | Sweep | Varies | Typically binding? |
 |---|---|---|
 | FEM volume bound | max tetrahedron volume | often **not** — see below |

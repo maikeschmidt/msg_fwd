@@ -103,13 +103,21 @@ t_total  = [man(have).time_mesh_s] + [man(have).time_solve_s];
 ref_L     = have(imin);
 ref_key   = sprintf('fem_C%02d', ref_L);
 
-% EXTERNAL REFERENCES
+% REFERENCES
 %
-% The sweep compares refinement levels against the finest level, which shows
-% self-convergence. Two further references say whether the refined result
-% agrees with the production models:
+% Every level is reported against the PUBLISHED models, not against the
+% finest level of the sweep. Referencing the finest level answers "did the
+% sweep settle"; referencing the published models answers "how far is each
+% level from the result the paper reports", which is the question a reader
+% has and is on a scale they can already interpret.
+%
 %   the unrefined FEM realistic  — did refining the cord change the answer?
-%   the BEM realistic            — does the refined FEM agree with the BEM?
+%   the BEM realistic            — does refining the cord move the FEM
+%                                  towards or away from the BEM?
+%
+% Reading the two together is the point of this analysis: if refining the
+% cord leaves the FEM where it was but does not close the gap to the BEM,
+% the BEM-FEM difference is not a near-source discretisation artefact.
 %
 % Both come from config_paths (core_fem_file, core_bem_file); either being
 % absent is reported and skipped rather than fatal.
@@ -140,14 +148,29 @@ for e = 1:size(ext_specs, 1)
     fprintf('  external reference loaded: %s\n', ext_specs{e,4});
 end
 
-n_ori = numel(orientation_labels);
-n_lvl = numel(have);
+% The published models are the primary references. Without them the sweep
+% can still be read against its own finest level, but only as a
+% self-convergence check — say so rather than presenting it as the same
+% thing.
+prim = ext_refs;
+if isempty(prim)
+    prim = struct('key', ref_key, ...
+                  'label', sprintf('finest cord mesh (%g mm^3)', ...
+                                   man(ref_L).cord_maxvol_mm3));
+    warning(['Neither published model was found, so levels are reported ' ...
+             'against the finest level of this sweep. That shows the sweep ' ...
+             'settled, not what it settled on.']);
+end
+using_original = ~isempty(ext_refs);
+
+n_ori  = numel(orientation_labels);
+n_lvl  = numel(have);
+n_prim = numel(prim);
 
 fprintf('Levels loaded    : %d\n', n_lvl);
 fprintf('Cord bounds      : %s mm^3\n', mat2str(cord_mm3, 3));
 fprintf('Global bound     : %g mm^3 (fixed)\n', man(have(1)).global_maxvol_mm3);
-fprintf('Reference        : cord maxvol = %g mm^3, %d cord tets\n\n', ...
-    man(ref_L).cord_maxvol_mm3, man(ref_L).n_tets_cord);
+fprintf('References       : %s\n\n', strjoin({prim.label}, ' | '));
 
 
 % COMPUTE
@@ -160,75 +183,98 @@ fprintf(fid, 'Generated : %s\n', datestr(now));
 fprintf(fid, 'Array     : %s   Sensor axis: %d\n', array_name, target_axis);
 fprintf(fid, 'Global tetrahedron bound held FIXED at %g mm^3.\n', ...
     man(have(1)).global_maxvol_mm3);
-fprintf(fid, 'Only the spinal cord compartment is refined.\n');
-fprintf(fid, 'Reference : finest cord bound, %g mm^3 (%d cord tets)\n\n', ...
-    man(ref_L).cord_maxvol_mm3, man(ref_L).n_tets_cord);
+fprintf(fid, 'Only the spinal cord compartment is refined.\n\n');
+fprintf(fid, 'Every level is reported against the PUBLISHED models, so each\n');
+fprintf(fid, 'number says how far that level sits from the result the paper\n');
+fprintf(fid, 'reports. Self-convergence against the finest level of the sweep\n');
+fprintf(fid, 'is reported separately further down.\n\n');
 
-fprintf(fcsv, ['cord_maxvol_mm3,h_cord_mm,n_tets_cord,n_tets_total,time_s,' ...
+fprintf(fcsv, ['reference,cord_maxvol_mm3,h_cord_mm,n_tets_cord,n_tets_total,time_s,' ...
     'orientation,re_median,re_ci_lo,re_ci_hi,re_max,r2_median,r2_min,' ...
     'rdm_median,gain_pct\n']);
 
-R = struct('re', nan(n_lvl, n_ori), 'r2', nan(n_lvl, n_ori), ...
-           'rdm', nan(n_lvl, n_ori), 'gain', nan(n_lvl, n_ori));
+R = struct('key', {prim.key}, 'label', {prim.label}, ...
+           're',   repmat({nan(n_lvl, n_ori)}, 1, n_prim), ...
+           'r2',   repmat({nan(n_lvl, n_ori)}, 1, n_prim), ...
+           'rdm',  repmat({nan(n_lvl, n_ori)}, 1, n_prim), ...
+           'gain', repmat({nan(n_lvl, n_ori)}, 1, n_prim));
 S_dec = struct('label', {}, 're', {}, 'gain', {}, 'rdm', {}, 'rsq', {});
 dist  = [];
 
-fprintf(fid, '  %10s %9s %11s %9s %5s %9s %9s\n', ...
-    'cord mm^3', 'h (mm)', 'cord tets', 'time(s)', 'ori', 'RE(%)', 'r2');
+for p = 1:n_prim
 
-for i = 1:n_lvl
-    L   = have(i);
-    key = sprintf('fem_C%02d', L);
-    kk  = numel(S_dec) + 1;
-    store_this = (i == 1) || (L == ref_L);
-    if store_this
-        S_dec(kk).label = sprintf('cord maxvol = %g mm^3', man(L).cord_maxvol_mm3);
-    end
+    fprintf(fid, '%s\nLEVELS vs %s\n%s\n', repmat('-',1,78), ...
+        upper(prim(p).label), repmat('-',1,78));
+    fprintf(fid, '  %10s %9s %11s %9s %5s %9s %9s\n', ...
+        'cord mm^3', 'h (mm)', 'cord tets', 'time(s)', 'ori', 'RE(%)', 'r2');
 
-    for oi = 1:n_ori
-        ori   = orientation_labels{oi};
-        vopts = struct('vector_mode','orientation','orientation',ori);
+    for i = 1:n_lvl
+        L   = have(i);
+        key = sprintf('fem_C%02d', L);
 
-        [LA, LB] = lf_pair_vectors(lf, ref_key, key, target_axis, vopts);
-        M = lf_metrics_series(LA, LB, metric_opts);
-
-        ks  = 2:(size(LA,2)-1);
-        re  = M.re(ks);
-        r2  = M.rsq(ks);
-        rdm = M.rdm(ks);
-        gn  = (exp(M.lnmag(ks)) - 1) * 100;
-
-        if isempty(dist), dist = ks * src_spacing_mm; end
-
-        R.re(i,oi)   = median(re,  'omitnan');
-        R.r2(i,oi)   = median(r2,  'omitnan');
-        R.rdm(i,oi)  = median(rdm, 'omitnan');
-        R.gain(i,oi) = median(gn,  'omitnan');
-
-        ci = st_boot_ci_median(re, n_boot, ci_level);
-
-        fprintf(fid, '  %10g %9.3f %11d %9.1f %5s %9.3f %9.5f\n', ...
-            man(L).cord_maxvol_mm3, man(L).h_cord_mm, man(L).n_tets_cord, ...
-            t_total(i), ori, R.re(i,oi), R.r2(i,oi));
-
-        fprintf(fcsv, '%g,%.4f,%d,%d,%.2f,%s,%.4f,%.4f,%.4f,%.4f,%.6f,%.6f,%.6f,%.4f\n', ...
-            man(L).cord_maxvol_mm3, man(L).h_cord_mm, man(L).n_tets_cord, ...
-            man(L).n_tets, t_total(i), ori, R.re(i,oi), ci(1), ci(2), max(re), ...
-            R.r2(i,oi), min(r2), R.rdm(i,oi), R.gain(i,oi));
-
+        % Decomposition is kept for the production (coarsest) level and the
+        % finest, against each reference.
+        store_this = (i == 1) || (L == ref_L);
         if store_this
-            if oi == 1
-                for f = {'re','gain','rdm','rsq'}
-                    S_dec(kk).(f{1}) = nan(n_ori, numel(ks));
+            kk = numel(S_dec) + 1;
+            S_dec(kk).label = sprintf('%g mm^3 vs %s', ...
+                man(L).cord_maxvol_mm3, prim(p).label);
+        end
+
+        for oi = 1:n_ori
+            ori   = orientation_labels{oi};
+            vopts = struct('vector_mode','orientation','orientation',ori);
+
+            % The reference is the FIRST argument: the published model is
+            % the denominator of the relative error.
+            [LA, LB] = lf_pair_vectors(lf, prim(p).key, key, target_axis, vopts);
+            M = lf_metrics_series(LA, LB, metric_opts);
+
+            ks  = 2:(size(LA,2)-1);
+            re  = M.re(ks);
+            r2  = M.rsq(ks);
+            rdm = M.rdm(ks);
+            gn  = (exp(M.lnmag(ks)) - 1) * 100;
+
+            if isempty(dist), dist = ks * src_spacing_mm; end
+
+            R(p).re(i,oi)   = median(re,  'omitnan');
+            R(p).r2(i,oi)   = median(r2,  'omitnan');
+            R(p).rdm(i,oi)  = median(rdm, 'omitnan');
+            R(p).gain(i,oi) = median(gn,  'omitnan');
+
+            ci = st_boot_ci_median(re, n_boot, ci_level);
+
+            fprintf(fid, '  %10g %9.3f %11d %9.1f %5s %9.3f %9.5f\n', ...
+                man(L).cord_maxvol_mm3, man(L).h_cord_mm, man(L).n_tets_cord, ...
+                t_total(i), ori, R(p).re(i,oi), R(p).r2(i,oi));
+
+            fprintf(fcsv, '%s,%g,%.4f,%d,%d,%.2f,%s,%.4f,%.4f,%.4f,%.4f,%.6f,%.6f,%.6f,%.4f\n', ...
+                prim(p).key, man(L).cord_maxvol_mm3, man(L).h_cord_mm, ...
+                man(L).n_tets_cord, man(L).n_tets, t_total(i), ori, ...
+                R(p).re(i,oi), ci(1), ci(2), max(re), ...
+                R(p).r2(i,oi), min(r2), R(p).rdm(i,oi), R(p).gain(i,oi));
+
+            if store_this
+                if oi == 1
+                    for f = {'re','gain','rdm','rsq'}
+                        S_dec(kk).(f{1}) = nan(n_ori, numel(ks));
+                    end
                 end
+                S_dec(kk).re(oi,:)   = re;
+                S_dec(kk).gain(oi,:) = gn;
+                S_dec(kk).rdm(oi,:)  = rdm;
+                S_dec(kk).rsq(oi,:)  = r2;
             end
-            S_dec(kk).re(oi,:)   = re;
-            S_dec(kk).gain(oi,:) = gn;
-            S_dec(kk).rdm(oi,:)  = rdm;
-            S_dec(kk).rsq(oi,:)  = r2;
         end
     end
+    fprintf(fid, '\n');
 end
+
+% Which reference is which, for the verdict below
+p_fem = find(strcmp({prim.key}, 'fem_original'), 1);
+if isempty(p_fem), p_fem = 1; end
+p_bem = find(strcmp({prim.key}, 'bem_original'), 1);
 
 
 % CONVERGENCE VERDICT
@@ -236,10 +282,12 @@ end
 fprintf(fid, '\n%s\nIS THE NEAR-SOURCE FIELD RESOLVED?\n%s\n', ...
     repmat('=',1,78), repmat('=',1,78));
 
-% Observed order against cord element size, excluding the reference
-fprintf(fid, '\nObserved trend (slope of log RE vs log h_cord):\n');
+% Observed trend against cord element size, measured against the FEM
+% original. The reference is outside the sweep, so no level is excluded.
+fprintf(fid, '\nObserved trend vs %s (slope of log RE vs log h_cord):\n', ...
+    prim(p_fem).label);
 for oi = 1:n_ori
-    e = R.re(:, oi)';
+    e = R(p_fem).re(:, oi)';
     m = (e > 0) & isfinite(e) & isfinite(h_cord) & (h_cord > 0);
     if sum(m) >= 3
         p = polyfit(log(h_cord(m)), log(e(m)), 1);
@@ -249,31 +297,73 @@ for oi = 1:n_ori
     end
 end
 
-% Production level = the coarsest, i.e. no local refinement
-i_prod = 1;
-fprintf(fid, '\nAt the PRODUCTION mesh (cord bound = global bound = %g mm^3),\n', ...
-    man(have(i_prod)).cord_maxvol_mm3);
-fprintf(fid, 'relative to the most refined cord mesh computed:\n');
+% The most refined cord mesh is the level furthest from the production
+% setting, so it carries the largest possible refinement effect.
+i_fine = find(have == ref_L, 1);
+i_prod = 1;   % coarsest = production, no local refinement
+
+fprintf(fid, '\nAt the MOST REFINED cord mesh (%g mm^3), relative to\n', ...
+    man(ref_L).cord_maxvol_mm3);
+fprintf(fid, '%s:\n', prim(p_fem).label);
 for oi = 1:n_ori
     fprintf(fid, '  %-4s RE = %6.3f%%   r2 = %.5f   RDM = %.4f   amplitude %+.3f%%\n', ...
-        orientation_labels{oi}, R.re(i_prod,oi), R.r2(i_prod,oi), ...
-        R.rdm(i_prod,oi), R.gain(i_prod,oi));
+        orientation_labels{oi}, R(p_fem).re(i_fine,oi), R(p_fem).r2(i_fine,oi), ...
+        R(p_fem).rdm(i_fine,oi), R(p_fem).gain(i_fine,oi));
 end
 
-worst = max(R.re(i_prod, :));
+worst = max(R(p_fem).re(i_fine, :));
 fprintf(fid, '\nSUMMARY:\n');
 if worst <= tol_pct
     fprintf(fid, ['Refining the mesh around the spinal cord by a factor of %.0f in\n' ...
-        'element volume changed the sensor-level lead fields by at most\n' ...
-        '%.3f%%. The St. Venant source model is therefore stably resolved at\n' ...
-        'the production mesh, and the reported results do not depend on\n' ...
-        'near-source discretisation.\n'], ...
+        'element volume moved the sensor-level lead fields by at most %.3f%%\n' ...
+        'from the published model. The St. Venant source model is therefore\n' ...
+        'stably resolved at the production mesh, and the reported results do\n' ...
+        'not depend on near-source discretisation.\n'], ...
         man(have(i_prod)).cord_maxvol_mm3 / man(ref_L).cord_maxvol_mm3, worst);
 else
-    fprintf(fid, ['Refining the cord mesh changed the sensor-level lead fields by\n' ...
-        'up to %.3f%%, which EXCEEDS the %.1f%% tolerance. The near-source\n' ...
-        'discretisation is not negligible at the production mesh and should\n' ...
-        'either be refined locally or reported as a limitation.\n'], worst, tol_pct);
+    fprintf(fid, ['Refining the cord mesh moved the sensor-level lead fields by\n' ...
+        'up to %.3f%% from the published model, which EXCEEDS the %.1f%%\n' ...
+        'tolerance. The near-source discretisation is not negligible at the\n' ...
+        'production mesh and should either be refined locally or reported as\n' ...
+        'a limitation.\n'], worst, tol_pct);
+end
+
+% DOES REFINING THE CORD CLOSE THE BEM-FEM GAP?
+%
+% The question the two references answer together. If the distance to the
+% BEM barely moves while the cord is refined, the BEM-FEM difference is a
+% property of the two formulations rather than a near-source meshing
+% artefact — which is the claim the paper needs to make.
+
+if ~isempty(p_bem)
+    fprintf(fid, '\n%s\nDOES CORD REFINEMENT MOVE THE FEM TOWARDS THE BEM?\n%s\n', ...
+        repmat('=',1,78), repmat('=',1,78));
+    fprintf(fid, '  %10s %5s %12s %12s\n', ...
+        'cord mm^3', 'ori', 'vs FEM og', 'vs BEM og');
+    for i = 1:n_lvl
+        for oi = 1:n_ori
+            fprintf(fid, '  %10g %5s %11.3f%% %11.3f%%\n', ...
+                man(have(i)).cord_maxvol_mm3, orientation_labels{oi}, ...
+                R(p_fem).re(i,oi), R(p_bem).re(i,oi));
+        end
+    end
+
+    fprintf(fid, '\n');
+    for oi = 1:n_ori
+        d_bem = R(p_bem).re(i_fine,oi) - R(p_bem).re(i_prod,oi);
+        d_fem = R(p_fem).re(i_fine,oi) - R(p_fem).re(i_prod,oi);
+        fprintf(fid, ['  [%s] refining from %g to %g mm^3 changes the distance to\n' ...
+            '       the BEM by %+.3f%% and to the FEM original by %+.3f%%.\n'], ...
+            orientation_labels{oi}, man(have(i_prod)).cord_maxvol_mm3, ...
+            man(ref_L).cord_maxvol_mm3, d_bem, d_fem);
+        if abs(d_bem) < abs(R(p_bem).re(i_prod,oi)) * 0.1
+            fprintf(fid, ['       -> the gap to the BEM is essentially unchanged, so it is\n' ...
+                '          not a near-source discretisation artefact.\n']);
+        else
+            fprintf(fid, ['       -> the gap to the BEM moves appreciably with cord\n' ...
+                '          resolution; part of it is discretisation.\n']);
+        end
+    end
 end
 
 % Cost of local vs global refinement
@@ -289,93 +379,71 @@ fprintf(fid, ['\nLocal refinement buys near-source accuracy at a fraction of the
     'extra elements are confined to the cord.\n']);
 
 
-% FINEST LEVEL AGAINST THE EXTERNAL REFERENCES
-if ~isempty(ext_refs)
-    fprintf(fid, '\n%s\nFINEST REFINEMENT vs THE REPORTED MODELS\n%s\n', ...
-        repmat('=',1,74), repmat('=',1,74));
-    fprintf(fid, ['Refining the cord only matters if it moves the answer away\n' ...
-                  'from the production models. Compared here at the finest\n' ...
-                  'cord bound.\n\n']);
-    fprintf(fid, '  %-28s %-5s %9s %9s %9s %10s\n', ...
-        'Reference', 'ori', 'RE(%)', 'r2', 'RDM', 'gain(%)');
+% SELF-CONVERGENCE, AS A SECONDARY CHECK
+%
+% The tables above are against the published models. This one is each level
+% against the finest level of the sweep, which answers the different and
+% narrower question of whether the sweep itself settled. The finest level is
+% zero here by construction.
 
-    % Per-LEVEL RE against each reference, so the figure can show the whole
-    % sweep rather than only the finest level.
-    EXT = struct('label', {ext_refs.label}, ...
-                 're', repmat({nan(n_lvl, n_ori)}, 1, numel(ext_refs)));
-    for e = 1:numel(ext_refs)
-        for i = 1:n_lvl
-            for oi = 1:n_ori
-                vo = struct('vector_mode','orientation', ...
-                            'orientation', orientation_labels{oi});
-                try
-                    [LA, LB] = lf_pair_vectors(lf, ext_refs(e).key, ...
-                        sprintf('fem_C%02d', have(i)), target_axis, vo);
-                catch
-                    continue;
-                end
-                Mx = lf_metrics_series(LA, LB, metric_opts);
-                kp = 2:(size(LA,2)-1);
-                EXT(e).re(i,oi) = median(Mx.re(kp), 'omitnan');
-            end
-        end
-    end
+fprintf(fid, '\n%s\nSELF-CONVERGENCE (vs the finest cord mesh in this sweep)\n%s\n', ...
+    repmat('=',1,78), repmat('=',1,78));
+fprintf(fid, 'Reference: cord bound %g mm^3, %d cord tets.\n', ...
+    man(ref_L).cord_maxvol_mm3, man(ref_L).n_tets_cord);
+fprintf(fid, 'This shows the sweep settled; it does not show what it settled on.\n\n');
+fprintf(fid, '  %10s %5s %9s %9s\n', 'cord mm^3', 'ori', 'RE(%)', 'r2');
 
-    for e = 1:numel(ext_refs)
-        for oi = 1:n_ori
-            vopts = struct('vector_mode','orientation', ...
-                           'orientation', orientation_labels{oi});
-            try
-                [LA, LB] = lf_pair_vectors(lf, ext_refs(e).key, ref_key, ...
-                    target_axis, vopts);
-            catch
-                continue;
-            end
-            M = lf_metrics_series(LA, LB, metric_opts);
-            keep = 2:(size(LA,2)-1);
-            ln   = median(M.lnmag(keep), 'omitnan');
-            fprintf(fid, '  %-28s %-5s %9.3f %9.5f %9.4f %+10.2f\n', ...
-                ext_refs(e).label, orientation_labels{oi}, ...
-                median(M.re(keep),'omitnan'), median(M.rsq(keep),'omitnan'), ...
-                median(M.rdm(keep),'omitnan'), (exp(ln)-1)*100);
-
-            fprintf(fcsv, '%g,%g,%d,%d,%g,%s_vs_%s,%.4f,,,%.4f,%.6f,%.6f,%.6f,%.4f\n', ...
-                man(ref_L).cord_maxvol_mm3, man(ref_L).h_cord_mm, ...
-                man(ref_L).n_tets_cord, man(ref_L).n_tets, NaN, ...
-                ext_refs(e).key, orientation_labels{oi}, ...
-                median(M.re(keep),'omitnan'), max(M.re(keep)), ...
-                median(M.rsq(keep),'omitnan'), min(M.rsq(keep)), ...
-                median(M.rdm(keep),'omitnan'), (exp(ln)-1)*100);
-        end
+R_self = nan(n_lvl, n_ori);
+for i = 1:n_lvl
+    for oi = 1:n_ori
+        vo = struct('vector_mode','orientation', ...
+                    'orientation', orientation_labels{oi});
+        [LA, LB] = lf_pair_vectors(lf, ref_key, sprintf('fem_C%02d', have(i)), ...
+            target_axis, vo);
+        Ms = lf_metrics_series(LA, LB, metric_opts);
+        kp = 2:(size(LA,2)-1);
+        R_self(i,oi) = median(Ms.re(kp), 'omitnan');
+        fprintf(fid, '  %10g %5s %9.3f %9.5f\n', ...
+            man(have(i)).cord_maxvol_mm3, orientation_labels{oi}, ...
+            R_self(i,oi), median(Ms.rsq(kp), 'omitnan'));
     end
 end
 
-% FIGURE: the sweep against the production models
-if exist('EXT','var') && ~isempty(EXT)
-    plot_convergence_vs_reference(cord_mm3, EXT, struct( ...
-        'orientation_labels', {orientation_labels}, ...
-        'ori_titles',  ori_titles, ...
-        'xlabel',      'Cord-local max tetrahedron volume (mm^3)', ...
-        'title',       'Cord refinement against the reported models', ...
-        'save_dir',    save_dir, ...
-        'fname',       'cord_refinement_vs_original', ...
-        'reverse_x',   true, ...
-        'log_x',       true, ...
-        'colors',      pair_colors, ...
-        'self_re',     R.re));
-end
+
+% FIGURE: the sweep against the published models
+%
+% One line per reference, so the FEM and BEM distances are read on the same
+% axes. self_re draws the self-convergence curve behind them for scale.
+
+EXT = struct('label', {R.label}, 're', {R.re});
+plot_convergence_vs_reference(cord_mm3, EXT, struct( ...
+    'orientation_labels', {orientation_labels}, ...
+    'ori_titles',  ori_titles, ...
+    'xlabel',      'Cord-local max tetrahedron volume (mm^3)', ...
+    'title',       'Cord refinement against the published models', ...
+    'save_dir',    save_dir, ...
+    'fname',       'cord_refinement_vs_original', ...
+    'reverse_x',   true, ...
+    'log_x',       true, ...
+    'colors',      pair_colors, ...
+    'self_re',     R_self));
 
 fclose(fid);
 fclose(fcsv);
 
-fprintf('  Production-level RE: %s\n', ...
-    strjoin(arrayfun(@(x) sprintf('%.3f%%', x), R.re(i_prod,:), 'uni', 0), ' / '));
+for p = 1:n_prim
+    fprintf('  Most refined vs %-26s : %s\n', prim(p).label, ...
+        strjoin(arrayfun(@(x) sprintf('%.3f%%', x), R(p).re(i_fine,:), 'uni', 0), ' / '));
+end
 
 
 % FIGURES
+%
+% One row per reference, so the distance to the published FEM and to the
+% published BEM are read on the same axes as the mesh is refined.
 
-fig = figure('Color','w','Position',[80 80 1500 460]);
-tl  = tiledlayout(1, 3, 'TileSpacing','compact','Padding','loose');
+fig = figure('Color','w','Position',[80 80 1500 460*n_prim]);
+tl  = tiledlayout(n_prim, 3, 'TileSpacing','compact','Padding','loose');
 title(tl, sprintf(['Near-source refinement: global bound fixed at %g mm^3, ' ...
     'cord bound varied — axis %d'], man(have(1)).global_maxvol_mm3, target_axis), ...
     'FontSize', 14, 'FontWeight','bold');
@@ -384,19 +452,26 @@ xs = {h_cord, 'Cord element size h (mm)'; ...
       n_cord, 'Cord tetrahedra'; ...
       t_total, 'Compute time (s)'};
 
-for k = 1:3
-    ax = nexttile(tl); hold(ax, 'on');
-    for oi = 1:n_ori
-        y = R.re(:, oi)'; m = y > 0;
-        plot(ax, xs{k,1}(m), y(m), '-o', 'LineWidth', 2, ...
-            'DisplayName', ori_titles.(orientation_labels{oi}));
+for p = 1:n_prim
+    for k = 1:3
+        ax = nexttile(tl); hold(ax, 'on');
+        for oi = 1:n_ori
+            y = R(p).re(:, oi)'; m = y > 0;
+            plot(ax, xs{k,1}(m), y(m), '-o', 'LineWidth', 2, ...
+                'DisplayName', ori_titles.(orientation_labels{oi}));
+        end
+        yline(ax, tol_pct, '--k', 'Alpha', 0.5, ...
+            'Label', sprintf('%.1f%%', tol_pct), 'HandleVisibility','off');
+        set(ax, 'XScale','log', 'YScale','log');
+        grid(ax,'on'); xlabel(ax, xs{k,2});
+        if k == 1
+            ylabel(ax, sprintf('RE vs %s (%%)', prim(p).label));
+            legend(ax, 'Location','best','FontSize',9);
+        else
+            ylabel(ax, 'RE (%)');
+        end
+        set(ax,'FontSize',11,'TickDir','out');
     end
-    yline(ax, tol_pct, '--k', 'Alpha', 0.5, ...
-        'Label', sprintf('%.1f%%', tol_pct), 'HandleVisibility','off');
-    set(ax, 'XScale','log', 'YScale','log');
-    grid(ax,'on'); xlabel(ax, xs{k,2}); ylabel(ax, 'RE vs finest cord mesh (%)');
-    if k == 1, legend(ax, 'Location','best','FontSize',9); end
-    set(ax,'FontSize',11,'TickDir','out');
 end
 exportgraphics(fig, fullfile(save_dir,'cord_refinement_curves.png'),'Resolution',600);
 saveas(fig, fullfile(save_dir,'cord_refinement_curves.fig'));
@@ -407,8 +482,8 @@ if ~isempty(S_dec)
         'dist',               dist, ...
         'orientation_labels', {orientation_labels}, ...
         'ori_titles',         ori_titles, ...
-        'title',              sprintf(['Near-source refinement vs finest cord ' ...
-                                       'mesh — axis %d'], target_axis), ...
+        'title',              sprintf(['Near-source refinement vs the published ' ...
+                                       'models — axis %d'], target_axis), ...
         'colors',             lines(max(numel(S_dec),3)), ...
         'save_dir',           save_dir, ...
         'save_name',          'cord_refinement_decomposition');

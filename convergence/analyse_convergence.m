@@ -1,12 +1,19 @@
 % analyse_convergence - Mesh convergence analysis for BEM and FEM
 %
-% THE REFERENCE SOLUTION
-%   Convergence is measured against the FINEST mesh in each sweep, since no
-%   analytic solution exists for this geometry. This is standard practice,
-%   and it means the reported errors are LOWER BOUNDS on the true
-%   discretisation error: the reference is itself approximate. The observed
-%   convergence order is the more robust statement, because it does not
-%   depend on the reference being exact.
+% THE REFERENCE
+%   Every level is measured against the PUBLISHED model for that solver —
+%   the BEM sweep against the published BEM, the FEM sweep against the
+%   published FEM. Each number is then a distance from the result the paper
+%   reports, on the same scale as every other comparison in the toolbox.
+%
+%   Self-convergence against the sweep's own finest level is reported
+%   separately at the end. The two answer different questions: the finest
+%   level says whether the sweep settled, the published model says what it
+%   settled on. A sweep can settle cleanly and still sit at a constant
+%   offset from the published model, and only the pair of curves shows it.
+%
+%   The observed convergence order is the more robust statement in either
+%   case, since it does not depend on the reference being exact.
 %
 % METRICS
 %   Uses lf_metrics via lf_metrics_series, so the convergence errors are in
@@ -86,8 +93,9 @@ fprintf(fid, 'Generated : %s\n', datestr(now));
 fprintf(fid, 'Array     : %s   Sensor axis: %d\n', array_name, target_axis);
 fprintf(fid, 'Metrics   : re_mode=%s  rsq_mode=%s (see lf_metrics.m)\n', ...
     metric_opts.re_mode, metric_opts.rsq_mode);
-fprintf(fid, 'Reference : the FINEST mesh in each sweep. Errors are therefore\n');
-fprintf(fid, '            lower bounds on true discretisation error.\n\n');
+fprintf(fid, 'Reference : the PUBLISHED model for each solver, so each error is\n');
+fprintf(fid, '            a distance from the reported result. Self-convergence\n');
+fprintf(fid, '            against each sweep''s finest level is reported at the end.\n\n');
 
 fprintf(fcsv, 'method,level,resolution_param,h_mm,n_dof,time_s,orientation,re_median,re_max,r2_median,r2_min\n');
 
@@ -123,15 +131,25 @@ if isfile(fem_manifest_file)
     if numel(have) < 2
         warning('Fewer than 2 FEM levels available — skipping FEM convergence.');
     else
-        % Reference = finest = smallest maxvol among those loaded
+        % Finest level, kept for the self-convergence check further down
         [~, imin] = min([man(have).maxvol_mm3]);
-        ref_L     = have(imin);
-        ref_key   = sprintf('fem_L%02d', ref_L);
+        fine_L    = have(imin);
+
+        % REFERENCE: the published FEM model.
+        % Each level is reported as a distance from the result the paper
+        % reports, rather than from the finest level of the sweep. The
+        % finest level answers "did the sweep settle"; the published model
+        % answers "how far is each level from what we report", which is the
+        % scale used by every other analysis in the toolbox.
+        [lf, ref_key, ref_label, using_og] = pick_reference(lf, 'fem', ...
+            sprintf('fem_L%02d', fine_L), ...
+            sprintf('finest level (maxvol = %g mm^3)', man(fine_L).maxvol_mm3), ...
+            orientation_labels, n_sensor_axes, is_meg, core_bem_file, core_fem_file);
+        ref_L = fine_L;   % only used to label the self-convergence section
 
         fprintf(fid, '\n%s\nFEM VOLUME MESH CONVERGENCE (h-refinement)\n%s\n', ...
             repmat('=',1,78), repmat('=',1,78));
-        fprintf(fid, 'Reference level: maxvol = %g mm^3, %d nodes, %d tets\n\n', ...
-            man(ref_L).maxvol_mm3, man(ref_L).n_nodes, man(ref_L).n_tets);
+        fprintf(fid, 'Reference: %s\n\n', ref_label);
 
         % Node counts per level, so the bound actually used can be
         % reported alongside the mesh size it produced.
@@ -155,8 +173,14 @@ if isfile(fem_manifest_file)
         results.fem_man = man;
         results.fem_have = have;
         results.fem_ref  = ref_L;
+        results.fem_using_og = using_og;
 
-        report_order_and_tradeoff(R, man, have, ref_L, 'FEM', ...
+        % With the published model as reference no level is excluded from
+        % the tolerance search, since none of them IS the reference. Pass
+        % NaN so nothing is excluded; pass the finest level only when the
+        % reference fell back to it.
+        excl = ternary_num(using_og, NaN, ref_L);
+        report_order_and_tradeoff(R, man, have, excl, 'FEM', ...
             'maxvol_mm3', 'mm^3', 'n_nodes', tol_pct, ...
             fem_production_maxvol_mm3, fid, orientation_labels);
     end
@@ -194,15 +218,20 @@ if isfile(bem_manifest_file)
     if numel(have) < 2
         warning('Fewer than 2 BEM levels available — skipping BEM convergence.');
     else
-        % Reference = finest = largest keep fraction
+        % Finest level, kept for the self-convergence check further down
         [~, imax] = max([man(have).keep_fraction]);
-        ref_L     = have(imax);
-        ref_key   = sprintf('bem_L%02d', ref_L);
+        fine_L    = have(imax);
+
+        % REFERENCE: the published BEM model — see the FEM block above.
+        [lf, ref_key, ref_label, using_og] = pick_reference(lf, 'bem', ...
+            sprintf('bem_L%02d', fine_L), ...
+            sprintf('finest level (keep = %.2f)', man(fine_L).keep_fraction), ...
+            orientation_labels, n_sensor_axes, is_meg, core_bem_file, core_fem_file);
+        ref_L = fine_L;
 
         fprintf(fid, '\n%s\nBEM SURFACE MESH CONVERGENCE\n%s\n', ...
             repmat('=',1,78), repmat('=',1,78));
-        fprintf(fid, 'Reference level: keep = %.2f, %d torso vertices\n\n', ...
-            man(ref_L).keep_fraction, man(ref_L).n_vert_torso);
+        fprintf(fid, 'Reference: %s\n\n', ref_label);
 
         R = analyse_sweep(lf, ref_key, have, man, 'bem', ...
             orientation_labels, target_axis, metric_opts, fid, fcsv, ...
@@ -213,8 +242,10 @@ if isfile(bem_manifest_file)
         results.bem_man  = man;
         results.bem_have = have;
         results.bem_ref  = ref_L;
+        results.bem_using_og = using_og;
 
-        report_order_and_tradeoff(R, man, have, ref_L, 'BEM', ...
+        excl = ternary_num(using_og, NaN, ref_L);
+        report_order_and_tradeoff(R, man, have, excl, 'BEM', ...
             'keep_fraction', 'fraction kept', 'n_vert_torso', tol_pct, ...
             bem_production_keep, fid, orientation_labels);
 
@@ -268,7 +299,7 @@ if isfield(results, 'fem') || isfield(results, 'bem')
     yline(tol_pct, '--k', 'Alpha', 0.5, ...
         'Label', sprintf('%.1f%% tolerance', tol_pct), 'HandleVisibility','off');
     set(gca, 'XScale','log', 'YScale','log');
-    grid on; xlabel('Total compute time (s)'); ylabel('Mean RE vs finest mesh (%)');
+    grid on; xlabel('Total compute time (s)'); ylabel('Mean RE vs the published model (%)');
     title({'Accuracy versus computation cost', ...
            'lower-left is better'}, 'FontSize', 13, 'FontWeight','bold');
     legend(lg, 'Location','best'); set(gca,'FontSize',11,'TickDir','out');
@@ -285,142 +316,13 @@ fprintf('Figures: %s\n', save_dir);
 
 
 %% ---------------------------------------------------------------------
+%%% ---------------------------------------------------------------------
 %% LOCAL FUNCTIONS
 %% ---------------------------------------------------------------------
 
-% AGAINST THE REPORTED MODELS
-%
-% The sweeps above measure each level against their own finest level, which
-% shows the sweep settled. This measures every level against the models the
-% paper reports, which shows what it settled ON.
-
-fprintf('\nComparing every level against the published models...\n');
-
-ref_opts = struct('orientation_labels', {orientation_labels}, ...
-                  'n_sensor_axes', n_sensor_axes, 'is_meg', is_meg, ...
-                  'bem_file', core_bem_file, 'fem_file', core_fem_file);
-
-sweep_spec = { ...
-    'fem', 'maxvol_mm3',    'Max tetrahedron volume (mm^3)'; ...
-    'bem', 'h_torso_mm',    'Torso mesh spacing h (mm)'};
-
-for s = 1:size(sweep_spec,1)
-    sw = sweep_spec{s,1};
-    if ~isfield(results, sw) || ~isfield(results, [sw '_lf']), continue; end
-
-    lf_sw = results.([sw '_lf']);
-    R_sw  = results.(sw);
-    man_s = results.([sw '_man']);
-    have_s = results.([sw '_have']);
-
-    [lf_sw, ~, refs] = load_original_references(lf_sw, struct(), ref_opts);
-    if isempty(refs), continue; end
-
-    n_lvl = numel(have_s);
-    EXT = struct('label', {refs.label}, ...
-                 're', repmat({nan(n_lvl, numel(orientation_labels))}, 1, numel(refs)));
-
-    for e = 1:numel(refs)
-        for i = 1:n_lvl
-            for oi = 1:numel(orientation_labels)
-                vo = struct('vector_mode','orientation', ...
-                            'orientation', orientation_labels{oi});
-                try
-                    [LA, LB] = lf_pair_vectors(lf_sw, refs(e).key, ...
-                        sprintf('%s_L%02d', sw, have_s(i)), target_axis, vo);
-                catch
-                    continue;
-                end
-                Mx = lf_metrics_series(LA, LB, metric_opts);
-                kp = 2:(size(LA,2)-1);
-                EXT(e).re(i,oi) = median(Mx.re(kp), 'omitnan');
-            end
-        end
-    end
-
-    xv = [man_s(have_s).(sweep_spec{s,2})];
-
-    plot_convergence_vs_reference(xv(:), EXT, struct( ...
-        'orientation_labels', {orientation_labels}, ...
-        'ori_titles', ori_titles, 'xlabel', sweep_spec{s,3}, ...
-        'title', sprintf('%s refinement against the reported models', upper(sw)), ...
-        'save_dir', save_dir, ...
-        'fname', sprintf('convergence_vs_original_%s', sw), ...
-        'reverse_x', true, 'log_x', true, 'colors', pair_colors, ...
-        'self_re', R_sw.re_med));
-end
-
-
-% LOCAL FUNCTIONS
-%% ---------------------------------------------------------------------
-
-% AGAINST THE REPORTED MODELS
-%
-% The sweeps above measure each level against their own finest level, which
-% shows the sweep settled. This measures every level against the models the
-% paper reports, which shows what it settled ON.
-
-fprintf('\nComparing every level against the published models...\n');
-
-ref_opts = struct('orientation_labels', {orientation_labels}, ...
-                  'n_sensor_axes', n_sensor_axes, 'is_meg', is_meg, ...
-                  'bem_file', core_bem_file, 'fem_file', core_fem_file);
-
-for sweep = {'fem','bem'}
-    sw = sweep{1};
-    if ~exist(sprintf('lf_%s', sw), 'var'), continue; end
-    lf_sw = eval(sprintf('lf_%s', sw));
-    if ~exist(sprintf('R_%s', sw), 'var'), continue; end
-    R_sw  = eval(sprintf('R_%s', sw));
-    if isempty(fieldnames(lf_sw)), continue; end
-
-    [lf_sw, ~, refs] = load_original_references(lf_sw, struct(), ref_opts);
-    if isempty(refs), continue; end
-
-    n_lvl = numel(R_sw.levels);
-    EXT = struct('label', {refs.label}, ...
-                 're', repmat({nan(n_lvl, numel(orientation_labels))}, 1, numel(refs)));
-
-    for e = 1:numel(refs)
-        for i = 1:n_lvl
-            for oi = 1:numel(orientation_labels)
-                vo = struct('vector_mode','orientation', ...
-                            'orientation', orientation_labels{oi});
-                try
-                    [LA, LB] = lf_pair_vectors(lf_sw, refs(e).key, ...
-                        sprintf('%s_L%02d', sw, R_sw.levels(i)), target_axis, vo);
-                catch
-                    continue;
-                end
-                Mx = lf_metrics_series(LA, LB, metric_opts);
-                kp = 2:(size(LA,2)-1);
-                EXT(e).re(i,oi) = median(Mx.re(kp), 'omitnan');
-            end
-        end
-    end
-
-    if strcmp(sw,'fem')
-        xv = [man_fem(R_sw.levels).maxvol_mm3];
-        xl = 'Max tetrahedron volume (mm^3)';
-    else
-        xv = [man_bem(R_sw.levels).h_torso_mm];
-        xl = 'Torso mesh spacing h (mm)';
-    end
-
-    plot_convergence_vs_reference(xv(:), EXT, struct( ...
-        'orientation_labels', {orientation_labels}, ...
-        'ori_titles', ori_titles, 'xlabel', xl, ...
-        'title', sprintf('%s refinement against the reported models', upper(sw)), ...
-        'save_dir', save_dir, ...
-        'fname', sprintf('convergence_vs_original_%s', sw), ...
-        'reverse_x', true, 'log_x', true, 'colors', pair_colors, ...
-        'self_re', R_sw.re_med));
-end
-
-
 function R = analyse_sweep(lf, ref_key, have, man, method, ...
     orientation_labels, target_axis, mopts, fid, fcsv, res_field, dof_field)
-% Per-level, per-orientation error against the reference (finest) level.
+% Per-level, per-orientation error against the reference lead field.
 
     n_lvl = numel(have);
     n_ori = numel(orientation_labels);
@@ -439,8 +341,8 @@ function R = analyse_sweep(lf, ref_key, have, man, method, ...
             ori   = orientation_labels{oi};
             vopts = struct('vector_mode','orientation','orientation',ori);
 
-            % Reference is the FIRST argument: the finest mesh is the
-            % denominator of the relative error.
+            % Reference is the FIRST argument: it is the denominator of
+            % the relative error.
             [LA, LB] = lf_pair_vectors(lf, ref_key, key, target_axis, vopts);
             M = lf_metrics_series(LA, LB, mopts);
 
@@ -504,8 +406,12 @@ function report_order_and_tradeoff(R, man, have, ref_L, label, ...
     end
 
     fprintf(fid, '\n  OBSERVED CONVERGENCE ORDER (slope of log RE vs log h)\n');
-    fprintf(fid, '  Fitted excluding the reference level, whose error is 0 by\n');
-    fprintf(fid, '  construction and cannot appear on log axes.\n');
+    if isnan(ref_L)
+        fprintf(fid, '  The reference is outside the sweep, so every level is fitted.\n');
+    else
+        fprintf(fid, '  Fitted excluding the reference level, whose error is 0 by\n');
+        fprintf(fid, '  construction and cannot appear on log axes.\n');
+    end
 
     for oi = 1:n_ori
         e = R.re_med(:, oi)';
@@ -520,15 +426,21 @@ function report_order_and_tradeoff(R, man, have, ref_L, label, ...
 
     % Coarsest level meeting the tolerance on every orientation
     fprintf(fid, '\n  CONVERGENCE AT %.1f%% TOLERANCE\n', tol_pct);
-    % EXCLUDE THE REFERENCE LEVEL. Its RE is 0 by construction — it is
-    % being compared with itself — so including it makes the reference
-    % always "meet" any tolerance and the recommendation degenerates to
-    % "use the finest mesh", which is not a finding.
-    is_ref = (have(:) == ref_L);
+    % EXCLUDE THE REFERENCE LEVEL when it is one of the swept levels. Its
+    % RE is 0 by construction — it is being compared with itself — so
+    % including it makes the reference always "meet" any tolerance and the
+    % recommendation degenerates to "use the finest mesh", which is not a
+    % finding. With a published model as reference, ref_L is NaN and no
+    % level is excluded.
+    if isnan(ref_L)
+        is_ref = false(numel(have), 1);
+    else
+        is_ref = (have(:) == ref_L);
+    end
     ok_all = all(R.re_med <= tol_pct, 2) & ~is_ref;
     idx    = find(ok_all);
     if isempty(idx)
-        fprintf(fid, '    NO level (other than the reference) met the tolerance\n');
+        fprintf(fid, '    NO level met the tolerance\n');
         fprintf(fid, '    on all orientations. Report the per-level errors and the\n');
         fprintf(fid, '    observed order instead of a recommended setting, and say\n');
         fprintf(fid, '    which orientation is limiting.\n');
@@ -568,9 +480,9 @@ function report_order_and_tradeoff(R, man, have, ref_L, label, ...
                 R.r2_med(ip,oi), R.r2_min(ip,oi));
         end
         fprintf(fid, ['    Summary: at the production mesh the sensor-level lead\n' ...
-                      '    fields differ from the finest mesh computed by a median of\n' ...
-                      '    %.3f%%, i.e. the results are mesh independent to within\n' ...
-                      '    that tolerance.\n'], ...
+                      '    fields differ from the reference by a median of %.3f%%,\n' ...
+                      '    i.e. the results are mesh independent to within that\n' ...
+                      '    tolerance.\n'], ...
                       max(R.re_med(ip,:)));
     end
 end
@@ -591,9 +503,8 @@ function plot_convergence(R, man, have, ref_L, label, res_field, res_lbl, ...
 
     fig = figure('Color','w','Position',[60 60 1500 460]);
     tl  = tiledlayout(1, 3, 'TileSpacing','compact','Padding','loose');
-    title(tl, sprintf(['%s mesh convergence — error against the finest mesh ' ...
-        '(%s = %g)'], label, res_field, man(ref_L).(res_field)), ...
-        'FontSize', 14, 'FontWeight','bold');
+    title(tl, sprintf('%s mesh convergence — error against the published model', ...
+        label), 'FontSize', 14, 'FontWeight','bold');
 
     cols = lines(n_ori);
 
@@ -644,4 +555,38 @@ end
 
 function s = ternary_str(c, a, b)
     if c, s = a; else, s = b; end
+end
+
+
+function v = ternary_num(c, a, b)
+    if c, v = a; else, v = b; end
+end
+
+
+function [lf, ref_key, ref_label, using_og] = pick_reference(lf, meth, ...
+    fallback_key, fallback_label, oris, n_ax, is_meg, bem_file, fem_file)
+% Load the published model for one solver and return it as the reference.
+%
+% Falls back to the sweep's own finest level if the published file is not
+% there, and reports which was used. The two answer different questions, so
+% a silent fallback would change what the numbers mean without saying so.
+
+    ref_opts = struct('orientation_labels', {oris}, ...
+                      'n_sensor_axes', n_ax, 'is_meg', is_meg, ...
+                      'bem_file', bem_file, 'fem_file', fem_file, ...
+                      'which', {{meth}});
+    [lf, ~, refs] = load_original_references(lf, struct(), ref_opts);
+
+    if isempty(refs)
+        ref_key   = fallback_key;
+        ref_label = fallback_label;
+        using_og  = false;
+        warning(['%s: published lead field not found, so levels are ' ...
+                 'reported against the %s. That shows the sweep settled, ' ...
+                 'not what it settled on.'], upper(meth), fallback_label);
+    else
+        ref_key   = refs(1).key;
+        ref_label = refs(1).label;
+        using_og  = true;
+    end
 end
