@@ -60,10 +60,10 @@ load(fullfile(forward_fields_base, 'leadfields_organised.mat'), ...
 table_models = {
     'bem_anatom_full_cont_back',       'BEM Continuous';
     'bem_anatom_full_inhomo_back',     'BEM Toroidal';
-    'bem_anatom_full_realistic_back',  'BEM Realistic';
+    'bem_anatom_full_realistic_back',  'BEM MRI-derived';
     'fem_anatom_full_cont_back',       'FEM Continuous';
     'fem_anatom_full_inhomo_back',     'FEM Toroidal';
-    'fem_anatom_full_realistic_back',  'FEM Realistic';
+    'fem_anatom_full_realistic_back',  'FEM MRI-derived';
 };
 
 % SET THIS: sensor axis to report (3 = radial axis for OPM)

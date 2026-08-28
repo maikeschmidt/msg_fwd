@@ -44,8 +44,8 @@ if ~isfield(opts,'which'),   opts.which   = {'fem','bem'}; end
 if ~isfield(opts,'verbose'), opts.verbose = true; end
 
 spec = { ...
-    'fem', getfield_or(opts,'fem_file',''), 'fem_original', 'FEM original (realistic)'; ...
-    'bem', getfield_or(opts,'bem_file',''), 'bem_original', 'BEM original (realistic)'};
+    'fem', getfield_or(opts,'fem_file',''), 'fem_original', 'FEM original (MRI-derived)'; ...
+    'bem', getfield_or(opts,'bem_file',''), 'bem_original', 'BEM original (MRI-derived)'};
 
 refs = struct('key', {}, 'label', {});
 

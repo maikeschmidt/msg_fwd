@@ -159,11 +159,11 @@ try
 
         if isfield(lfm, kR) && isfield(lfm, kC)
             C(end+1) = mk('segmentation','Bone segmentation', upper(meth), ...
-                sprintf('%s realistic vs continuous', upper(meth)), lfm, kR, kC); %#ok<SAGROW>
+                sprintf('%s MRI-derived vs continuous', upper(meth)), lfm, kR, kC); %#ok<SAGROW>
         end
         if isfield(lfm, kR) && isfield(lfm, kT)
             C(end+1) = mk('bone_detail','Bone geom. detail', upper(meth), ...
-                sprintf('%s realistic vs toroidal', upper(meth)), lfm, kR, kT); %#ok<SAGROW>
+                sprintf('%s MRI-derived vs toroidal', upper(meth)), lfm, kR, kT); %#ok<SAGROW>
         end
     end
 
@@ -365,6 +365,86 @@ catch err
     fprintf('  source space refinement: SKIPPED (%s)\n', err.message);
 end
 
+% ---- 4b: the surface and torso decimation sweeps -----------------------
+%
+% The blocks above cover the FEM volume bound and the FEM cord. These add
+% the remaining sweeps so the full comparison table covers every resolution
+% test that was run, not only the two FEM ones.
+%
+% Each sweep contributes two comparisons: the coarsest level and the finest
+% level, both against the PRODUCTION level of that same sweep. The
+% production level is the reference because that is the mesh the reported
+% results were computed on, so each number is the cost of having chosen a
+% different resolution. Sweeps whose folders are absent are skipped.
+
+conv_sweeps = { ...
+  % dir                       manifest                              file pattern                              meth  res field        factor                   label                          unit
+    convergence_bem_allsurf,  'bem_convergence_manifest.mat',       'leadfield_conv_bem_lvl%02d_%s.mat',      'bem', 'keep_fraction', 'surface_refinement',    'Surface refinement',          'keep'; ...
+    convergence_fem_surface,  'fem_surface_convergence_manifest.mat','cord_leadfield_surfconv_lvl%02d_%s.mat','fem', 'keep_fraction', 'surface_refinement',    'Surface refinement',          'keep'; ...
+    convergence_bem_torso,    'bem_convergence_manifest.mat',       'leadfield_conv_bem_lvl%02d_%s.mat',      'bem', 'keep_fraction', 'torso_decimation',      'Torso decimation',            'keep'; ...
+    convergence_fem_torso,    'fem_surface_convergence_manifest.mat','cord_leadfield_surfconv_lvl%02d_%s.mat','fem', 'keep_fraction', 'torso_decimation',      'Torso decimation',            'keep'};
+
+surface_production_keep = 0.50;   % the decimation used for production
+
+for sw = 1:size(conv_sweeps, 1)
+    sdir  = conv_sweeps{sw,1};
+    smeth = conv_sweeps{sw,4};
+    sfac  = conv_sweeps{sw,6};
+    slab  = conv_sweeps{sw,7};
+    tag   = sprintf('%s %s', upper(smeth), slab);
+
+    try
+        mfile = fullfile(sdir, conv_sweeps{sw,2});
+        if ~isfile(mfile)
+            fprintf('  %s: SKIPPED (no manifest in %s)\n', tag, sdir);
+            continue;
+        end
+        Sm = load(mfile); sman = Sm.manifest;
+
+        lfs = struct(); ams = struct(); gots = [];
+        for L = 1:numel(sman)
+            f = fullfile(sdir, sprintf(conv_sweeps{sw,3}, L, array_name));
+            if ~isfile(f), continue; end
+            d  = load(f);
+            fn = fieldnames(d);
+            vi = find(cellfun(@(x) isstruct(d.(x)) && isfield(d.(x),'leadfield'), fn),1);
+            if isempty(vi), continue; end
+            us = lf_unit_scale(d.(fn{vi}), smeth, is_meg);
+            [lfs, ams] = organise_leadfield(lfs, ams, d.(fn{vi}), ...
+                sprintf('S%02d', L), us, orientation_labels, n_sensor_axes, is_meg);
+            gots(end+1) = L; %#ok<SAGROW>
+        end
+
+        if numel(gots) < 2
+            fprintf('  %s: SKIPPED (only %d level(s))\n', tag, numel(gots));
+            continue;
+        end
+
+        kf   = [sman(gots).(conv_sweeps{sw,5})];
+        i_pr = find(abs(kf - surface_production_keep) < 1e-9, 1);
+        if isempty(i_pr)
+            fprintf('  %s: SKIPPED (production keep %.2f not in sweep)\n', ...
+                tag, surface_production_keep);
+            continue;
+        end
+        k_pr = sprintf('S%02d', gots(i_pr));
+
+        [~, i_coarse] = min(kf);
+        [~, i_fine]   = max(kf);
+
+        for ee = [i_coarse, i_fine]
+            if ee == i_pr, continue; end   % the reference against itself
+            C(end+1) = mk(sfac, slab, upper(smeth), ...
+                sprintf('%s keep %.2f vs %.2f', upper(smeth), kf(ee), kf(i_pr)), ...
+                lfs, k_pr, sprintf('S%02d', gots(ee))); %#ok<SAGROW>
+        end
+        fprintf('  %s: OK (%d levels, keep %.2f to %.2f)\n', ...
+            tag, numel(gots), min(kf), max(kf));
+    catch err
+        fprintf('  %s: SKIPPED (%s)\n', tag, err.message);
+    end
+end
+
 % ---- 5: warped replicates --------------------------------------------
 %
 % CROSS-SOLVER, matched geometry. For each replicate the BEM and FEM are
@@ -504,7 +584,10 @@ for c = 1:numel(C)
             gain   = (exp(ln_med) - 1) * 100;
             ci     = st_boot_ci_median(re, n_boot, ci_level);
 
-            fprintf(fcsv, '%s,%s,%s,%s,%d,%s,%d,', ...
+            % Text fields are quoted: several comparison names and factor
+            % labels contain commas ("BEM vs FEM, realistic bone"), which
+            % unquoted would shift every column after them.
+            fprintf(fcsv, '"%s","%s","%s","%s",%d,%s,%d,', ...
                 C(c).factor, C(c).label, C(c).solver, C(c).name, ax, omode, ...
                 sum(~isnan(re)));
             fprintf(fcsv, '%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,', ...

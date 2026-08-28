@@ -61,15 +61,15 @@ if ~exist(save_dir, 'dir'); mkdir(save_dir); end
 % Reference is the RE denominator.
 groups = {
   'bone_geometry_bem', 'Bone geometry effect (BEM)', {
-      'bem_anatom_full_realistic_back', 'bem_anatom_full_cont_back',   'Realistic vs Continuous'
-      'bem_anatom_full_realistic_back', 'bem_anatom_full_inhomo_back', 'Realistic vs Toroidal'
+      'bem_anatom_full_realistic_back', 'bem_anatom_full_cont_back',   'MRI-derived vs Continuous'
+      'bem_anatom_full_realistic_back', 'bem_anatom_full_inhomo_back', 'MRI-derived vs Toroidal'
   };
   'bone_geometry_fem', 'Bone geometry effect (FEM)', {
-      'fem_anatom_full_realistic_back', 'fem_anatom_full_cont_back',   'Realistic vs Continuous'
-      'fem_anatom_full_realistic_back', 'fem_anatom_full_inhomo_back', 'Realistic vs Toroidal'
+      'fem_anatom_full_realistic_back', 'fem_anatom_full_cont_back',   'MRI-derived vs Continuous'
+      'fem_anatom_full_realistic_back', 'fem_anatom_full_inhomo_back', 'MRI-derived vs Toroidal'
   };
   'solver', 'Solver effect (BEM vs FEM, matched geometry)', {
-      'bem_anatom_full_realistic_back', 'fem_anatom_full_realistic_back', 'Realistic bone'
+      'bem_anatom_full_realistic_back', 'fem_anatom_full_realistic_back', 'MRI-derived bone'
       'bem_anatom_full_inhomo_back',    'fem_anatom_full_inhomo_back',    'Toroidal bone'
       'bem_anatom_full_cont_back',      'fem_anatom_full_cont_back',      'Continuous bone'
   };

@@ -141,7 +141,7 @@ bone_titles = containers.Map( ...
      'assymnetrical_bone', 'blocks_bone', 'orig_bone', ...
      'holes_bone', 'two_piece_bone'}, ...
     {'Continuous Bone', 'Homogeneous Bone', 'Inhomogeneous Bone', ...
-     'Realistic Bone', 'Asymmetrical', 'Blocks', 'Toroidal', ...
+     'MRI-derived Bone', 'Asymmetrical', 'Blocks', 'Toroidal', ...
      'Holes', 'Two Pieces'});
 
 
@@ -153,21 +153,21 @@ model_display = struct();
 model_display.bem_anatom_full_cont_back        = 'BEM | Continuous';
 model_display.bem_anatom_full_homo_back        = 'BEM | Homogeneous';
 model_display.bem_anatom_full_inhomo_back      = 'BEM | Inhomogeneous';
-model_display.bem_anatom_full_realistic_back   = 'BEM | Realistic';
+model_display.bem_anatom_full_realistic_back   = 'BEM | MRI-derived';
 model_display.fem_anatom_full_cont_back        = 'FEM | Continuous';
 model_display.fem_anatom_full_homo_back        = 'FEM | Homogeneous';
 model_display.fem_anatom_full_inhomo_back      = 'FEM | Inhomogeneous';
-model_display.fem_anatom_full_realistic_back   = 'FEM | Realistic';
+model_display.fem_anatom_full_realistic_back   = 'FEM | MRI-derived';
 
 % Anatomical MEG/OPM — front array
 model_display.bem_anatom_full_cont_front       = 'BEM | Continuous';
 model_display.bem_anatom_full_homo_front       = 'BEM | Homogeneous';
 model_display.bem_anatom_full_inhomo_front     = 'BEM | Inhomogeneous';
-model_display.bem_anatom_full_realistic_front  = 'BEM | Realistic';
+model_display.bem_anatom_full_realistic_front  = 'BEM | MRI-derived';
 model_display.fem_anatom_full_cont_front       = 'FEM | Continuous';
 model_display.fem_anatom_full_homo_front       = 'FEM | Homogeneous';
 model_display.fem_anatom_full_inhomo_front     = 'FEM | Inhomogeneous';
-model_display.fem_anatom_full_realistic_front  = 'FEM | Realistic';
+model_display.fem_anatom_full_realistic_front  = 'FEM | MRI-derived';
 
 % Canonical MEG/OPM — back array
 model_display.bem_canon_full_cont_back         = 'Canon | Continuous';
@@ -178,7 +178,7 @@ model_display.bem_canon_full_inhomo_back       = 'Canon | Inhomogeneous';
 % model_display.bem_anatom_full_cont_elec_back      = 'BEM EEG | Continuous';
 % model_display.bem_anatom_full_homo_elec_back      = 'BEM EEG | Homogeneous';
 % model_display.bem_anatom_full_inhomo_elec_back    = 'BEM EEG | Inhomogeneous';
-% model_display.bem_anatom_full_realistic_elec_back = 'BEM EEG | Realistic';
+% model_display.bem_anatom_full_realistic_elec_back = 'BEM EEG | MRI-derived';
 
 % Single-letter labels for compact heatmap annotation
 model_display.bem_anatom_full_cont_back_short      = 'A';
@@ -217,7 +217,7 @@ cb_colors = [
     0.00, 0.45, 0.70;   % blue           — Continuous
     0.90, 0.62, 0.00;   % orange         — Homogeneous
     0.00, 0.62, 0.45;   % bluish-green   — Inhomogeneous
-    0.80, 0.47, 0.65;   % reddish-purple — Realistic
+    0.80, 0.47, 0.65;   % reddish-purple — MRI-derived
 ];
 
 % Publication palette: BEM (solid, rows 1-4) + FEM (dashed, rows 5-8)

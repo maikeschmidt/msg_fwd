@@ -127,8 +127,8 @@ ext_refs = struct('key', {}, 'label', {});
 % core_bem_file and core_fem_file already resolve to the per-geometry
 % subfolder inside og_fields, so no path building is needed here.
 ext_specs = { ...
-    core_fem_file, 'fem', 'fem_original', 'FEM realistic (unrefined)'; ...
-    core_bem_file, 'bem', 'bem_original', 'BEM realistic'};
+    core_fem_file, 'fem', 'fem_original', 'FEM MRI-derived (unrefined)'; ...
+    core_bem_file, 'bem', 'bem_original', 'BEM MRI-derived'};
 
 for e = 1:size(ext_specs, 1)
     f = ext_specs{e,1};

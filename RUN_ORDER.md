@@ -191,6 +191,7 @@ st_group_stats                % needs st_collect_replicates
 
 % LAST — pulls every factor above onto one scale
 compute_hierarchy_table
+compute_full_comparison_table   % formats the same numbers as full tables
 ```
 
 Re-run `run_all_analysis` after any change to `metric_defaults.m`, even if
@@ -218,6 +219,32 @@ Outputs, in `<save_base_dir>/hierarchy/`:
 
 The `.tex` files with factors as columns use `\resizebox`, so the preamble
 needs `\usepackage{graphicx}`. All of them use `booktabs`.
+
+### `compute_full_comparison_table` — the complete tables
+
+Run straight after `compute_hierarchy_table`. It recomputes nothing: it
+reads `all_comparisons.csv` and lays it out, so the two can never disagree.
+
+Where the hierarchy table aggregates comparisons into one number per factor
+to answer "which factor matters most", this one does no aggregation at all —
+every comparison appears as its own row, with RE, r², RDM and lnMAG (plus
+gain %), one table per sensor axis. Rows are grouped into eight families in
+the order the paper uses them: bone model within BEM, within FEM, then BEM
+vs FEM; then CSF, bone conductivity, organ segmentation, mesh resolution and
+anatomical warping.
+
+Outputs, in `<save_base_dir>/full_tables/`:
+
+| File | Use |
+|---|---|
+| `full_comparison_table_axis<N>.tex` | one LaTeX table per sensor axis |
+| `full_comparison_table_axis<N>.csv` | the same content, machine readable |
+| `full_comparison_table.txt` | all axes, fixed-width, for reading at the terminal |
+| `full_comparison_table_wide.csv` | every axis in one file |
+
+Set `include_warping_within = true` to add the within-solver warp spread; it
+is off by default because it answers a different question from the
+cross-solver warp rows.
 
 ---
 

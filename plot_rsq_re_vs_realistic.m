@@ -188,7 +188,7 @@ for method_cell = {'bem', 'fem'}
             title(ori_titles.(ori_label), 'FontSize', 16, 'FontWeight', 'bold');
             xlabel('Distance along spinal cord (mm)', 'FontSize', 16);
             if ori_idx == 1
-                ylabel('R² (vs Realistic)', 'FontSize', 22);
+                ylabel('R² (vs MRI-derived)', 'FontSize', 22);
             end
 
             xlims = xlim;
@@ -254,7 +254,7 @@ for method_cell = {'bem', 'fem'}
             title(ori_titles.(ori_label), 'FontSize', 16, 'FontWeight', 'bold');
             xlabel('Distance along spinal cord (mm)', 'FontSize', 16);
             if ori_idx == 1
-                ylabel('Relative Error (%) (vs Realistic)', 'FontSize', 22);
+                ylabel('Relative Error (%) (vs MRI-derived)', 'FontSize', 22);
             end
 
             xlims = xlim;
