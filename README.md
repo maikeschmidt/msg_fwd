@@ -284,6 +284,26 @@ Sensor arrays are detected automatically, in priority order:
 meshes are generated with TetGen through ISO2Mesh, and the St. Venant
 source model is used. FEM output is scaled to fT/nAm to match the BEM.
 
+### Brain
+
+A geometry includes the brain when msg_coreg has done two things:
+registered the SPM template head (`mesh_brain`, `mesh_iskull`,
+`mesh_oskull`, `mesh_scalp`), and built a brain source model
+(`sources_brain`, from `cr_generate_brain_sources`). The runners detect
+this (`has_brain_sources`), say so, and add brain lead fields to the cord
+ones:
+
+| Runner | Brain model | Output |
+|---|---|---|
+| `run_bem_leadfields` | three-shell BEM: inner skull, outer skull, scalp; 0.33 / 0.33/80 / 0.33 S/m (`bem_brain_leadfields`) | `leadfield_<g>_brain_bem_<array>.mat` (`leadfield_brain`, fT/nAm) |
+| `run_biot_savart_leadfields` | infinite medium (`bs_leadfield`) | `leadfield_geometries_<g>_brain_bslaw_<array>.mat` |
+| `run_fem_leadfields` | not computed | — |
+
+The three-shell BEM is the standard volume conductor for MEG of the brain.
+It is separate from the torso model used for the cord. FEM is not used for
+the brain: the template cortex is not a closed surface, so no volume mesh
+can be built from it.
+
 ### Bone model variants
 
 | Variant | Canonical | Anatomical |

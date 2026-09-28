@@ -49,6 +49,17 @@
 %                                   geometry variant and sensor array
 %                                   (front / back), in subfolders named
 %                                   after each geometry variant
+%   leadfield_<model>_brain_bem_<array>.mat
+%                                 - brain lead fields (three-shell BEM),
+%                                   only when the geometry includes the
+%                                   brain (see BRAIN below)
+%
+% BRAIN:
+%   If the geometry holds sources_brain (msg_coreg's
+%   cr_generate_brain_sources) and the registered head meshes mesh_iskull,
+%   mesh_oskull and mesh_scalp, the script says so and also computes brain
+%   lead fields with a three-shell BEM (brain 0.33, skull 0.33/80, scalp
+%   0.33 S/m) via bem_brain_leadfields. Cord lead fields are unchanged.
 %
 % DEPENDENCIES:
 %   - cr_add_functions()        : initialises toolbox and HBF paths
@@ -383,6 +394,27 @@ for fIdx = 1:numel(filenames)
         outfile = fullfile(outdir, ['leadfield_' model_name '_' array_name '.mat']);
         save(outfile, 'leadfield_cord', '-v7.3');
         fprintf('  Saved: %s\n', outfile);
+    end
+
+
+    %% STEP 8: Brain lead fields (only if the geometry includes the brain)
+    % A geometry includes the brain when msg_coreg registered the SPM
+    % template head and built sources_brain (cr_generate_brain_sources).
+    % The brain then gets the standard MEG volume conductor, a three-shell
+    % BEM (inner skull, outer skull, scalp), independent of the torso
+    % model used for the cord.
+
+    [has_brain, missing] = has_brain_sources(geoms);
+    if has_brain && isElec
+        fprintf('  Brain sources present, but the array is EEG: brain BEM skipped.\n');
+    elseif has_brain && ~isempty(missing)
+        warning('Brain sources present but %s missing — brain BEM skipped for %s.', ...
+            strjoin(missing, ', '), filenames{fIdx});
+    elseif has_brain
+        fprintf('  BRAIN INCLUDED: computing three-shell BEM brain lead fields\n');
+        bem_brain_leadfields(geoms, sensor_arrays, sensor_structs, ...
+            fullfile(lf_save_path, filenames{fIdx}), ...
+            regexprep(filenames{fIdx}, '^geometries[_-]?', ''));
     end
 
     fprintf('Finished: %s\n', filenames{fIdx});

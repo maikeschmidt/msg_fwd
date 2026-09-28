@@ -10,6 +10,11 @@
 %   2. front_coils_3axis / back_coils_3axis — standard triaxial OPM arrays
 %   3. front_coils_2axis / back_coils_2axis — standard biaxial arrays
 %
+% BRAIN:
+%   If the geometry holds sources_brain (msg_coreg), brain lead fields are
+%   computed too, with the same infinite-medium solution:
+%   leadfield_<model>_brain_bslaw_<array>.mat
+%
 % OUTPUTS:
 %   leadfield_<model>_bslaw_experimental.mat  — experimental array
 %   leadfield_<model>_bslaw_front.mat         — standard front array
@@ -85,6 +90,9 @@ compute_back  = true;
 compute_front = true;
 
 % INITIALISE
+
+% bs_leadfield, has_brain_sources and brain_source_pos live in msg_fwd/functions
+addpath(fullfile(fileparts(fileparts(mfilename('fullpath'))), 'functions'));
 
 fprintf(' Biot-Savart Infinite Space Leadfield Computation ');
 
@@ -163,74 +171,41 @@ for f = 1:numel(filenames)
         continue;
     end
 
-    % Compute leadfield for each array 
+    % Source sets: the cord always, the brain when the geometry includes it
+    % (sources_brain from msg_coreg's cr_generate_brain_sources)
+    src_sets = {src_pos_mm, ''};
+    if has_brain_sources(geom)
+        fprintf('  BRAIN INCLUDED: computing Biot-Savart brain lead fields\n');
+        src_sets(end+1, :) = {brain_source_pos(geom), '_brain'};
+    end
+
+    % Compute leadfield for each array and source set
     for a = 1:numel(arrays)
         arr_label  = arrays{a}.label;
         grad       = arrays{a}.grad;
-
-        coilpos_mm = grad.coilpos;
-        coilori    = grad.coilori;
-        tra        = grad.tra;
-
-        n_coils    = size(coilpos_mm, 1);
-        n_channels = size(tra, 1);
-
         fprintf('  Array: %-14s | %d coils | %d channels\n', ...
-            arr_label, n_coils, n_channels);
+            arr_label, size(grad.coilpos, 1), size(grad.tra, 1));
 
-        % Convert to metres
-        coilpos_m = coilpos_mm * 1e-3;
-        src_pos_m = src_pos_mm * 1e-3;
+        for ss = 1:size(src_sets, 1)
+            pos_mm = src_sets{ss, 1};
+            tag    = src_sets{ss, 2};
 
-        % Normalise orientations defensively
-        ori_norms = sqrt(sum(coilori.^2, 2));
-        if any(abs(ori_norms - 1) > 1e-6)
-            warning('Coil orientations not unit vectors — normalising.');
-            coilori = coilori ./ ori_norms;
+            leadfield_bs           = struct();
+            leadfield_bs.leadfield = bs_leadfield(grad, pos_mm);
+            leadfield_bs.label     = grad.label;
+            leadfield_bs.pos       = pos_mm;
+            leadfield_bs.unit      = 'mm';
+            leadfield_bs.model     = 'biot_savart_infinite';
+            leadfield_bs.geometry  = model;
+            leadfield_bs.array     = arr_label;
+            leadfield_bs.mu0       = mu0;
+            leadfield_bs.units_out = 'fT/nAm';
+
+            outfile = fullfile(save_base, ...
+                ['leadfield_' model tag '_bslaw_' arr_label '.mat']);
+            save(outfile, 'leadfield_bs', '-v7.3');
+            fprintf('    Saved: %s (%d sources)\n', outfile, size(pos_mm, 1));
         end
-
-        leadfield_cells = cell(1, n_sources);
-
-        for s = 1:n_sources
-            r_vec  = coilpos_m - src_pos_m(s, :);
-            r_mag  = sqrt(sum(r_vec.^2, 2));
-            r_mag3 = r_mag .^ 3;
-
-            if any(r_mag < 1e-6)
-                warning('Source %d within 1µm of a coil (%s %s) — zeroed.', ...
-                    s, model, arr_label);
-                leadfield_cells{s} = zeros(n_channels, 3);
-                continue;
-            end
-
-            lf_coil = zeros(n_coils, 3);
-            for d = 1:3
-                q         = dipole_orientations(d, :);
-                q_rep     = repmat(q, n_coils, 1);
-                q_cross_r = cross(q_rep, r_vec, 2);
-                B_vec     = scale_fT_per_nAm * q_cross_r ./ r_mag3;
-                lf_coil(:, d) = sum(B_vec .* coilori, 2);
-            end
-
-            leadfield_cells{s} = tra * lf_coil;
-        end
-
-        % Package output
-        leadfield_bs           = struct();
-        leadfield_bs.leadfield = leadfield_cells;
-        leadfield_bs.label     = grad.label;
-        leadfield_bs.pos       = src_pos_mm;
-        leadfield_bs.unit      = 'mm';
-        leadfield_bs.model     = 'biot_savart_infinite';
-        leadfield_bs.geometry  = model;
-        leadfield_bs.array     = arr_label;
-        leadfield_bs.mu0       = mu0;
-        leadfield_bs.units_out = 'fT/nAm';
-
-        outfile = fullfile(save_base, ...
-            ['leadfield_' model '_bslaw_' arr_label '.mat']);
-        save(outfile, 'leadfield_bs', '-v7.3');
-        fprintf('    Saved: %s\n', outfile);
     end
 
     fprintf('  Done: %s\n\n', model);

@@ -103,6 +103,15 @@ t_total  = [man(have).time_mesh_s] + [man(have).time_solve_s];
 ref_L     = have(imin);
 ref_key   = sprintf('fem_C%02d', ref_L);
 
+% Production level: the cord bound equal to the global bound, i.e. no local
+% refinement. It is NOT the coarsest level — the sweep also coarsens the
+% cord above the global bound.
+i_prod = find(abs(cord_mm3 - man(have(1)).global_maxvol_mm3) < 1e-9, 1);
+if isempty(i_prod)
+    error(['No level has cord bound = global bound (%g mm^3), so the ' ...
+           'production level is not in the sweep.'], man(have(1)).global_maxvol_mm3);
+end
+
 % REFERENCES
 %
 % Every level is reported against the PUBLISHED models, not against the
@@ -212,9 +221,9 @@ for p = 1:n_prim
         L   = have(i);
         key = sprintf('fem_C%02d', L);
 
-        % Decomposition is kept for the production (coarsest) level and the
-        % finest, against each reference.
-        store_this = (i == 1) || (L == ref_L);
+        % Decomposition is kept for the production level and the finest,
+        % against each reference.
+        store_this = (i == i_prod) || (L == ref_L);
         if store_this
             kk = numel(S_dec) + 1;
             S_dec(kk).label = sprintf('%g mm^3 vs %s', ...
@@ -300,7 +309,6 @@ end
 % The most refined cord mesh is the level furthest from the production
 % setting, so it carries the largest possible refinement effect.
 i_fine = find(have == ref_L, 1);
-i_prod = 1;   % coarsest = production, no local refinement
 
 fprintf(fid, '\nAt the MOST REFINED cord mesh (%g mm^3), relative to\n', ...
     man(ref_L).cord_maxvol_mm3);

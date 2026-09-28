@@ -46,7 +46,8 @@
 %     Column 3 → Z (Ventral-Dorsal,    VD)
 %
 % UNIT SCALING:
-%   BEM MEG:  x 1e15  (T/nAm  → fT/nAm)
+%   Chosen per file by lf_unit_scale:
+%   BEM MEG:  x 1e15 (raw per nA*m) or x 1e6 (raw per A*m), detected
 %   FEM MEG:  x 1     (already fT/nAm)
 %   EEG:      x 1e6   (V/nAm  → µV/nAm)
 %
@@ -226,18 +227,12 @@ for m = 1:numel(loaded_models)
     leadfields.(model_key).is_meg             = is_meg;
 
     % Unit scaling
-    % BEM MEG: raw output is T/nAm → scale to fT/nAm
-    % FEM MEG: already scaled to fT/nAm in batch_fem_forward_all_models
-    % EEG:     raw output is V/nAm → scale to µV/nAm
-    if is_meg
-        if startsWith(model_key, 'bem_')
-            unit_scale = 1e15;
-        else
-            unit_scale = 1;
-        end
-    else
-        unit_scale = 1e6;
-    end
+    % Resolved per file by lf_unit_scale, never hard-coded: raw BEM output
+    % is per nA*m (x1e15) or per A*m (x1e6) depending on the FieldTrip
+    % version that produced it, and a fixed factor mis-scales the other by
+    % 1e9. FEM MEG is already fT/nAm; EEG is V/nAm -> µV/nAm.
+    [unit_scale, scale_why] = lf_unit_scale(lf_struct, model_key, is_meg);
+    fprintf('  %s: x%.0e (%s)\n', model_key, unit_scale, scale_why);
 
     % Reshape each source leadfield into orientation-labelled cell arrays.
     % Channels are blocked by sensor axis: [axis1; axis2; axis3]

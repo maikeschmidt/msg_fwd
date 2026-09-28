@@ -12,6 +12,13 @@
 %   msg_coreg: https://github.com/maikeschmidt/msg_coreg
 %   msg_fwd:   https://github.com/maikeschmidt/msg_fwd
 %
+% BRAIN:
+%   Brain sources are never computed with FEM. The SPM template cortex that
+%   msg_coreg registers is not a closed surface, so TetGen cannot build a
+%   volume mesh from it. A geometry that includes the brain gets its brain
+%   lead fields from run_bem_leadfields (three-shell BEM) and
+%   run_biot_savart_leadfields; this script says so and computes the cord.
+%
 % WORKFLOW:
 %   1. Load pre-computed geometry .mat file for each model variant
 %   2. Assemble and orient BEM boundary meshes (mm → m)
@@ -241,6 +248,14 @@ for fIdx = 1:numel(filenames)
     % Load geometry file
     geom_file = fullfile(geoms_path, [geom_fname_noext '.mat']);
     geoms     = load(geom_file);
+
+    % The brain is not modelled with FEM: the SPM template cortex is not a
+    % closed surface, so no tetrahedral volume can be built from it. Brain
+    % lead fields come from run_bem_leadfields (three-shell BEM) and
+    % run_biot_savart_leadfields instead. Only the cord is computed here.
+    if has_brain_sources(geoms)
+        fprintf('  Brain sources present: skipped by FEM (template cortex is not watertight); cord only.\n');
+    end
 
     % Downsample torso mesh for anatomical models only (larger mesh surface)
     reduce_torso    = contains(geom_fname_noext, 'anatom');
@@ -576,8 +591,9 @@ for fIdx = 1:numel(filenames)
     % Output is in T/(A*m); scaling by 1e6 converts to fT/nAm to match
     % the BEM leadfield units used elsewhere in the pipeline.
     
+    % sensor_arrays and grads are paired by index — keep them in step
     sensor_arrays = {'back'};
-    grads         = {grad_front, grad_back};
+    grads         = {grad_back};
 
     % Uncomment for single full-body array:
     % sensor_arrays = {'fullbody'};

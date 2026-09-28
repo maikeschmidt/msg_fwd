@@ -84,9 +84,9 @@ end
 % thing varying across the sweep is the cord.
 global_maxvol_mm3 = 500;
 
-% CORD-LOCAL bounds in mm^3, coarsest first. The first entry should equal
-% global_maxvol_mm3 so the sweep starts from "no local refinement" and the
-% effect is measured against a genuine baseline.
+% CORD-LOCAL bounds in mm^3, coarsest first. One entry MUST equal
+% global_maxvol_mm3: that level is "no local refinement", the production
+% baseline analyse_cord_refinement measures against.
 % Spans BOTH directions about the global bound: levels above 500 coarsen
 % the cord relative to the rest of the volume, levels below refine it. A
 % one-sided sweep can only show that refining changes nothing; it cannot
