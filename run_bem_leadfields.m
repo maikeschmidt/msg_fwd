@@ -200,15 +200,52 @@ for fIdx = 1:numel(filenames)
     %
     %   Compartment    ci (S/m)      co (S/m)
     %   -----------    ----------    --------
-    %   Spinal cord    0.33          0.23
+    %   Spinal cord    0.33          see below
     %   Bone           0.33/40       0.23
     %   Heart          0.62          0.23
     %   Lungs          0.05          0.23
-    %   Torso          0.23          0.00  (outermost — no outer medium
-    
+    %   Torso          0.23          0.00  (outermost — no outer medium)
+    %
+    % THE CORD'S OUTER CONDUCTIVITY DEPENDS ON THE BONE MODEL
+    %
+    %   HBF reads each pair as "conductivity just inside / just outside this
+    %   boundary", so wherever two surfaces nest, the inner surface's OUTER
+    %   value and the outer surface's INNER value describe the same region
+    %   and have to agree.
+    %
+    %   Where bone is segmented into separate vertebrae, those bodies sit
+    %   beside the cord in torso tissue. The cord's surroundings are then
+    %   torso tissue, so co = 0.23, and the bone surfaces separately have
+    %   bone inside (0.33/40) and tissue outside (0.23). Consistent.
+    %
+    %   Where bone is a continuous sheath, it ENCLOSES the cord. The region
+    %   between the two surfaces is then the inside of the bone shell, which
+    %   is bone. Leaving the cord's outer value at 0.23 would declare that
+    %   same region to be both 0.23 and 0.33/40, and HBF would solve a
+    %   problem that is neither — while the FEM, which labels tetrahedral
+    %   volumes from the geometry itself, correctly fills it with bone. That
+    %   is the whole of the disagreement between the two solvers on a
+    %   continuous bone model.
+    %
+    %   Rather than keying this off the file name, it is measured from the
+    %   geometry: if the cord sources lie inside the bone surface, the bone
+    %   encloses the cord and the cord's outer conductivity is bone.
+
     cratio  = 40;
     ci_cord = [0.33,  0.33/cratio,  0.62,  0.05,  0.23];
     co_cord = [0.23,  0.23,         0.23,  0.23,  0.00];
+
+    bone_encloses_cord = cord_inside_bone(geoms);
+
+    if bone_encloses_cord
+        co_cord(1) = 0.33/cratio;
+        fprintf(['  Bone ENCLOSES the cord: cord outer conductivity set to ' ...
+                 'bone (%.5f S/m),\n    so it matches the bone compartment ' ...
+                 'it sits inside.\n'], co_cord(1));
+    else
+        fprintf(['  Bone sits beside the cord: cord outer conductivity left ' ...
+                 'as torso tissue (%.2f S/m).\n'], co_cord(1));
+    end
 
 %% STEP 3: Load sensor arrays
     % Sensor type (MEG/OPM or EEG) is detected automatically from the
@@ -399,6 +436,43 @@ fprintf('\n All BEM computations completed (woohoo) \n');
 
 
 % LOCAL FUNCTIONS
+
+function tf = cord_inside_bone(geoms)
+% Does the bone surface enclose the cord?
+%
+% Decides from the geometry rather than the file name, so a variant that is
+% renamed, regenerated or added later cannot get the wrong conductivity
+% pairing. Tests the cord source positions, which are the points whose
+% surroundings actually matter for the lead field.
+%
+% A clear majority is required either way: a geometry where only some
+% sources fall inside the bone is neither arrangement, and silently picking
+% one would hide a real problem with the meshes.
+
+    pts = geoms.sources_cent.pos;
+    n   = size(pts, 1);
+    bv  = geoms.mesh_bone.vertices;
+    bf  = geoms.mesh_bone.faces;
+
+    inside = false(n, 1);
+    for k = 1:n
+        inside(k) = tt_is_inside(pts(k,:), bv, bf);
+    end
+    frac = mean(inside);
+
+    if frac > 0.95
+        tf = true;
+    elseif frac < 0.05
+        tf = false;
+    else
+        error('run_bem_leadfields:partialenclosure', ...
+            ['%.1f%% of cord sources lie inside the bone surface. The bone ' ...
+             'neither clearly encloses the cord nor clearly sits beside it, ' ...
+             'so the conductivity pairing cannot be determined. Check the ' ...
+             'bone mesh before computing lead fields.'], frac*100);
+    end
+end
+
 
 function b = fix_winding(b, comp_name, geom_name)
 % Give HBF a counter-clockwise closed boundary, or stop and say why not.

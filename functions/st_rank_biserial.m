@@ -38,7 +38,7 @@
 %   fprintf('effect size r = %.3f\n', st_rank_biserial(d));
 %
 % SEE ALSO:
-%   st_signflip_test, st_boot_ci_median, st_group_stats
+%   st_signflip_test, st_boot_ci_median
 %
 % -------------------------------------------------------------------------
 % Copyright (c) 2026 University College London

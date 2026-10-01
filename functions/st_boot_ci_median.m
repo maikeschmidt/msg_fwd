@@ -8,7 +8,7 @@
 %       "how much would the reported median move if the cord had been
 %        sampled at different positions?"
 %
-%     Resampling REPLICATE GEOMETRIES (st_group_stats):
+%     Resampling REPLICATE GEOMETRIES (st_warp_summary):
 %       "how much would the reported median move for a different
 %        plausible geometry?"
 %
@@ -42,7 +42,7 @@
 %   fprintf('median %.3f [%.3f, %.3f]\n', median(re_per_replicate), ci(1), ci(2));
 %
 % SEE ALSO:
-%   st_signflip_test, st_bh_fdr, st_group_stats
+%   st_signflip_test, st_bh_fdr
 %
 % -------------------------------------------------------------------------
 % Copyright (c) 2026 University College London

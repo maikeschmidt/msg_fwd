@@ -95,10 +95,9 @@ The variant tag is inferred from the base filename, giving
 `geometries_warp01_realistic` / `geometries_warp01_cont`. The warp set is
 seeded, so warp *k* is the same deformation in both runs.
 
-> The warps are built on the anatomical model, so `warp_variant` is
-> `realistic` in `compute_hierarchy_table` and `variant_for_type.warp` in
-> `st_collect_replicates`. Change it in those two places if you warp a
-> different bone model.
+> The warps are built on the anatomical model, so the bone variant is
+> `realistic` in both `compute_hierarchy_table` and `st_warp_summary`.
+> Change it in those two places if you warp a different bone model.
 
 ---
 
@@ -167,8 +166,8 @@ hierarchy table only appears where BOTH solvers ran on the same geometry, so
 a missing FEM silently drops that replicate from the table.
 
 **Set `sensor_arrays` to `back` only** unless you need the front array:
-`st_collect_replicates` uses the back array, and computing both doubles the
-cost for nothing.
+`st_warp_summary` uses the back array, and computing both doubles the cost
+for nothing.
 
 ---
 
@@ -186,8 +185,8 @@ run_all_analysis
 analyse_bone_conductivity     % needs 2a
 analyse_csf_effect            % needs 2b
 analyse_convergence           % needs 2c
-st_collect_replicates         % needs 2d
-st_group_stats                % needs st_collect_replicates
+st_warp_summary               % needs 2d — intervals across warped anatomies
+plot_warp_family              % the warp-family figure
 
 % LAST — pulls every factor above onto one scale
 compute_hierarchy_table
@@ -255,7 +254,7 @@ base geom ──> cr_generate_warps ─> cr_build_warp_geometries ──> BEM
                                                         └──> FEM (volume warp)
                                                               │
                                                               v
-                                          st_collect_replicates ─> st_group_stats
+                                          st_warp_summary
 
 base geom ──> run_bone_conductivity_{bem,fem} ──> analyse_bone_conductivity
 base geom ──> run_fem_leadfields_csf ──────────> analyse_csf_effect

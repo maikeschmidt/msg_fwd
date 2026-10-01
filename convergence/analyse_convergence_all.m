@@ -1,5 +1,5 @@
 % analyse_convergence_all - Every refinement sweep, against each other and
-%                           against the production models
+%                           against the reference models
 %
 % The individual analyse_* scripts each measure one sweep against its own
 % finest level, which answers "did this sweep settle". This answers the
@@ -8,7 +8,7 @@
 %   Does the FEM volume sweep agree with the BEM surface sweep?
 %   Does the FEM surface sweep agree with the BEM surface sweep?
 %   Does refining the cord move the answer relative to any of them?
-%   Does any of it move away from the production models?
+%   Does any of it move away from the reference models?
 %
 % Every sweep contributes its FINEST level — its best available estimate of
 % the truth — and those are compared against each other and against the
@@ -250,7 +250,7 @@ for k = 1:size(pairs_of_interest,1)
     end
 end
 
-% Every sweep against the published models
+% Every sweep against the reference models (MRI-derived)
 fprintf(fid, '\n%s\nEVERY SWEEP AGAINST THE PUBLISHED MODELS\n%s\n', ...
     repmat('=',1,78), repmat('=',1,78));
 for ref_id = {'bem_original','fem_original'}
@@ -269,8 +269,8 @@ for ref_id = {'bem_original','fem_original'}
 end
 
 fprintf(fid, ['\nREADING THIS\n' ...
-  'Sweeps that agree with each other AND with the published model have\n' ...
-  'converged to the same solution, which is evidence the published model\n' ...
+  'Sweeps that agree with each other AND with the reference model (MRI-derived) have\n' ...
+  'converged to the same solution, which is evidence the reference model (MRI-derived)\n' ...
   'was already resolved. A sweep that disagrees with the others points at\n' ...
   'the discretisation it varies.\n' ...
   '\nNote the FEM volume bound is not the active constraint at these\n' ...
@@ -300,7 +300,7 @@ for oi = 1:n_ori
         end
     end
     xlabel('comparison', 'FontSize', 12); ylabel('reference', 'FontSize', 12);
-    title(sprintf('%s — all refinement sweeps and the published models', ...
+    title(sprintf('%s — all refinement sweeps and the reference models', ...
         ori_titles.(orientation_labels{oi})), 'FontSize', 13, 'FontWeight','bold');
     f = sprintf('convergence_all_matrix_%s', orientation_labels{oi});
     exportgraphics(fig, fullfile(save_dir,[f '.png']), 'Resolution', 600);
@@ -315,7 +315,7 @@ if ~isempty(i_b) || ~isempty(i_f)
     if ~isempty(sel)
         fig = figure('Color','w','Position',[100 100 1400 460]);
         tl = tiledlayout(1, n_ori, 'TileSpacing','compact','Padding','loose');
-        title(tl, 'Every refinement sweep against the published models', ...
+        title(tl, 'Every refinement sweep against the reference models', ...
             'FontSize', 14, 'FontWeight','bold');
         for oi = 1:n_ori
             ax = nexttile(tl); hold(ax,'on');
@@ -329,7 +329,7 @@ if ~isempty(i_b) || ~isempty(i_f)
             if oi==1, ylabel(ax,'Median RE (%)','FontSize',12); end
             title(ax, ori_titles.(orientation_labels{oi}), 'FontSize',12);
             if oi==n_ori
-                lg = legend(ax, {'vs published BEM','vs published FEM'}, ...
+                lg = legend(ax, {'vs reference BEM (MRI-derived)','vs reference FEM (MRI-derived)'}, ...
                     'Location','best','FontSize',10); lg.Box='off';
             end
         end

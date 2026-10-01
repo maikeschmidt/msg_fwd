@@ -33,7 +33,7 @@
 %   J R Stat Soc B 57(1):289-300.
 %
 % SEE ALSO:
-%   st_signflip_test, st_group_stats
+%   st_signflip_test, st_boot_ci_median
 %
 % -------------------------------------------------------------------------
 % Copyright (c) 2026 University College London

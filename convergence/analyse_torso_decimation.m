@@ -6,10 +6,10 @@
 %   varies across levels; cord, bone, heart and lung surfaces stay at full
 %   resolution, so the source space is fixed throughout.
 %
-% THE REFERENCE IS THE PRODUCTION MESH
+% THE REFERENCE IS THE REFERENCE MESH
 %
 %   Every comparison is made against the keep = 0.50 level of the SAME
-%   sweep. That is the decimation used for the production models, so each
+%   sweep. That is the decimation used for the reference models, so each
 %   number answers "what would change if the torso had been meshed at this
 %   resolution instead". Using the sweep's own 0.50 level rather than the
 %   separately generated production lead field keeps the comparison internal
@@ -312,7 +312,7 @@ fprintf(fid, '%s\nHEADLINE\n%s\n', repmat('=',1,78), repmat('=',1,78));
 i_coarse = 1;   % levels are stored in ascending keep order
 fprintf(fid, 'Coarsest level in the sweep: keep = %.2f\n\n', F(1).keeps(i_coarse));
 
-fprintf(fid, 'Moving the torso from the production %.0f%% to %.0f%% of its faces\n', ...
+fprintf(fid, 'Moving the torso from the reference %.0f%% to %.0f%% of its faces\n', ...
     reference_keep*100, F(1).keeps(i_coarse)*100);
 fprintf(fid, 'changes the sensor-level lead fields by:\n');
 for oi = 1:n_ori
@@ -330,7 +330,7 @@ if has_fem
 end
 
 if has_cross
-    fprintf(fid, '\nSolver disagreement at the production level:\n');
+    fprintf(fid, '\nSolver disagreement at the reference level:\n');
     ip = find(abs(F(3).keeps - reference_keep) < 1e-9, 1);
     if ~isempty(ip)
         for oi = 1:n_ori
@@ -445,7 +445,7 @@ if has_cross
                 'Color', cols(1,:), 'LineWidth', 2.5, 'MarkerSize', 7, ...
                 'MarkerFaceColor', cols(1,:), 'DisplayName','BEM vs FEM');
             xline(ax, reference_keep, '--k', 'Alpha', 0.6, ...
-                'Label','production', 'HandleVisibility','off');
+                'Label','reference', 'HandleVisibility','off');
             grid(ax,'on');
             xlabel(ax, 'Fraction of torso faces kept');
             if k == 1
@@ -534,8 +534,8 @@ if ~isempty(S_dec)
         'dist',               dist, ...
         'orientation_labels', {orientation_labels}, ...
         'ori_titles',         ori_titles, ...
-        'title',              sprintf(['Torso decimation vs the production ' ...
-                                       'mesh — axis %d'], target_axis), ...
+        'title',              sprintf(['Torso decimation vs the reference ' ...
+                                       mesh (50%% torso) — axis %d'], target_axis), ...
         'colors',             lines(max(numel(S_dec),3)), ...
         'save_dir',           save_dir, ...
         'save_name',          'torso_decimation_decomposition');
