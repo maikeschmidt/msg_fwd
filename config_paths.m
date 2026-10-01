@@ -63,7 +63,7 @@
 % ROOTS — in most cases these are the only two lines that need changing
 
 data_root    = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates';           % SET THIS
-results_root = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\results_final_finaltest';   % SET THIS
+results_root = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\results_final_final_final_test';   % SET THIS
 
 % External binaries. duneuro_binpath is the FOLDER holding
 % bst_duneuro_meeg_win64.exe, not the executable.
