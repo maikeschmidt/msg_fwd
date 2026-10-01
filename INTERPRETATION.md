@@ -92,14 +92,29 @@ might meet, and that is a question about the spread of a distribution, which
 an interval answers directly. So: no permutation tests, no multiplicity
 correction, no effect sizes.
 
-**The coverage statement** is the number the analysis exists to produce:
+**The coverage statement**, worded descriptively:
 
-> 95% of warped anatomies give a BEM–FEM relative error at or below X%.
+> In 95% of the 30 warps, BEM–FEM relative error was at or below X%
+> (95% CI …).
 
-Read as: a geometry drawn from this family has a 95% chance of agreeing
-between solvers to within that. Quote the interval next to it — with 30
-warps the 95th percentile rests on the top one or two values, so the point
-estimate alone overstates what the sample carries.
+Not "a new geometry has a 95% chance of falling below X". The warps are
+affine transformations of one anatomy rather than a sample from a population
+of bodies, and a percentile taken from 30 values is not a predictive
+probability — that needs a tolerance interval and a sampling model, neither
+of which applies here. Quote the interval alongside: the percentile rests on
+the top one or two values.
+
+**The within-solver spread is the comparator.** Cross-solver (BEM vs FEM on
+one anatomy) is reported next to within-solver (one solver between two
+anatomies, every warp pair). The claim is that the solvers agree more closely
+on one geometry than either agrees with itself across geometries, and that
+needs both numbers. The report states whether the intervals separate; no test
+is applied, because non-overlapping intervals carry it.
+
+Within-solver intervals use a **cluster bootstrap** — anatomies are resampled
+and the pairs rebuilt. Resampling pairs directly would treat shared anatomies
+as new information, since each anatomy appears in n−1 pairs, and give
+intervals that are too narrow.
 
 **`warp_along_cord_axis<N>.png`** is the median contrast at each source
 position with a band for the spread across anatomies. Where the band is

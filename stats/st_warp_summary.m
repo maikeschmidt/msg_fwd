@@ -25,16 +25,30 @@
 %      the warp is the unit that was sampled.
 %
 %   2. THE 95TH PERCENTILE, AND WHAT IT LICENCES
-%      The value below which 95% of the warped anatomies fall. Read as: a
-%      geometry drawn from this family of warps has a 95% chance of giving a
-%      BEM-FEM difference no larger than this. That is the statement the
-%      warping analysis exists to support, and it needs a percentile rather
-%      than a test.
+%      The value below which 95% of the warped anatomies fall, reported
+%      descriptively: "in 95% of the 30 warps, BEM-FEM relative error was at
+%      or below X%".
 %
-%      The interval around that percentile is reported too. With 30 warps
-%      the 95th percentile rests on the top one or two values, so the
-%      interval is wide and quoting the point estimate alone would overstate
-%      what the sample can carry.
+%      NOT "a new geometry has a 95% chance of falling below X". The warps
+%      are affine transformations of ONE anatomy rather than a sample from a
+%      population of bodies, and a percentile taken from 30 values is not a
+%      predictive probability — that would need a tolerance interval and a
+%      sampling model, neither of which applies. The interval is reported
+%      alongside because the percentile rests on the top one or two values.
+%
+%   2b. THE WITHIN-SOLVER SPREAD, AS THE COMPARATOR
+%      How far one solver moves between two anatomies, over every pair of
+%      warps, within each solver.
+%
+%      This is what the cross-solver number is read against. The claim the
+%      paper makes is that the two solvers differ LESS on one geometry than
+%      either solver differs between geometries, and that is a comparison
+%      between two quantities, so both have to be reported. Intervals come
+%      from a cluster bootstrap that resamples ANATOMIES and rebuilds the
+%      pairs, since the pairs share warps and are not independent.
+%
+%      Descriptive, with no test: non-overlapping intervals carry the point
+%      on their own.
 %
 %   3. WHERE ALONG THE CORD IT VARIES
 %      The median contrast at each source position, with a band showing the
@@ -63,7 +77,7 @@
 %                                    percentiles, and the reference's rank
 %   warp_summary_per_warp.csv        one row per warp, for plotting elsewhere
 %   warp_summary_along_cord.csv      per source position
-%   warp_distribution_axis<N>.png    the spread across anatomies
+%   warp_distribution_axis<N>.png    cross-solver against within-solver
 %   warp_along_cord_axis<N>.png      median and spread by cord position
 %
 % -------------------------------------------------------------------------
@@ -175,7 +189,9 @@ fcrd = fopen(fullfile(save_dir, 'warp_summary_along_cord.csv'), 'w');
 
 fprintf(fdis, ['axis,orientation,metric,n_warps,median,iqr_lo,iqr_hi,' ...
     'ci_lo,ci_hi,p50,p75,p90,p95,p95_ci_lo,p95_ci_hi,min,max,' ...
-    'reference_value,reference_percentile\n']);
+    'reference_value,reference_percentile,' ...
+    'within_bem_median,within_bem_ci_lo,within_bem_ci_hi,' ...
+    'within_fem_median,within_fem_ci_lo,within_fem_ci_hi,n_pairs\n']);
 fprintf(fwrp, 'axis,orientation,warp,re,r2,rdm,lnmag,gain_pct\n');
 fprintf(fcrd, ['axis,orientation,source_index,distance_mm,' ...
     're_median,re_p05,re_p25,re_p75,re_p95,re_min,re_max\n']);
@@ -224,6 +240,23 @@ for ax = 1:n_sensor_axes
                 per_warp(w,3), per_warp(w,4), (exp(per_warp(w,4))-1)*100);
         end
 
+        % WITHIN-SOLVER SPREAD, as the comparator for the cross-solver value
+        %
+        % How far one solver moves between two anatomies. Every unordered
+        % pair of warps, within each solver. This is what the cross-solver
+        % number has to be read against: the central claim is that the two
+        % solvers differ LESS on one geometry than either solver differs
+        % between geometries, and that comparison needs both quantities.
+        %
+        % Descriptive only — no test. The intervals either overlap or they
+        % do not, and that carries the point without an inferential frame
+        % these computed geometries cannot support.
+        wb = pairwise_within(lf, 'bem', have, ax, vopts, metric_opts);
+        wf = pairwise_within(lf, 'fem', have, ax, vopts, metric_opts);
+
+        S(ax,oi).within_bem = wb;
+        S(ax,oi).within_fem = wf;
+
         % The reference anatomy, same contrast
         ref_val = NaN;
         if have_ref
@@ -271,12 +304,24 @@ for ax = 1:n_sensor_axes
         S(ax,oi).cover = p_cover; S(ax,oi).cover_ci = ci_cov;
         S(ax,oi).ref_pct = ref_pct;
 
+        % Within-solver medians, with intervals from the same cluster
+        % bootstrap: anatomies are resampled and the pairs rebuilt from the
+        % resampled set, because the pairs are not independent of each other.
+        S(ax,oi).wb_med = median(wb.re, 'omitnan');
+        S(ax,oi).wf_med = median(wf.re, 'omitnan');
+        S(ax,oi).wb_ci  = boot_ci_within(wb, numel(have), n_boot, ci_level);
+        S(ax,oi).wf_ci  = boot_ci_within(wf, numel(have), n_boot, ci_level);
+
         fprintf(fdis, '%d,%s,RE,%d,%.4f,%.4f,%.4f,%.4f,%.4f,', ...
             ax, ori, numel(re), med, prctile_1d(re,25), prctile_1d(re,75), ...
             ci_med(1), ci_med(2));
-        fprintf(fdis, '%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.2f\n', ...
+        fprintf(fdis, '%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.2f,', ...
             prctile_1d(re,50), prctile_1d(re,75), prctile_1d(re,90), ...
             p_cover, ci_cov(1), ci_cov(2), min(re), max(re), ref_val, ref_pct);
+        fprintf(fdis, '%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%d\n', ...
+            S(ax,oi).wb_med, S(ax,oi).wb_ci(1), S(ax,oi).wb_ci(2), ...
+            S(ax,oi).wf_med, S(ax,oi).wf_ci(1), S(ax,oi).wf_ci(2), ...
+            numel(wb.re));
     end
 end
 
@@ -303,16 +348,56 @@ for ax = 1:n_sensor_axes
     fprintf(fid, '\n  THE COVERAGE STATEMENT\n');
     for oi = 1:n_ori
         s = S(ax,oi);
-        fprintf(fid, ['    %-4s %d%% of warped anatomies give a BEM-FEM ' ...
-            'relative error at or\n         below %.3f%% (95%% CI %.3f to ' ...
-            '%.3f). A geometry drawn from this\n         family therefore has ' ...
-            'a %d%% chance of agreeing between solvers to\n         within ' ...
-            'that.\n'], orientation_labels{oi}, cover_pct, s.cover, ...
-            s.cover_ci(1), s.cover_ci(2), cover_pct);
+        fprintf(fid, ['    %-4s In %d%% of the %d warps, BEM-FEM relative ' ...
+            'error was at or below\n         %.3f%% (95%% CI %.3f to %.3f).' ...
+            '\n'], orientation_labels{oi}, cover_pct, numel(have), ...
+            s.cover, s.cover_ci(1), s.cover_ci(2));
     end
-    fprintf(fid, ['\n    With %d anatomies the %dth percentile rests on the ' ...
-        'top one or two\n    values, so quote the interval alongside it.\n'], ...
-        numel(have), cover_pct);
+    fprintf(fid, ['\n    This is a description of these %d warps, not a ' ...
+        'prediction for a new\n    geometry. The warps are affine ' ...
+        'transformations of ONE anatomy, so they\n    are not a sample from ' ...
+        'a population of bodies, and a percentile taken from\n    %d values ' ...
+        'is not a %d%% probability for an unseen case — that would need a\n' ...
+        '    tolerance interval and a sampling model neither of which applies ' ...
+        'here.\n    Quote the interval alongside the percentile: it rests on ' ...
+        'the top one or\n    two values.\n'], ...
+        numel(have), numel(have), cover_pct);
+
+    fprintf(fid, ['\n  SOLVER DIFFERENCE AGAINST ANATOMICAL DIFFERENCE\n' ...
+        '    Cross-solver is BEM vs FEM on one anatomy. Within-solver is one\n' ...
+        '    solver between two anatomies, over every pair of warps.\n\n']);
+    fprintf(fid, '    %-5s %-26s %-26s %-26s\n', ...
+        'ori', 'BEM vs FEM (same warp)', 'within BEM (warp pairs)', ...
+        'within FEM (warp pairs)');
+
+    for oi = 1:n_ori
+        s = S(ax,oi);
+        fprintf(fid, '    %-5s %7.2f%% [%5.2f-%5.2f]   %7.2f%% [%5.2f-%5.2f]   %7.2f%% [%5.2f-%5.2f]\n', ...
+            orientation_labels{oi}, ...
+            s.med,    s.ci(1),    s.ci(2), ...
+            s.wb_med, s.wb_ci(1), s.wb_ci(2), ...
+            s.wf_med, s.wf_ci(1), s.wf_ci(2));
+    end
+
+    fprintf(fid, '\n');
+    for oi = 1:n_ori
+        s = S(ax,oi);
+        sep_b = s.ci(2) < s.wb_ci(1);
+        sep_f = s.ci(2) < s.wf_ci(1);
+        if sep_b && sep_f
+            fprintf(fid, ['    %-4s cross-solver sits below both within-solver ' ...
+                'families with no\n         interval overlap: the two solvers ' ...
+                'agree more closely on one\n         geometry than either ' ...
+                'agrees with itself across geometries.\n'], ...
+                orientation_labels{oi});
+        else
+            fprintf(fid, ['    %-4s intervals overlap (BEM %s, FEM %s) — the ' ...
+                'separation does not\n         hold in this orientation, so ' ...
+                'do not claim it here.\n'], orientation_labels{oi}, ...
+                ternary_str(sep_b,'separated','overlapping'), ...
+                ternary_str(sep_f,'separated','overlapping'));
+        end
+    end
 
     if have_ref
         fprintf(fid, '\n  WHERE THE REFERENCE ANATOMY SITS\n');
@@ -351,37 +436,45 @@ fclose(fid); fclose(fdis); fclose(fwrp); fclose(fcrd);
 for ax = 1:n_sensor_axes
     fig = figure('Color','w','Position',[80 80 1400 420]);
     tl  = tiledlayout(1, n_ori, 'TileSpacing','compact','Padding','loose');
-    title(tl, sprintf(['BEM vs FEM across %d warped anatomies — sensor ' ...
-        'axis %d'], numel(have), ax), 'FontSize', 14, 'FontWeight','bold');
+    title(tl, sprintf(['Solver difference against anatomical difference, ' ...
+        '%d warped anatomies — sensor axis %d'], numel(have), ax), ...
+        'FontSize', 14, 'FontWeight','bold');
 
     for oi = 1:n_ori
         s  = S(ax,oi);
-        re = s.per_warp(:,1);
         ax_h = nexttile(tl); hold(ax_h,'on');
 
-        % Every anatomy, jittered, with the summary over the top
-        jit = (rand(numel(re),1) - 0.5) * 0.25;
-        scatter(ax_h, 1 + jit, re, 26, [0.45 0.55 0.75], 'filled', ...
-            'MarkerFaceAlpha', 0.65, 'DisplayName','each anatomy');
+        % Three families side by side. The comparison between them is the
+        % claim: the solvers agree more closely on one geometry than either
+        % agrees with itself across geometries.
+        fam = { s.per_warp(:,1), s.med, s.ci, [0.80 0.30 0.20], 'BEM vs FEM (same anatomy)'; ...
+                s.within_bem.re,  s.wb_med, s.wb_ci, [0.20 0.40 0.70], 'within BEM (anatomy pairs)'; ...
+                s.within_fem.re,  s.wf_med, s.wf_ci, [0.45 0.45 0.45], 'within FEM (anatomy pairs)' };
 
-        plot(ax_h, [0.75 1.25], [s.med s.med], '-', 'Color',[0.15 0.15 0.15], ...
-            'LineWidth', 2.5, 'DisplayName','median');
-        plot(ax_h, [1 1], s.ci, '-', 'Color',[0.15 0.15 0.15], 'LineWidth', 1.2, ...
-            'HandleVisibility','off');
-
-        yline(ax_h, s.cover, '--', 'Color',[0.80 0.30 0.20], 'LineWidth', 2, ...
-            'Label', sprintf('%dth pct = %.2f%%', cover_pct, s.cover), ...
-            'LabelHorizontalAlignment','left', 'DisplayName', ...
-            sprintf('%dth percentile', cover_pct));
-
-        if ~isnan(s.ref_val)
-            yline(ax_h, s.ref_val, ':', 'Color',[0.20 0.45 0.25], 'LineWidth', 2, ...
-                'Label','reference anatomy', 'LabelHorizontalAlignment','right', ...
-                'DisplayName','reference anatomy');
+        for f = 1:3
+            v = fam{f,1}; v = v(~isnan(v));
+            jit = (rand(numel(v),1) - 0.5) * 0.3;
+            scatter(ax_h, f + jit, v, 14, fam{f,4}, 'filled', ...
+                'MarkerFaceAlpha', 0.30, 'HandleVisibility','off');
+            plot(ax_h, [f-0.3 f+0.3], [fam{f,2} fam{f,2}], '-', ...
+                'Color', fam{f,4}, 'LineWidth', 3, 'DisplayName', fam{f,5});
+            plot(ax_h, [f f], fam{f,3}, '-', 'Color', fam{f,4}, ...
+                'LineWidth', 1.6, 'HandleVisibility','off');
         end
 
-        xlim(ax_h, [0.6 1.4]); set(ax_h, 'XTick', []);
-        ylabel(ax_h, 'Relative error, BEM vs FEM (%)');
+        yline(ax_h, s.cover, '--', 'Color',[0.80 0.30 0.20], 'LineWidth', 1.2, ...
+            'Label', sprintf('%dth pct = %.2f%%', cover_pct, s.cover), ...
+            'LabelHorizontalAlignment','left', 'HandleVisibility','off');
+
+        if ~isnan(s.ref_val)
+            yline(ax_h, s.ref_val, ':', 'Color',[0.20 0.45 0.25], 'LineWidth', 1.6, ...
+                'Label','reference anatomy', 'LabelHorizontalAlignment','right', ...
+                'HandleVisibility','off');
+        end
+
+        xlim(ax_h, [0.4 3.6]);
+        set(ax_h, 'XTick', 1:3, 'XTickLabel', {'cross','w-BEM','w-FEM'});
+        ylabel(ax_h, 'Relative error (%)');
         title(ax_h, ori_titles.(orientation_labels{oi}));
         grid(ax_h,'on'); set(ax_h,'FontSize',11,'TickDir','out');
         if oi == 1, legend(ax_h, 'Location','best','FontSize',8); end
@@ -474,6 +567,71 @@ function ci = boot_ci_pct(v, p, n_boot, level)
     a  = (1 - level) / 2;
     ci = [prctile_1d(b, a*100), prctile_1d(b, (1-a)*100)];
 end
+
+function W = pairwise_within(lf, meth, have, ax, vopts, mopts)
+% One solver, every unordered pair of anatomies. Returns the per-pair median
+% RE and which two warps each pair came from, so the bootstrap below can
+% rebuild the pair set from resampled anatomies.
+
+    n  = numel(have);
+    np = n*(n-1)/2;
+    W.re = nan(np,1);  W.i = nan(np,1);  W.j = nan(np,1);
+
+    k = 0;
+    for a = 1:n
+        for b = a+1:n
+            k = k + 1;
+            ka = sprintf('%s_%s', meth, have{a});
+            kb = sprintf('%s_%s', meth, have{b});
+            try
+                [LA, LB] = lf_pair_vectors(lf, ka, kb, ax, vopts);
+            catch
+                continue;
+            end
+            M = lf_metrics_series(LA, LB, mopts);
+            W.re(k) = median(M.re(2:(size(LA,2)-1)), 'omitnan');
+            W.i(k)  = a;  W.j(k) = b;
+        end
+    end
+end
+
+
+function ci = boot_ci_within(W, n_warp, n_boot, level)
+% Cluster bootstrap for a within-solver family.
+%
+% The pairs are not independent — each anatomy appears in n-1 of them — so
+% resampling pairs would treat shared anatomies as new information and give
+% an interval that is too narrow. Resampling ANATOMIES and rebuilding the
+% pair set from the resampled anatomies respects that dependency.
+%
+% Pairs where the same anatomy was drawn twice are dropped: their relative
+% error is zero by construction and keeping them would drag the median down.
+
+    ok = ~isnan(W.re);
+    if ~any(ok), ci = [NaN NaN]; return; end
+
+    % Lookup from an anatomy pair to its stored relative error
+    L = sparse(W.i(ok), W.j(ok), W.re(ok), n_warp, n_warp);
+
+    b = nan(n_boot, 1);
+    for t = 1:n_boot
+        d = randi(n_warp, n_warp, 1);
+        v = [];
+        for a = 1:n_warp
+            for c = a+1:n_warp
+                p = min(d(a), d(c));  q = max(d(a), d(c));
+                if p == q, continue; end        % same anatomy drawn twice
+                val = L(p, q);
+                if val ~= 0, v(end+1) = val; end %#ok<AGROW>
+            end
+        end
+        if ~isempty(v), b(t) = median(v); end
+    end
+
+    a_t = (1 - level) / 2;
+    ci  = [prctile_1d(b, a_t*100), prctile_1d(b, (1-a_t)*100)];
+end
+
 
 function s = ternary_str(c, a, b)
     if c, s = a; else, s = b; end
