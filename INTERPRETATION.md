@@ -116,6 +116,19 @@ and the pairs rebuilt. Resampling pairs directly would treat shared anatomies
 as new information, since each anatomy appears in n−1 pairs, and give
 intervals that are too narrow.
 
+**`warp_bem_vs_fem_hist_axis<N>.png`** is the distribution of the BEM–FEM
+difference, three orientations per sensor axis, with the within-solver
+families drawn over it as outlines. Little overlap between the filled
+cross-solver mass and the two outlines is the visual form of the central
+claim.
+
+Pooled **per source across anatomies** by default, not one median per
+anatomy: thirty medians make a histogram with more bins than data, whereas
+pooling every source of every anatomy gives a distribution with real shape.
+It is the same quantity, just not pre-averaged. Set `hist_per_source = false`
+to histogram the per-anatomy medians instead. Normalised to proportion
+because there are far more within-solver pairs than anatomies.
+
 **`warp_along_cord_axis<N>.png`** is the median contrast at each source
 position with a band for the spread across anatomies. Where the band is
 narrow the solver difference is a property of the method; where it is wide

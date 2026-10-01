@@ -78,6 +78,7 @@
 %   warp_summary_per_warp.csv        one row per warp, for plotting elsewhere
 %   warp_summary_along_cord.csv      per source position
 %   warp_distribution_axis<N>.png    cross-solver against within-solver
+%   warp_bem_vs_fem_hist_axis<N>.png  distributions, pooled per source
 %   warp_along_cord_axis<N>.png      median and spread by cord position
 %
 % -------------------------------------------------------------------------
@@ -487,6 +488,113 @@ for ax = 1:n_sensor_axes
 end
 
 
+% FIGURE 1b — DISTRIBUTIONS AS HISTOGRAMS
+%
+% One figure per sensor axis, three subplots — one per dipole orientation.
+%
+% PER-SOURCE, POOLED ACROSS ANATOMIES is the default rather than one median
+% per anatomy. Thirty medians make a histogram with more bins than data;
+% pooling every source of every anatomy gives a distribution with real
+% shape, and it is the same quantity, just not pre-averaged. Set
+% hist_per_source = false to histogram the per-anatomy medians instead.
+%
+% The within-solver families are drawn as outlines over the top, so the
+% separation that the main claim rests on is visible directly: the
+% cross-solver mass sitting left of both within-solver masses.
+%
+% Normalised to proportion, not counts — there are far more within-solver
+% pairs than anatomies, so raw counts would not be comparable.
+
+hist_per_source = true;    % SET THIS
+overlay_within  = true;    % SET THIS
+
+fprintf('\nHistograms of the BEM-FEM difference...\n');
+
+for ax = 1:n_sensor_axes
+
+    Hx = cell(1,n_ori); Hb = cell(1,n_ori); Hf = cell(1,n_ori);
+    for oi = 1:n_ori
+        if hist_per_source
+            v = S(ax,oi).per_src(:)';
+            Hx{oi} = v(~isnan(v));
+            Hb{oi} = S(ax,oi).within_bem.all_src;
+            Hf{oi} = S(ax,oi).within_fem.all_src;
+        else
+            v = S(ax,oi).per_warp(:,1)';
+            Hx{oi} = v(~isnan(v));
+            Hb{oi} = S(ax,oi).within_bem.re(~isnan(S(ax,oi).within_bem.re))';
+            Hf{oi} = S(ax,oi).within_fem.re(~isnan(S(ax,oi).within_fem.re))';
+        end
+    end
+
+    if all(cellfun(@isempty, Hx)), continue; end
+
+    % Shared x-limits across the three panels, so the orientations are
+    % directly comparable rather than each rescaled to its own spread.
+    allv = [Hx{:}];
+    if overlay_within, allv = [allv, Hb{:}, Hf{:}]; end
+    xhi = prctile_1d(allv, 99.5);
+    if ~isfinite(xhi) || xhi <= 0, xhi = max(allv); end
+
+    fig = figure('Color','w','Position',[100 100 1500 440]);
+    tl  = tiledlayout(1, n_ori, 'TileSpacing','compact','Padding','loose');
+    title(tl, sprintf(['BEM vs FEM on matched warped anatomies — ' ...
+        'sensor axis %d'], ax), 'FontSize', 14, 'FontWeight','bold');
+
+    for oi = 1:n_ori
+        axh = nexttile(tl); hold(axh,'on');
+        v = Hx{oi};
+        if isempty(v), continue; end
+
+        histogram(axh, v, 'BinLimits', [0 xhi], 'NumBins', 40, ...
+            'Normalization','probability', ...
+            'FaceColor',[0.80 0.30 0.20], 'FaceAlpha', 0.65, ...
+            'EdgeColor','none');
+
+        if overlay_within
+            if ~isempty(Hb{oi})
+                histogram(axh, Hb{oi}, 'BinLimits', [0 xhi], 'NumBins', 40, ...
+                    'Normalization','probability', 'DisplayStyle','stairs', ...
+                    'EdgeColor',[0.20 0.40 0.70], 'LineWidth', 1.4);
+            end
+            if ~isempty(Hf{oi})
+                histogram(axh, Hf{oi}, 'BinLimits', [0 xhi], 'NumBins', 40, ...
+                    'Normalization','probability', 'DisplayStyle','stairs', ...
+                    'EdgeColor',[0.45 0.45 0.45], 'LineWidth', 1.4);
+            end
+        end
+
+        md = median(v);
+        xline(axh, md, '--k', 'LineWidth', 1.8, ...
+            'Label', sprintf('%.2f%%', md), 'LabelOrientation','horizontal', ...
+            'LabelVerticalAlignment','top', 'FontSize', 10);
+
+        xlim(axh, [0 xhi]);
+        grid(axh,'on'); box(axh,'off');
+        set(axh, 'FontSize', 11, 'TickDir','out', 'LineWidth', 1.1);
+        xlabel(axh, 'Relative error (%)', 'FontSize', 12);
+        if oi == 1
+            ylabel(axh, ternary_str(hist_per_source, ...
+                'Proportion of sources', 'Proportion of anatomies'), ...
+                'FontSize', 12);
+        end
+        title(axh, sprintf('%s   (n = %d)', ...
+            ori_titles.(orientation_labels{oi}), numel(v)), 'FontSize', 12);
+
+        if oi == n_ori && overlay_within
+            lg = legend(axh, {'BEM vs FEM','within BEM','within FEM'}, ...
+                'Location','northeast','FontSize',10); lg.Box = 'off';
+        end
+    end
+
+    f_out = sprintf('warp_bem_vs_fem_hist_axis%d', ax);
+    exportgraphics(fig, fullfile(save_dir,[f_out '.png']), 'Resolution', 600);
+    saveas(fig,          fullfile(save_dir,[f_out '.fig']));
+    close(fig);
+    fprintf('  axis %d -> %s.png\n', ax, f_out);
+end
+
+
 % FIGURE 2 — WHERE ALONG THE CORD THE ANATOMY MATTERS
 %
 % Median across anatomies as the line; the band is the spread across
@@ -576,6 +684,7 @@ function W = pairwise_within(lf, meth, have, ax, vopts, mopts)
     n  = numel(have);
     np = n*(n-1)/2;
     W.re = nan(np,1);  W.i = nan(np,1);  W.j = nan(np,1);
+    W.all_src = [];    % every source of every pair, for the histogram
 
     k = 0;
     for a = 1:n
@@ -588,11 +697,14 @@ function W = pairwise_within(lf, meth, have, ax, vopts, mopts)
             catch
                 continue;
             end
-            M = lf_metrics_series(LA, LB, mopts);
-            W.re(k) = median(M.re(2:(size(LA,2)-1)), 'omitnan');
+            M  = lf_metrics_series(LA, LB, mopts);
+            kp = 2:(size(LA,2)-1);
+            W.re(k) = median(M.re(kp), 'omitnan');
             W.i(k)  = a;  W.j(k) = b;
+            W.all_src = [W.all_src, M.re(kp)];   %#ok<AGROW>
         end
     end
+    W.all_src = W.all_src(~isnan(W.all_src));
 end
 
 
