@@ -1,8 +1,8 @@
 % plot_warp_family - Publication figure of the warped anatomy family
 %
-% Draws the reference torso as a solid black silhouette with a selection of
-% warped torsos laid faintly over it, in sagittal and coronal view, so the
-% range of body shapes the analysis covers can be seen at a glance.
+% Draws the reference torso as a solid filled silhouette with a few warped
+% torsos laid faintly over it, in sagittal and coronal view, so the range of
+% body shapes the analysis covers can be seen at a glance.
 %
 % This is the figure for the paper. cr_plot_warps in msg_coreg is the
 % pre-flight check on the same warps — it adds a scale-factor panel and
@@ -10,18 +10,25 @@
 % printed. Keep both: they answer different questions.
 %
 % WHAT IT SHOWS
-%   The reference anatomy in black, drawn heavily, with each warped anatomy
-%   over it at low opacity. Where the faint outlines bunch tightly the warps
-%   barely move the body; where they fan out the family spans a real range
-%   of shapes. The spinal cord is drawn in the same colour as its own torso,
-%   because the warp is one affine map applied to every mesh at once — an
-%   unwarped cord inside a warped torso would look as though the cord had
-%   escaped the body, which is a drawing error rather than a geometry one.
+%   The reference anatomy as a solid filled body, with a few warped
+%   anatomies filled faintly over the top. Where the faint bodies sit close
+%   to the solid one the warps barely move the torso; where they extend
+%   beyond it the family spans a real range of shapes. The spinal cord is
+%   drawn warped with its own torso, because the warp is one affine map
+%   applied to every mesh at once — an unwarped cord inside a warped torso
+%   would look as though the cord had escaped the body, which is a drawing
+%   error rather than a geometry one.
 %
-% WHY SILHOUETTES RATHER THAN SURFACES
-%   A projected convex hull reads cleanly in print and overlays without
-%   occluding, which a rendered surface does not. The point of the figure is
-%   the spread of the family, not the detail of any one mesh.
+% WHY FILLED SILHOUETTES RATHER THAN SURFACES
+%   A filled projection reads as a body at a glance and overlays legibly at
+%   low opacity, which a rendered 3-D surface does not — several translucent
+%   surfaces depth-sort into mud. The point of the figure is the spread of
+%   the family, not the detail of any one mesh.
+%
+%   The silhouette follows the actual projected shape via `boundary`, with a
+%   shrink factor, rather than a convex hull. A hull would square off the
+%   concave parts of a torso profile and the warped bodies would then differ
+%   from the reference in ways the geometry does not.
 %
 % USAGE:
 %   plot_warp_family
@@ -30,9 +37,13 @@
 % OPTIONS (all optional)
 %   .geom_file   base geometry .mat (default: the MRI-derived reference)
 %   .warp_file   warp .mat from cr_generate_warps
-%   .n_show      how many warps to overlay, evenly spaced (default 12)
+%   .n_show      how many warps to overlay, evenly spaced (default 4)
 %   .save_dir    where the figure goes
-%   .alpha       opacity of each warped outline (default 0.35)
+%   .alpha       opacity of each warped body (default 0.22)
+%   .shrink      boundary shrink factor, 0 = convex hull, 1 = tightest
+%                (default 0.4); raise it if the silhouette looks too boxy,
+%                lower it if it develops spurious notches
+%   .show_cord   draw the spinal cord as well (default true)
 %
 % OUTPUT:
 %   warp_family.png / .fig
@@ -59,8 +70,10 @@ end
 if ~isfield(S,'warp_file')
     S.warp_file = fullfile(warp_geoms, 'anatomical_warps.mat');
 end
-if ~isfield(S,'n_show'),   S.n_show   = 12;                                  end
-if ~isfield(S,'alpha'),    S.alpha    = 0.35;                                end
+if ~isfield(S,'n_show'),    S.n_show    = 4;                                 end
+if ~isfield(S,'alpha'),     S.alpha     = 0.22;                              end
+if ~isfield(S,'shrink'),    S.shrink    = 0.4;                               end
+if ~isfield(S,'show_cord'), S.show_cord = true;                              end
 if ~isfield(S,'save_dir'), S.save_dir = fullfile(save_base_dir, 'warping');   end
 
 if ~exist(S.save_dir,'dir'); mkdir(S.save_dir); end
@@ -101,8 +114,9 @@ tl  = tiledlayout(1, 2, 'TileSpacing','compact','Padding','loose');
 
 % A single hue for every warp keeps the eye on the spread rather than
 % inviting the reader to track individual warps, which carry no order.
-warp_col = [0.20 0.45 0.75];
-cord_col = [0.75 0.35 0.15];
+ref_col  = [0.26 0.32 0.40];   % solid reference body
+warp_col = [0.20 0.45 0.75];   % the faint overlaid bodies
+cord_col = [0.80 0.33 0.15];
 
 views = { 3, 2, 'Ventral-Dorsal (mm)', 'Rostral-Caudal (mm)', 'Sagittal'; ...
           1, 2, 'Left-Right (mm)',     'Rostral-Caudal (mm)', 'Coronal' };
@@ -112,40 +126,53 @@ for v = 1:size(views,1)
     cx = views{v,1}; cy = views{v,2};
     ax = nexttile(tl); hold(ax,'on');
 
-    % Warped outlines first, so the reference sits on top of them
+    % Reference first and solid, so the faint warped bodies read as laid
+    % over it rather than behind it.
+    silhouette(ax, V0(:,cx), V0(:,cy), ref_col, 1.0, S.shrink, 'none');
+    if S.show_cord
+        silhouette(ax, C0(:,cx), C0(:,cy), cord_col, 1.0, S.shrink, 'none');
+    end
+
     for i = 1:numel(show)
         M  = W.matrices{show(i)};
         Vw = apply_T(M, V0);
-        Cw = apply_T(M, C0);
-        outline(ax, Vw(:,cx), Vw(:,cy), warp_col, 1.1, S.alpha);
-        outline(ax, Cw(:,cx), Cw(:,cy), cord_col, 0.9, S.alpha);
+        silhouette(ax, Vw(:,cx), Vw(:,cy), warp_col, S.alpha, S.shrink, ...
+                   warp_col);
+        if S.show_cord
+            Cw = apply_T(M, C0);
+            silhouette(ax, Cw(:,cx), Cw(:,cy), cord_col, S.alpha, ...
+                       S.shrink, 'none');
+        end
     end
-
-    h_ref  = outline(ax, V0(:,cx), V0(:,cy), [0 0 0], 2.6, 1.0);
-    h_cord = outline(ax, C0(:,cx), C0(:,cy), [0 0 0], 1.6, 1.0);
 
     axis(ax, 'equal');
     xlabel(ax, views{v,3}); ylabel(ax, views{v,4});
     title(ax, views{v,5}, 'FontSize', 12);
     set(ax, 'FontSize', 11, 'TickDir', 'out', 'Box', 'off');
     grid(ax, 'on'); ax.GridAlpha = 0.12;
+    set(ax, 'Layer', 'top');     % keep the grid readable over the fills
 
     if v == 1
-        % Proxy lines, so the legend shows full-strength colours rather than
-        % the faded ones actually drawn.
-        p1 = plot(ax, NaN, NaN, '-', 'Color', [0 0 0], 'LineWidth', 2.6);
-        p2 = plot(ax, NaN, NaN, '-', 'Color', warp_col, 'LineWidth', 1.8);
-        p3 = plot(ax, NaN, NaN, '-', 'Color', cord_col, 'LineWidth', 1.8);
-        legend(ax, [p1 p2 p3], ...
-            {'Reference anatomy', ...
-             sprintf('Warped torso (%d of %d)', numel(show), n_warp), ...
-             'Warped spinal cord'}, ...
-            'Location', 'southoutside', 'FontSize', 9, 'Box', 'off');
+        % Proxy patches, so the legend shows the fills at a legible opacity
+        % rather than the very faint ones actually drawn.
+        p1 = patch(ax, NaN, NaN, ref_col,  'EdgeColor','none');
+        p2 = patch(ax, NaN, NaN, warp_col, 'FaceAlpha', 0.45, ...
+                   'EdgeColor', warp_col);
+        lbl = {'Reference anatomy', ...
+               sprintf('Warped torso (%d of %d)', numel(show), n_warp)};
+        h   = [p1 p2];
+        if S.show_cord
+            p3  = patch(ax, NaN, NaN, cord_col, 'EdgeColor','none');
+            h   = [h p3];
+            lbl = [lbl, {'Spinal cord'}];
+        end
+        legend(ax, h, lbl, 'Location','southoutside', 'FontSize', 9, ...
+               'Box', 'off');
     end
 end
 
 title(tl, sprintf(['Family of warped anatomies (%d geometries)\n' ...
-    'reference in black, warps overlaid'], n_warp), ...
+    'reference solid, %d warps overlaid'], n_warp, numel(show)), ...
     'FontSize', 14, 'FontWeight', 'bold');
 
 exportgraphics(fig, fullfile(S.save_dir, 'warp_family.png'), 'Resolution', 600);
@@ -164,9 +191,38 @@ function p = apply_T(T, pts)
     p = p(:, 1:3);
 end
 
-function h = outline(ax, x, y, col, lw, alpha)
-% Convex-hull silhouette of a projected point cloud. Cheap, and it overlays
-% without hiding what is underneath.
-    k = convhull(x, y);
-    h = plot(ax, x(k), y(k), '-', 'Color', [col alpha], 'LineWidth', lw);
+function h = silhouette(ax, x, y, col, alpha, shrink, edge_col)
+% Filled silhouette of a projected point cloud.
+%
+% `boundary` traces the actual outline of the projection with a shrink
+% factor, so concave parts of a torso profile survive. A convex hull would
+% square them off, and the warped bodies would then appear to differ from
+% the reference in ways the geometry does not.
+%
+% Falls back to the convex hull where `boundary` is unavailable, and says so
+% once, because the figure is still readable but no longer faithful in the
+% concave regions.
+
+    persistent warned
+    k = [];
+    if exist('boundary', 'file') == 2 || exist('boundary', 'builtin') == 5
+        try
+            k = boundary(x(:), y(:), shrink);
+        catch
+            k = [];
+        end
+    end
+    if isempty(k)
+        if isempty(warned)
+            warning('plot_warp_family:noboundary', ...
+                ['boundary() unavailable — falling back to a convex hull. ' ...
+                 'Concave parts of the torso profile will be squared off.']);
+            warned = true;
+        end
+        k = convhull(x(:), y(:));
+    end
+
+    h = patch(ax, 'XData', x(k), 'YData', y(k), ...
+              'FaceColor', col, 'FaceAlpha', alpha, ...
+              'EdgeColor', edge_col, 'LineWidth', 0.9);
 end
