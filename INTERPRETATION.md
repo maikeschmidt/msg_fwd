@@ -78,47 +78,40 @@ worse, organ conductivity is not the cause.
 
 Four scripts, and they are **not** interchangeable.
 
-### `st_collect_replicates` → `st_group_stats`
+### `st_warp_summary` — the one statistical analysis
 
-Collects a contrast on each warp, then reports its **spread across
-anatomies**. With only one contrast collected there is nothing to pair
-against, so **no p-values are produced, by design**. A narrow spread means
-the contrast does not depend on the anatomy — that is the whole claim.
+Each warped anatomy gives one BEM-versus-FEM contrast. This describes the
+distribution of those contrasts and says where along the cord it varies.
 
-If you see "no significance reported", that is correct behaviour, not a
-failure. Collect a second contrast to get a paired test.
+**Why intervals and nothing else.** These are simulated geometries, not
+sampled participants. Every number is computed exactly, with no measurement
+noise, so there is no null hypothesis for a significance test to test — a
+difference between two warps is real by construction. What is genuinely
+uncertain is how well this set of warps represents the anatomies the method
+might meet, and that is a question about the spread of a distribution, which
+an interval answers directly. So: no permutation tests, no multiplicity
+correction, no effect sizes.
 
-### `st_warp_comparisons`
+**The coverage statement** is the number the analysis exists to produce:
 
-Three families, tested against each other:
+> 95% of warped anatomies give a BEM–FEM relative error at or below X%.
 
-| Family | n (for 30 warps) | What it is |
-|---|---|---|
-| within-BEM | 435 | every warp pair, BEM |
-| within-FEM | 435 | the same pairs, FEM |
-| cross-solver | 30 | BEM vs FEM on one anatomy |
+Read as: a geometry drawn from this family has a 95% chance of agreeing
+between solvers to within that. Quote the interval next to it — with 30
+warps the 95th percentile rests on the top one or two values, so the point
+estimate alone overstates what the sample carries.
 
-**The result to look for:** cross-solver significantly **smaller** than both
-within-solver families. That means the two solvers differ less from each
-other on one anatomy than either differs from itself across anatomies — so
-anatomy dominates solver choice.
+**`warp_along_cord_axis<N>.png`** is the median contrast at each source
+position with a band for the spread across anatomies. Where the band is
+narrow the solver difference is a property of the method; where it is wide
+the anatomy is driving it.
 
-### `st_warp_geometry_impact`
+**Where the reference anatomy sits** is reported as its percentile within
+the warp distribution. Between the 5th and 95th means the MRI-derived
+geometry is one ordinary member of the family rather than an outlier.
 
-The one with thresholds and per-source detail. Warp-vs-warp is the reference
-distribution; warp-vs-original is tested against it.
-
-- **`n exceeding`** — how many warps sit beyond the 95th percentile of the
-  reference. If few do, the original anatomy is simply one member of the
-  family, not an outlier.
-- **`warp_impact_cord_<ori>.png`** — where along the cord geometry bites.
-  The shaded band is the warp-vs-warp IQR; the line is warp-vs-original.
-- **`warp_impact_per_source.csv`** — per-source FDR-corrected p-values.
-
-**On multiple comparisons.** The headline count is one descriptive statistic
-about a proportion, so no correction is applied. Per-warp p-values carry
-BH-adjusted values in case you want to name individual warps. The per-source
-analysis is inherently many tests and is FDR-corrected.
+All intervals are percentile bootstrap **resampling anatomies**, since the
+anatomy is the unit that was sampled.
 
 ### What all of this is *not*
 
@@ -167,7 +160,7 @@ in the `*_vs_original_*` figures. The two answer different questions:
 | published model | what did it settle on? |
 
 Both are needed. A sweep can settle cleanly and still sit at a constant
-offset from the published model — that means it converged to a *different*
+offset from the reference model (MRI-derived) — that means it converged to a *different*
 answer, and only the two curves together reveal it. If the published file is
 missing, each script falls back to the finest level and says so in the
 report rather than changing meaning silently.
@@ -229,7 +222,7 @@ exactly. That is a useful null check, not a bug: `analyse_cord_refinement`
 reports the fraction of cord tetrahedra actually subdivided at each level,
 so you can see where real refinement starts.
 
-### Torso decimation: the reference is the production mesh
+### Torso decimation: the reference is the reference mesh
 
 `analyse_torso_decimation` compares everything against the **keep = 0.50
 level of the same sweep** — the decimation used for production. Each number

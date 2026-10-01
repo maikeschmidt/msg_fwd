@@ -2,15 +2,15 @@
 %
 % THE REFERENCE
 %   Every level is measured against the PUBLISHED model for that solver —
-%   the BEM sweep against the published BEM, the FEM sweep against the
-%   published FEM. Each number is then a distance from the result the paper
+%   the BEM sweep against the reference BEM, the FEM sweep against the
+%   reference FEM. Each number is then a distance from the result being
 %   reports, on the same scale as every other comparison in the toolbox.
 %
 %   Self-convergence against the sweep's own finest level is reported
 %   separately at the end. The two answer different questions: the finest
-%   level says whether the sweep settled, the published model says what it
+%   level says whether the sweep settled, the reference model says what it
 %   settled on. A sweep can settle cleanly and still sit at a constant
-%   offset from the published model, and only the pair of curves shows it.
+%   offset from the reference model, and only the pair of curves shows it.
 %
 %   The observed convergence order is the more robust statement in either
 %   case, since it does not depend on the reference being exact.
@@ -77,7 +77,7 @@ is_meg        = true;
 tol_pct = 1.0;
 
 % Production settings to call out explicitly in the report.
-% These are the settings that produced the published leadfields, so the
+% These are the settings that produced the reference lead fields, so the
 % error reported at these levels is the discretisation error to quote
 % when stating that the results are mesh independent.
 fem_production_maxvol_mm3 = 500;    % see run_fem_leadfields.m
@@ -93,7 +93,7 @@ fprintf(fid, 'Generated : %s\n', datestr(now));
 fprintf(fid, 'Array     : %s   Sensor axis: %d\n', array_name, target_axis);
 fprintf(fid, 'Metrics   : re_mode=%s  rsq_mode=%s (see lf_metrics.m)\n', ...
     metric_opts.re_mode, metric_opts.rsq_mode);
-fprintf(fid, 'Reference : the PUBLISHED model for each solver, so each error is\n');
+fprintf(fid, 'Reference : the MRI-derived model for each solver, so each error is\n');
 fprintf(fid, '            a distance from the reported result. Self-convergence\n');
 fprintf(fid, '            against each sweep''s finest level is reported at the end.\n\n');
 
@@ -135,10 +135,10 @@ if isfile(fem_manifest_file)
         [~, imin] = min([man(have).maxvol_mm3]);
         fine_L    = have(imin);
 
-        % REFERENCE: the published FEM model.
+        % REFERENCE: the reference FEM model (MRI-derived).
         % Each level is reported as a distance from the result the paper
         % reports, rather than from the finest level of the sweep. The
-        % finest level answers "did the sweep settle"; the published model
+        % finest level answers "did the sweep settle"; the reference model
         % answers "how far is each level from what we report", which is the
         % scale used by every other analysis in the toolbox.
         [lf, ref_key, ref_label, using_og] = pick_reference(lf, 'fem', ...
@@ -153,7 +153,7 @@ if isfile(fem_manifest_file)
 
         % Node counts per level, so the bound actually used can be
         % reported alongside the mesh size it produced.
-        fprintf(fid, 'NODE COUNTS vs the production mesh range (106,444-144,961):\n');
+        fprintf(fid, 'NODE COUNTS vs the reference mesh range (106,444-144,961):\n');
         fprintf(fid, '  %10s %12s %12s %10s %10s\n', ...
             'maxvol', 'nodes', 'tets', 'h (mm)', 'in range?');
         for L = have
@@ -175,7 +175,7 @@ if isfile(fem_manifest_file)
         results.fem_ref  = ref_L;
         results.fem_using_og = using_og;
 
-        % With the published model as reference no level is excluded from
+        % With the reference model (MRI-derived) as reference no level is excluded from
         % the tolerance search, since none of them IS the reference. Pass
         % NaN so nothing is excluded; pass the finest level only when the
         % reference fell back to it.
@@ -222,7 +222,7 @@ if isfile(bem_manifest_file)
         [~, imax] = max([man(have).keep_fraction]);
         fine_L    = have(imax);
 
-        % REFERENCE: the published BEM model — see the FEM block above.
+        % REFERENCE: the reference BEM model (MRI-derived) — see the FEM block above.
         [lf, ref_key, ref_label, using_og] = pick_reference(lf, 'bem', ...
             sprintf('bem_L%02d', fine_L), ...
             sprintf('finest level (keep = %.2f)', man(fine_L).keep_fraction), ...
@@ -299,7 +299,7 @@ if isfield(results, 'fem') || isfield(results, 'bem')
     yline(tol_pct, '--k', 'Alpha', 0.5, ...
         'Label', sprintf('%.1f%% tolerance', tol_pct), 'HandleVisibility','off');
     set(gca, 'XScale','log', 'YScale','log');
-    grid on; xlabel('Total compute time (s)'); ylabel('Mean RE vs the published model (%)');
+    grid on; xlabel('Total compute time (s)'); ylabel('Mean RE vs the reference model (%)');
     title({'Accuracy versus computation cost', ...
            'lower-left is better'}, 'FontSize', 13, 'FontWeight','bold');
     legend(lg, 'Location','best'); set(gca,'FontSize',11,'TickDir','out');
@@ -309,6 +309,68 @@ if isfield(results, 'fem') || isfield(results, 'bem')
     close(fig);
 end
 
+% SELF-CONVERGENCE, AS A SECONDARY CHECK
+%
+% The tables above measure every level against the reference model, which
+% says what each level costs relative to the result being reported. This
+% measures every level against the finest level of its own sweep, which says
+% whether the sweep settled at all. Both are needed: a sweep can settle
+% cleanly and still sit at a constant offset from the reference, and only
+% the two curves together show that.
+
+fprintf('\nSelf-convergence against each sweep''s finest level...\n');
+
+sweep_spec = { ...
+    'fem', 'maxvol_mm3',    'Max tetrahedron volume (mm^3)'; ...
+    'bem', 'h_torso_mm',    'Torso mesh spacing h (mm)'};
+
+for s = 1:size(sweep_spec,1)
+    sw = sweep_spec{s,1};
+    if ~isfield(results, sw) || ~isfield(results, [sw '_lf']), continue; end
+
+    lf_sw  = results.([sw '_lf']);
+    R_sw   = results.(sw);
+    man_s  = results.([sw '_man']);
+    have_s = results.([sw '_have']);
+
+    n_lvl    = numel(have_s);
+    self_key = sprintf('%s_L%02d', sw, results.([sw '_ref']));
+    R_self   = nan(n_lvl, numel(orientation_labels));
+
+    for i = 1:n_lvl
+        for oi = 1:numel(orientation_labels)
+            vo = struct('vector_mode','orientation', ...
+                        'orientation', orientation_labels{oi});
+            try
+                [LA, LB] = lf_pair_vectors(lf_sw, self_key, ...
+                    sprintf('%s_L%02d', sw, have_s(i)), target_axis, vo);
+            catch
+                continue;
+            end
+            Mx = lf_metrics_series(LA, LB, metric_opts);
+            kp = 2:(size(LA,2)-1);
+            R_self(i,oi) = median(Mx.re(kp), 'omitnan');
+        end
+    end
+
+    xv = [man_s(have_s).(sweep_spec{s,2})];
+
+    % The reference curve in front, self-convergence faint behind it.
+    EXT = struct('label', {sprintf('reference %s (MRI-derived)', upper(sw))}, ...
+                 're',    {R_sw.re_med});
+
+    plot_convergence_vs_reference(xv(:), EXT, struct( ...
+        'orientation_labels', {orientation_labels}, ...
+        'ori_titles', ori_titles, 'xlabel', sweep_spec{s,3}, ...
+        'title', sprintf('%s refinement against the reference (MRI-derived %s)', ...
+                 upper(sw), upper(sw)), ...
+        'save_dir', save_dir, ...
+        'fname', sprintf('convergence_vs_reference_%s', sw), ...
+        'reverse_x', true, 'log_x', true, 'colors', pair_colors, ...
+        'self_re', R_self));
+end
+
+
 fprintf('\n=== Complete ===\n');
 fprintf('Report : %s\n', fullfile(save_dir, 'convergence_report.txt'));
 fprintf('CSV    : %s\n', fullfile(save_dir, 'convergence_results.csv'));
@@ -316,7 +378,6 @@ fprintf('Figures: %s\n', save_dir);
 
 
 %% ---------------------------------------------------------------------
-%%% ---------------------------------------------------------------------
 %% LOCAL FUNCTIONS
 %% ---------------------------------------------------------------------
 
@@ -463,7 +524,7 @@ function report_order_and_tradeoff(R, man, have, ref_L, label, ...
         fprintf(fid, '    This is the recommended production setting.\n');
     end
 
-    % Error at the production setting
+    % Error at the reference setting
     ip = find(abs(arrayfun(@(i) man(have(i)).(res_field), 1:numel(have)) ...
               - production_value) < 1e-9, 1);
     fprintf(fid, '\n  ERROR AT THE PRODUCTION SETTING (%s = %g %s)\n', ...
@@ -479,7 +540,7 @@ function report_order_and_tradeoff(R, man, have, ref_L, label, ...
                 oris{oi}, R.re_med(ip,oi), R.re_max(ip,oi), ...
                 R.r2_med(ip,oi), R.r2_min(ip,oi));
         end
-        fprintf(fid, ['    Summary: at the production mesh the sensor-level lead\n' ...
+        fprintf(fid, ['    Summary: at the reference mesh the sensor-level lead\n' ...
                       '    fields differ from the reference by a median of %.3f%%,\n' ...
                       '    i.e. the results are mesh independent to within that\n' ...
                       '    tolerance.\n'], ...
@@ -503,8 +564,8 @@ function plot_convergence(R, man, have, ref_L, label, res_field, res_lbl, ...
 
     fig = figure('Color','w','Position',[60 60 1500 460]);
     tl  = tiledlayout(1, 3, 'TileSpacing','compact','Padding','loose');
-    title(tl, sprintf('%s mesh convergence — error against the published model', ...
-        label), 'FontSize', 14, 'FontWeight','bold');
+    title(tl, sprintf(['%s mesh convergence — error against the reference ' ...
+        '(MRI-derived %s)'], label, label), 'FontSize', 14, 'FontWeight','bold');
 
     cols = lines(n_ori);
 
@@ -565,9 +626,9 @@ end
 
 function [lf, ref_key, ref_label, using_og] = pick_reference(lf, meth, ...
     fallback_key, fallback_label, oris, n_ax, is_meg, bem_file, fem_file)
-% Load the published model for one solver and return it as the reference.
+% Load the reference model (MRI-derived) for one solver.
 %
-% Falls back to the sweep's own finest level if the published file is not
+% Falls back to the sweep's own finest level if the reference file is not
 % there, and reports which was used. The two answer different questions, so
 % a silent fallback would change what the numbers mean without saying so.
 
@@ -581,7 +642,7 @@ function [lf, ref_key, ref_label, using_og] = pick_reference(lf, meth, ...
         ref_key   = fallback_key;
         ref_label = fallback_label;
         using_og  = false;
-        warning(['%s: published lead field not found, so levels are ' ...
+        warning(['%s: reference lead field not found, so levels are ' ...
                  'reported against the %s. That shows the sweep settled, ' ...
                  'not what it settled on.'], upper(meth), fallback_label);
     else

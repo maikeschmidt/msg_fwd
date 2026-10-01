@@ -155,12 +155,12 @@ for s = 1:size(specs, 1)
     [~, imax] = max(keeps);
     ref_L     = have(imax);
 
-    % REFERENCE: the published model for THIS solver.
+    % REFERENCE: the reference model (MRI-derived) for THIS solver.
     %
     % Each sweep is reported against its own published lead field — the BEM
-    % sweep against the published BEM, the FEM sweep against the published
+    % sweep against the reference BEM, the FEM sweep against the published
     % FEM. Referencing the finest level of the sweep answers "did the sweep
-    % settle"; referencing the published model answers "how far is each
+    % settle"; referencing the reference model (MRI-derived) answers "how far is each
     % level from the result the paper reports", which is on a scale the
     % reader already has from every other analysis.
     %
@@ -177,7 +177,7 @@ for s = 1:size(specs, 1)
         ref_label = sprintf('finest level in this sweep (keep = %.2f)', ...
                             man(ref_L).keep_fraction);
         using_og  = false;
-        warning(['%s: published lead field not found, so levels are ' ...
+        warning(['%s: reference lead field not found, so levels are ' ...
                  'reported against the finest level of the sweep. That ' ...
                  'shows the sweep settled, not what it settled on.'], upper(meth));
     else
@@ -261,15 +261,15 @@ for s = 1:size(specs, 1)
         end
     end
 
-    % Error at the production setting. With the published model as reference
+    % Error at the reference setting. With the reference model (MRI-derived) as reference
     % this row is informative — it says how closely the sweep at the
-    % production decimation reproduces the published lead field, which is
+    % reference decimation reproduces the published lead field, which is
     % also a check that the sweep and production runs agree. Only when the
     % reference falls back to the finest level of the sweep does the
     % production row need excluding, and then only if it IS that level.
     ip = find(abs(keeps - production_keep) < 1e-9, 1);
     if ~isempty(ip) && (using_og || have(ip) ~= ref_L)
-        fprintf(fid, '\n  At the production setting (keep = %.2f):\n', production_keep);
+        fprintf(fid, '\n  At the reference setting (keep = %.2f):\n', production_keep);
         for oi = 1:n_ori
             fprintf(fid, '    [%s] RE = %.3f%%   r2 = %.5f\n', ...
                 orientation_labels{oi}, Rm.re(ip,oi), Rm.r2(ip,oi));
@@ -343,7 +343,7 @@ fclose(fcsv);
 % narrower question of whether the sweep settled. The finest level is zero
 % here by construction.
 %
-% Plotted behind the published-model curve so the two scales are visible
+% Plotted behind the reference-model curve so the two scales are visible
 % together: a sweep that has settled but sits at a constant offset from the
 % published model has converged to a different answer, and only the pair of
 % curves shows that.
@@ -392,7 +392,7 @@ for s = 1:size(specs, 1)
         'orientation_labels', {orientation_labels}, ...
         'ori_titles', ori_titles, ...
         'xlabel', 'Surface keep fraction', ...
-        'title', sprintf('%s surface refinement against the published model', ...
+        'title', sprintf('%s surface refinement against the reference (MRI-derived %s)', ...
                  upper(meth)), ...
         'save_dir', save_dir, ...
         'fname', sprintf('surface_convergence_vs_original_%s', meth), ...

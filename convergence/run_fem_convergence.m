@@ -332,7 +332,7 @@ for L = 1:n_lvl
         M(L).n_nodes, M(L).n_tets, M(L).n_tets_cord, ...
         M(L).mean_vol_mm3, M(L).h_mm, M(L).time_mesh_s);
 
-    % Flag the levels that land in the node range of the production mesh
+    % Flag the levels that land in the node range of the reference mesh
     if M(L).n_nodes >= 100000 && M(L).n_nodes <= 150000
         fprintf(['    >>> This level lands in the same node range as the\n' ...
                  '        production mesh (order 1e5 nodes). <<<\n']);

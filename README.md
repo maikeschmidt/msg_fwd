@@ -175,11 +175,8 @@ msg_fwd/
 │   ├── repair_warped_fem_leadfields.m, clean_duneuro_workdirs.m
 │   └── summarise_warp_geometry.m
 │
-├── stats/                           — group statistics over replicate geometries
-│   ├── st_collect_replicates.m      — pool metrics across warps
-│   ├── st_group_stats.m             — paired tests with FDR correction
-│   ├── st_warp_comparisons.m        — within-solver vs cross-solver families
-│   └── st_warp_geometry_impact.m    — geometry effect as a reference distribution
+├── stats/                           — spread of the solver difference across anatomies
+│   └── st_warp_summary.m            — intervals, percentiles, variation along the cord
 │
 ├── simpler_models/                  — BEM/FEM vs Biot–Savart and single sphere
 │   └── (see simpler_models/README.md)

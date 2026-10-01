@@ -48,7 +48,7 @@
 %   p = st_signflip_test(d, 10000, 'right');
 %
 % SEE ALSO:
-%   st_bh_fdr, st_boot_ci_median, st_rank_biserial, st_group_stats
+%   st_bh_fdr, st_boot_ci_median, st_rank_biserial
 %
 % -------------------------------------------------------------------------
 % Copyright (c) 2026 University College London

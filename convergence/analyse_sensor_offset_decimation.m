@@ -59,7 +59,7 @@ geom_file = fullfile(og_geoms, 'geometries_anatom_full_realistic.mat');   % SET 
 keep_fraction_levels = [0.25, 0.40, 0.50, 0.65, 0.80, 1.00];
 production_keep      = 0.50;    % the level the paper uses
 
-% Must match how the production array was generated
+% Must match how the reference array was generated
 S_sens = struct();
 S_sens.resolution = 10;      % SET THIS: grid spacing, mm
 S_sens.depth      = 10;      % SET THIS: nominal standoff from skin, mm
@@ -143,7 +143,7 @@ fprintf(fid, 'Generated : %s\n', datestr(now));
 fprintf(fid, 'Geometry  : %s\n', geom_file);
 fprintf(fid, 'Nominal standoff : %g mm, grid %g mm\n', S_sens.depth, S_sens.resolution);
 fprintf(fid, 'Reference array  : keep = %.2f (production)\n\n', production_keep);
-fprintf(fid, ['DISPLACEMENT is relative to the production array.\n' ...
+fprintf(fid, ['DISPLACEMENT is relative to the reference array.\n' ...
               'STANDOFF is the true distance to the FULL torso surface,\n' ...
               'whatever mesh was used to place the sensors.\n\n']);
 
@@ -157,7 +157,7 @@ for L = 1:numel(A)
     g = A(L).grad;
     P = double(g.coilpos);
 
-    % Displacement against the production array. Sensor counts can differ
+    % Displacement against the reference array. Sensor counts can differ
     % if raycasting misses on a coarse surface, so compare only the common
     % rows and report how many matched.
     n = min(size(P,1), size(ref.coilpos,1));
@@ -225,9 +225,9 @@ for L = 1:numel(A)
     plot(ax1, [A(L).keep-0.02, A(L).keep+0.02], [median(d) median(d)], ...
         'k-', 'LineWidth', 2);
 end
-xline(ax1, production_keep, '--k', 'LineWidth', 1.5, 'Label','production');
+xline(ax1, production_keep, '--k', 'LineWidth', 1.5, 'Label','reference');
 xlabel(ax1, 'Torso keep fraction', 'FontSize', 12);
-ylabel(ax1, 'Displacement from production array (mm)', 'FontSize', 12);
+ylabel(ax1, 'Displacement from reference array (50% torso, mm)', 'FontSize', 12);
 grid(ax1,'on'); box(ax1,'off'); set(ax1,'FontSize',11,'TickDir','out');
 
 ax2 = nexttile(tl); hold(ax2,'on');

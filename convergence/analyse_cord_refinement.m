@@ -13,7 +13,7 @@
 %   they contribute nothing to resolving the singular source. This sweep
 %   targets the elements that actually surround the dipoles. If the
 %   sensor-level lead fields stop changing as the cord mesh is refined, the
-%   St. Venant source model is stably resolved at the production mesh.
+%   St. Venant source model is stably resolved at the reference mesh.
 %   Runtime is recorded per level, so the accuracy-versus-cost trade-off
 %   can be read off directly.
 %
@@ -114,9 +114,9 @@ end
 
 % REFERENCES
 %
-% Every level is reported against the PUBLISHED models, not against the
+% Every level is reported against the reference models (MRI-derived), not against the
 % finest level of the sweep. Referencing the finest level answers "did the
-% sweep settle"; referencing the published models answers "how far is each
+% sweep settle"; referencing the reference models (MRI-derived) answers "how far is each
 % level from the result the paper reports", which is the question a reader
 % has and is on a scale they can already interpret.
 %
@@ -136,8 +136,8 @@ ext_refs = struct('key', {}, 'label', {});
 % core_bem_file and core_fem_file already resolve to the per-geometry
 % subfolder inside og_fields, so no path building is needed here.
 ext_specs = { ...
-    core_fem_file, 'fem', 'fem_original', 'FEM MRI-derived (unrefined)'; ...
-    core_bem_file, 'bem', 'bem_original', 'BEM MRI-derived'};
+    core_fem_file, 'fem', 'fem_original', 'Reference FEM (MRI-derived)'; ...
+    core_bem_file, 'bem', 'bem_original', 'Reference BEM (MRI-derived)'};
 
 for e = 1:size(ext_specs, 1)
     f = ext_specs{e,1};
@@ -193,7 +193,7 @@ fprintf(fid, 'Array     : %s   Sensor axis: %d\n', array_name, target_axis);
 fprintf(fid, 'Global tetrahedron bound held FIXED at %g mm^3.\n', ...
     man(have(1)).global_maxvol_mm3);
 fprintf(fid, 'Only the spinal cord compartment is refined.\n\n');
-fprintf(fid, 'Every level is reported against the PUBLISHED models, so each\n');
+fprintf(fid, 'Every level is reported against the reference models (MRI-derived), so each\n');
 fprintf(fid, 'number says how far that level sits from the result the paper\n');
 fprintf(fid, 'reports. Self-convergence against the finest level of the sweep\n');
 fprintf(fid, 'is reported separately further down.\n\n');
@@ -221,7 +221,7 @@ for p = 1:n_prim
         L   = have(i);
         key = sprintf('fem_C%02d', L);
 
-        % Decomposition is kept for the production level and the finest,
+        % Decomposition is kept for the reference level and the finest,
         % against each reference.
         store_this = (i == i_prod) || (L == ref_L);
         if store_this
@@ -234,7 +234,7 @@ for p = 1:n_prim
             ori   = orientation_labels{oi};
             vopts = struct('vector_mode','orientation','orientation',ori);
 
-            % The reference is the FIRST argument: the published model is
+            % The reference is the FIRST argument: the reference model (MRI-derived) is
             % the denominator of the relative error.
             [LA, LB] = lf_pair_vectors(lf, prim(p).key, key, target_axis, vopts);
             M = lf_metrics_series(LA, LB, metric_opts);
@@ -324,13 +324,13 @@ fprintf(fid, '\nSUMMARY:\n');
 if worst <= tol_pct
     fprintf(fid, ['Refining the mesh around the spinal cord by a factor of %.0f in\n' ...
         'element volume moved the sensor-level lead fields by at most %.3f%%\n' ...
-        'from the published model. The St. Venant source model is therefore\n' ...
-        'stably resolved at the production mesh, and the reported results do\n' ...
+        'from the reference model (MRI-derived). The St. Venant source model is therefore\n' ...
+        'stably resolved at the reference mesh, and the reported results do\n' ...
         'not depend on near-source discretisation.\n'], ...
         man(have(i_prod)).cord_maxvol_mm3 / man(ref_L).cord_maxvol_mm3, worst);
 else
     fprintf(fid, ['Refining the cord mesh moved the sensor-level lead fields by\n' ...
-        'up to %.3f%% from the published model, which EXCEEDS the %.1f%%\n' ...
+        'up to %.3f%% from the reference model (MRI-derived), which EXCEEDS the %.1f%%\n' ...
         'tolerance. The near-source discretisation is not negligible at the\n' ...
         'production mesh and should either be refined locally or reported as\n' ...
         'a limitation.\n'], worst, tol_pct);
@@ -389,7 +389,7 @@ fprintf(fid, ['\nLocal refinement buys near-source accuracy at a fraction of the
 
 % SELF-CONVERGENCE, AS A SECONDARY CHECK
 %
-% The tables above are against the published models. This one is each level
+% The tables above are against the reference models (MRI-derived). This one is each level
 % against the finest level of the sweep, which answers the different and
 % narrower question of whether the sweep itself settled. The finest level is
 % zero here by construction.
@@ -418,7 +418,7 @@ for i = 1:n_lvl
 end
 
 
-% FIGURE: the sweep against the published models
+% FIGURE: the sweep against the reference models (MRI-derived)
 %
 % One line per reference, so the FEM and BEM distances are read on the same
 % axes. self_re draws the self-convergence curve behind them for scale.
@@ -428,7 +428,7 @@ plot_convergence_vs_reference(cord_mm3, EXT, struct( ...
     'orientation_labels', {orientation_labels}, ...
     'ori_titles',  ori_titles, ...
     'xlabel',      'Cord-local max tetrahedron volume (mm^3)', ...
-    'title',       'Cord refinement against the published models', ...
+    'title',       'Cord refinement against the reference models', ...
     'save_dir',    save_dir, ...
     'fname',       'cord_refinement_vs_original', ...
     'reverse_x',   true, ...
@@ -490,7 +490,7 @@ if ~isempty(S_dec)
         'dist',               dist, ...
         'orientation_labels', {orientation_labels}, ...
         'ori_titles',         ori_titles, ...
-        'title',              sprintf(['Near-source refinement vs the published ' ...
+        'title',              sprintf(['Near-source refinement vs the reference ' ...
                                        'models — axis %d'], target_axis), ...
         'colors',             lines(max(numel(S_dec),3)), ...
         'save_dir',           save_dir, ...
