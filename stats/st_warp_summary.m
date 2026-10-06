@@ -78,7 +78,8 @@
 %   warp_summary_per_warp.csv        one row per warp, for plotting elsewhere
 %   warp_summary_along_cord.csv      per source position
 %   warp_distribution_axis<N>.png    cross-solver against within-solver
-%   warp_bem_vs_fem_hist_axis<N>.png  distributions, pooled per source
+%   warp_hist_cross_axis<N>.png      BEM vs FEM, observed and resampled
+%   warp_hist_within_axis<N>.png     one solver between anatomies
 %   warp_along_cord_axis<N>.png      median and spread by cord position
 %
 % -------------------------------------------------------------------------
@@ -113,6 +114,10 @@ is_meg        = true;
 cover_pct = 95;
 
 n_boot   = 10000;
+% Draws used only to build the pale resampled distribution in the figures.
+% Fewer than n_boot because the pooled values are for shape, not for an
+% interval, and 435 pairs times 10,000 draws is several million values.
+n_boot_show = 2000;
 ci_level = 0.95;
 rng(20260930, 'twister');
 
@@ -267,6 +272,9 @@ for ax = 1:n_sensor_axes
         end
 
         S(ax,oi).per_warp = per_warp;
+        S(ax,oi).per_warp_re   = per_warp(:,1)';
+        S(ax,oi).within_bem_re = wb.re(~isnan(wb.re))';
+        S(ax,oi).within_fem_re = wf.re(~isnan(wf.re))';
         S(ax,oi).per_src  = per_src;
         S(ax,oi).ref_val  = ref_val;
 
@@ -310,8 +318,28 @@ for ax = 1:n_sensor_axes
         % resampled set, because the pairs are not independent of each other.
         S(ax,oi).wb_med = median(wb.re, 'omitnan');
         S(ax,oi).wf_med = median(wf.re, 'omitnan');
-        S(ax,oi).wb_ci  = boot_ci_within(wb, numel(have), n_boot, ci_level);
-        S(ax,oi).wf_ci  = boot_ci_within(wf, numel(have), n_boot, ci_level);
+        [S(ax,oi).wb_ci, S(ax,oi).wb_boot] = ...
+            boot_ci_within(wb, numel(have), n_boot, ci_level, n_boot_show);
+        [S(ax,oi).wf_ci, S(ax,oi).wf_boot] = ...
+            boot_ci_within(wf, numel(have), n_boot, ci_level, n_boot_show);
+
+        % Pooled resamples of the cross-solver family: draw anatomies with
+        % replacement and keep the values drawn, not the median of each
+        % draw. Pooled, they trace the same distribution as the 30 observed
+        % values with far more points, which is what the pale background in
+        % the histograms is.
+        S(ax,oi).cross_boot = pooled_resample(re, n_boot_show);
+
+        % Where the reference anatomy sits WITHIN each solver: the reference
+        % compared against each warp, in that solver alone. The cross-solver
+        % figure has ref_val for this; without it the within-solver figure
+        % would have no equivalent mark.
+        if have_ref
+            S(ax,oi).wb_ref = median(ref_vs_warps(lf, 'bem', have, ax, vopts, metric_opts), 'omitnan');
+            S(ax,oi).wf_ref = median(ref_vs_warps(lf, 'fem', have, ax, vopts, metric_opts), 'omitnan');
+        else
+            S(ax,oi).wb_ref = NaN;  S(ax,oi).wf_ref = NaN;
+        end
 
         fprintf(fdis, '%d,%s,RE,%d,%.4f,%.4f,%.4f,%.4f,%.4f,', ...
             ax, ori, numel(re), med, prctile_1d(re,25), prctile_1d(re,75), ...
@@ -487,121 +515,54 @@ for ax = 1:n_sensor_axes
 end
 
 
-% FIGURE 1b — DISTRIBUTIONS AS HISTOGRAMS
+% FIGURE 1b — DISTRIBUTIONS, CROSS-SOLVER AND WITHIN-SOLVER
 %
-% One figure per sensor axis, three subplots — one per dipole orientation.
+% Two figures per sensor axis: one for the BEM-against-FEM comparison, one
+% for the within-solver families. Splitting them keeps each on a count axis
+% that suits it — there are n(n-1)/2 within-solver pairs against n
+% cross-solver comparisons, and on shared axes the smaller family is buried.
 %
-% RELATIVE ERROR ON THE Y-AXIS, NUMBER OF COMPARISONS ON THE X.
-% The bars run horizontally, so the axis carrying relative error is shared
-% with every other figure in the analysis and the three families can be read
-% off against each other at a glance.
+% In each panel:
+%   solid bars   the observed comparisons
+%   pale bars    the same comparisons resampled with replacement, pooled
+%                over draws and rescaled to the observed total, so it is a
+%                smoother tracing of the same distribution rather than a
+%                second quantity
+%   lines        median, where the reference anatomy sits, and the 95% value
 %
-% The x-axis is a count of comparisons: paired BEM-against-FEM comparisons
-% for the cross-solver family, and anatomy pairs for the within-solver
-% families.
-%
-% ONE MEDIAN PER COMPARISON is the unit, matching the headline value, which
-% is a median across the cord. Set hist_per_source = true to pool every
-% source of every comparison instead — that gives a smoother shape, but the
-% counts then run to tens of thousands and no longer read as "number of
-% comparisons".
-%
-% The count disparity is real and is left visible: there are n(n-1)/2
-% within-solver pairs against n cross-solver comparisons. The within-solver
-% families are drawn as outlines so the smaller cross-solver bars are not
-% buried.
+% Relative error is on the y-axis so it is the shared axis with every other
+% figure in the analysis; the x-axis counts comparisons.
 
-hist_per_source = false;   % SET THIS
-overlay_within  = true;    % SET THIS
+hist_bins = 20;      % SET THIS
 
-fprintf('\nHistograms of the BEM-FEM difference...\n');
+fprintf('\nDistribution figures...\n');
 
 for ax = 1:n_sensor_axes
 
-    Hx = cell(1,n_ori); Hb = cell(1,n_ori); Hf = cell(1,n_ori);
-    for oi = 1:n_ori
-        if hist_per_source
-            v = S(ax,oi).per_src(:)';
-            Hx{oi} = v(~isnan(v));
-            Hb{oi} = S(ax,oi).within_bem.all_src;
-            Hf{oi} = S(ax,oi).within_fem.all_src;
-        else
-            v = S(ax,oi).per_warp(:,1)';
-            Hx{oi} = v(~isnan(v));
-            Hb{oi} = S(ax,oi).within_bem.re(~isnan(S(ax,oi).within_bem.re))';
-            Hf{oi} = S(ax,oi).within_fem.re(~isnan(S(ax,oi).within_fem.re))';
-        end
-    end
+    % ---- cross-solver -------------------------------------------------
+    draw_hist_figure(S(ax,:), ax, orientation_labels, ori_titles, ...
+        save_dir, hist_bins, cover_pct, ...
+        struct('fields',  {{'per_warp_re'}}, ...
+               'boots',   {{'cross_boot'}}, ...
+               'refs',    {{'ref_val'}}, ...
+               'labels',  {{'BEM vs FEM (paired)'}}, ...
+               'colors',  {{[0.16 0.38 0.70]}}, ...
+               'title',   sprintf(['BEM vs FEM on matched warped ' ...
+                          'anatomies — sensor axis %d'], ax), ...
+               'fname',   sprintf('warp_hist_cross_axis%d', ax)));
 
-    if all(cellfun(@isempty, Hx)), continue; end
-
-    % Shared x-limits across the three panels, so the orientations are
-    % directly comparable rather than each rescaled to its own spread.
-    allv = [Hx{:}];
-    if overlay_within, allv = [allv, Hb{:}, Hf{:}]; end
-    xhi = prctile_1d(allv, 99.5);
-    if ~isfinite(xhi) || xhi <= 0, xhi = max(allv); end
-
-    fig = figure('Color','w','Position',[100 100 1500 460]);
-    tl  = tiledlayout(1, n_ori, 'TileSpacing','compact','Padding','loose');
-    title(tl, sprintf(['BEM vs FEM on matched warped anatomies — ' ...
-        'sensor axis %d'], ax), 'FontSize', 14, 'FontWeight','bold');
-
-    for oi = 1:n_ori
-        axh = nexttile(tl); hold(axh,'on');
-        v = Hx{oi};
-        if isempty(v), continue; end
-
-        nb = ternary_num(hist_per_source, 40, 20);
-
-        histogram(axh, v, 'BinLimits', [0 xhi], 'NumBins', nb, ...
-            'Orientation', 'horizontal', 'Normalization', 'count', ...
-            'FaceColor',[0.80 0.30 0.20], 'FaceAlpha', 0.65, ...
-            'EdgeColor','none');
-
-        if overlay_within
-            if ~isempty(Hb{oi})
-                histogram(axh, Hb{oi}, 'BinLimits', [0 xhi], 'NumBins', nb, ...
-                    'Orientation','horizontal', 'Normalization','count', ...
-                    'DisplayStyle','stairs', ...
-                    'EdgeColor',[0.20 0.40 0.70], 'LineWidth', 1.4);
-            end
-            if ~isempty(Hf{oi})
-                histogram(axh, Hf{oi}, 'BinLimits', [0 xhi], 'NumBins', nb, ...
-                    'Orientation','horizontal', 'Normalization','count', ...
-                    'DisplayStyle','stairs', ...
-                    'EdgeColor',[0.45 0.45 0.45], 'LineWidth', 1.4);
-            end
-        end
-
-        md = median(v);
-        yline(axh, md, '--k', 'LineWidth', 1.8, ...
-            'Label', sprintf('median %.2f%%', md), ...
-            'LabelHorizontalAlignment','right', ...
-            'LabelVerticalAlignment','bottom', 'FontSize', 10);
-
-        ylim(axh, [0 xhi]);
-        grid(axh,'on'); box(axh,'off');
-        set(axh, 'FontSize', 11, 'TickDir','out', 'LineWidth', 1.1);
-        xlabel(axh, 'Number of comparisons', 'FontSize', 12);
-        if oi == 1
-            ylabel(axh, 'Relative error (%)', 'FontSize', 12);
-        end
-        title(axh, sprintf('%s   (n = %d)', ...
-            ori_titles.(orientation_labels{oi}), numel(v)), 'FontSize', 12);
-
-        if oi == n_ori && overlay_within
-            lg = legend(axh, {'BEM vs FEM (paired)','within BEM (pairs)', ...
-                'within FEM (pairs)'}, 'Location','northeast','FontSize',10);
-            lg.Box = 'off';
-        end
-    end
-
-    f_out = sprintf('warp_bem_vs_fem_hist_axis%d', ax);
-    exportgraphics(fig, fullfile(save_dir,[f_out '.png']), 'Resolution', 600);
-    saveas(fig,          fullfile(save_dir,[f_out '.fig']));
-    close(fig);
-    fprintf('  axis %d -> %s.png\n', ax, f_out);
+    % ---- within-solver, one row per solver ----------------------------
+    draw_hist_figure(S(ax,:), ax, orientation_labels, ori_titles, ...
+        save_dir, hist_bins, cover_pct, ...
+        struct('fields',  {{'within_bem_re','within_fem_re'}}, ...
+               'boots',   {{'wb_boot','wf_boot'}}, ...
+               'refs',    {{'wb_ref','wf_ref'}}, ...
+               'labels',  {{'Within BEM (anatomy pairs)', ...
+                            'Within FEM (anatomy pairs)'}}, ...
+               'colors',  {{[0.16 0.52 0.38], [0.55 0.35 0.62]}}, ...
+               'title',   sprintf(['One solver between anatomies — ' ...
+                          'sensor axis %d'], ax), ...
+               'fname',   sprintf('warp_hist_within_axis%d', ax)));
 end
 
 
@@ -718,7 +679,7 @@ function W = pairwise_within(lf, meth, have, ax, vopts, mopts)
 end
 
 
-function ci = boot_ci_within(W, n_warp, n_boot, level)
+function [ci, pooled] = boot_ci_within(W, n_warp, n_boot, level, n_show)
 % Cluster bootstrap for a within-solver family.
 %
 % The pairs are not independent — each anatomy appears in n-1 of them — so
@@ -730,6 +691,7 @@ function ci = boot_ci_within(W, n_warp, n_boot, level)
 % error is zero by construction and keeping them would drag the median down.
 
     ok = ~isnan(W.re);
+    pooled = [];
     if ~any(ok), ci = [NaN NaN]; return; end
 
     % Lookup from an anatomy pair to its stored relative error
@@ -747,7 +709,10 @@ function ci = boot_ci_within(W, n_warp, n_boot, level)
                 if val ~= 0, v(end+1) = val; end %#ok<AGROW>
             end
         end
-        if ~isempty(v), b(t) = median(v); end
+        if ~isempty(v)
+            b(t) = median(v);
+            if t <= n_show, pooled = [pooled, v]; end %#ok<AGROW>
+        end
     end
 
     a_t = (1 - level) / 2;
@@ -762,4 +727,138 @@ end
 
 function v = ternary_num(c, a, b)
     if c, v = a; else, v = b; end
+end
+
+
+function draw_hist_figure(Srow, ax_idx, ori_labels, ori_titles, save_dir, ...
+                          nbins, cover_pct, P)
+% One figure: a row per family, a column per dipole orientation.
+%
+% Solid bars are the observed comparisons. Pale bars are those comparisons
+% resampled with replacement and pooled over draws, rescaled to the observed
+% total so the two sit on one count axis — the pale shape is the same
+% distribution traced with more points, not a separate quantity.
+
+    n_ori = numel(ori_labels);
+    n_fam = numel(P.fields);
+
+    % Shared y-limits across every panel, so orientations and families are
+    % read against each other rather than each rescaled to its own spread.
+    allv = [];
+    for f = 1:n_fam
+        for oi = 1:n_ori
+            allv = [allv, Srow(oi).(P.fields{f})]; %#ok<AGROW>
+        end
+    end
+    allv = allv(~isnan(allv));
+    if isempty(allv), return; end
+    yhi = pctl(allv, 99.5);
+    if ~isfinite(yhi) || yhi <= 0, yhi = max(allv); end
+    edges = linspace(0, yhi, nbins + 1);
+
+    fig = figure('Color','w','Position',[100 100 1500 300 + 240*n_fam]);
+    tl  = tiledlayout(n_fam, n_ori, 'TileSpacing','compact','Padding','loose');
+    title(tl, P.title, 'FontSize', 14, 'FontWeight','bold');
+
+    for f = 1:n_fam
+        col  = P.colors{f};
+        pale = col + (1 - col) * 0.68;      % same hue, much lighter
+
+        for oi = 1:n_ori
+            axh = nexttile(tl); hold(axh,'on');
+
+            v = Srow(oi).(P.fields{f});
+            v = v(~isnan(v));
+            if isempty(v), continue; end
+
+            b = Srow(oi).(P.boots{f});
+            b = b(~isnan(b));
+
+            % Resampled first, underneath, rescaled to the observed total
+            if ~isempty(b)
+                cb = histcounts(b, edges);
+                cb = cb * (numel(v) / max(sum(cb), 1));
+                barh(axh, edges(1:end-1) + diff(edges)/2, cb, 1.0, ...
+                    'FaceColor', pale, 'EdgeColor','none', ...
+                    'DisplayName','resampled (rescaled)');
+            end
+
+            cv = histcounts(v, edges);
+            barh(axh, edges(1:end-1) + diff(edges)/2, cv, 0.62, ...
+                'FaceColor', col, 'EdgeColor','none', ...
+                'DisplayName', sprintf('observed (n = %d)', numel(v)));
+
+            md  = median(v);
+            p95 = pctl(v, cover_pct);
+            rf  = Srow(oi).(P.refs{f});
+
+            yline(axh, md, '-', 'Color',[0.10 0.10 0.10], 'LineWidth', 1.8, ...
+                'Label', sprintf('median %.2f%%', md), ...
+                'LabelHorizontalAlignment','right', ...
+                'LabelVerticalAlignment','bottom', 'FontSize', 9, ...
+                'DisplayName','median');
+            yline(axh, p95, '--', 'Color',[0.75 0.25 0.15], 'LineWidth', 1.8, ...
+                'Label', sprintf('%d%% value %.2f%%', cover_pct, p95), ...
+                'LabelHorizontalAlignment','right', ...
+                'LabelVerticalAlignment','top', 'FontSize', 9, ...
+                'DisplayName', sprintf('%d%% value', cover_pct));
+            if ~isnan(rf)
+                yline(axh, rf, ':', 'Color',[0.20 0.45 0.25], 'LineWidth', 1.8, ...
+                    'Label','reference anatomy', ...
+                    'LabelHorizontalAlignment','left', ...
+                    'LabelVerticalAlignment','bottom', 'FontSize', 9, ...
+                    'DisplayName','reference anatomy');
+            end
+
+            ylim(axh, [0 yhi]);
+            grid(axh,'on'); box(axh,'off');
+            set(axh, 'FontSize', 11, 'TickDir','out', 'LineWidth', 1.1, ...
+                     'Layer','top');
+            if f == n_fam, xlabel(axh, 'Number of comparisons', 'FontSize', 12); end
+            if oi == 1,    ylabel(axh, 'Relative error (%)', 'FontSize', 12); end
+            if f == 1,     title(axh, ori_titles.(ori_labels{oi}), 'FontSize', 12); end
+            if oi == n_ori
+                text(axh, 1.0, 1.0, P.labels{f}, 'Units','normalized', ...
+                     'HorizontalAlignment','right', ...
+                     'VerticalAlignment','bottom', 'FontSize', 10, ...
+                     'FontAngle','italic');
+            end
+            if f == 1 && oi == 1
+                lg = legend(axh, 'Location','southeast','FontSize',8);
+                lg.Box = 'off';
+            end
+        end
+    end
+
+    exportgraphics(fig, fullfile(save_dir, [P.fname '.png']), 'Resolution', 600);
+    saveas(fig,          fullfile(save_dir, [P.fname '.fig']));
+    close(fig);
+    fprintf('  axis %d -> %s.png\n', ax_idx, P.fname);
+end
+
+
+function pooled = pooled_resample(v, n_draw)
+% Draw the sample with replacement n_draw times and keep every value drawn.
+% Pooled, these trace the same distribution as the observed values with far
+% more points — a smoother version of the same thing, not a new quantity.
+    v = v(~isnan(v));
+    n = numel(v);
+    if n == 0, pooled = []; return; end
+    pooled = reshape(v(randi(n, n, n_draw)), 1, []);
+end
+
+
+function r = ref_vs_warps(lf, meth, have, ax, vopts, mopts)
+% The reference anatomy against each warp, within one solver.
+    r = nan(1, numel(have));
+    for k = 1:numel(have)
+        try
+            [LA, LB] = lf_pair_vectors(lf, [meth '_reference'], ...
+                sprintf('%s_%s', meth, have{k}), ax, vopts);
+        catch
+            continue;
+        end
+        M = lf_metrics_series(LA, LB, mopts);
+        r(k) = median(M.re(2:(size(LA,2)-1)), 'omitnan');
+    end
 end
