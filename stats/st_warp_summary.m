@@ -24,10 +24,10 @@
 %      the median, resampling WARPS rather than source positions, because
 %      the warp is the unit that was sampled.
 %
-%   2. THE 95TH PERCENTILE, AND WHAT IT LICENCES
-%      The value below which 95% of the warped anatomies fall, reported
-%      descriptively: "in 95% of the 30 warps, BEM-FEM relative error was at
-%      or below X%".
+%   2. THE 95% VALUE — THE HEADLINE NUMBER
+%      Compare BEM against FEM on one anatomy and take the median across the
+%      whole cord. The 95% value is what that number is, 95% of the time.
+%      It is the 95th percentile of the per-anatomy medians.
 %
 %      NOT "a new geometry has a 95% chance of falling below X". The warps
 %      are affine transformations of ONE anatomy rather than a sample from a
@@ -346,23 +346,22 @@ for ax = 1:n_sensor_axes
             s.ci(1), s.ci(2), s.cover, s.cover_ci(1), s.cover_ci(2));
     end
 
-    fprintf(fid, '\n  THE COVERAGE STATEMENT\n');
+    fprintf(fid, '\n  THE HEADLINE VALUE\n');
+    fprintf(fid, ['    The %d%% value: comparing BEM against FEM on one ' ...
+        'anatomy and taking the\n    median across the whole cord, this is ' ...
+        'the value you get %d%% of the time.\n\n'], cover_pct, cover_pct);
     for oi = 1:n_ori
         s = S(ax,oi);
-        fprintf(fid, ['    %-4s In %d%% of the %d warps, BEM-FEM relative ' ...
-            'error was at or below\n         %.3f%% (95%% CI %.3f to %.3f).' ...
-            '\n'], orientation_labels{oi}, cover_pct, numel(have), ...
-            s.cover, s.cover_ci(1), s.cover_ci(2));
+        fprintf(fid, ['    %-4s %.3f%%   (95%% CI %.3f to %.3f)\n'], ...
+            orientation_labels{oi}, s.cover, s.cover_ci(1), s.cover_ci(2));
     end
-    fprintf(fid, ['\n    This is a description of these %d warps, not a ' ...
-        'prediction for a new\n    geometry. The warps are affine ' ...
-        'transformations of ONE anatomy, so they\n    are not a sample from ' ...
-        'a population of bodies, and a percentile taken from\n    %d values ' ...
-        'is not a %d%% probability for an unseen case — that would need a\n' ...
-        '    tolerance interval and a sampling model neither of which applies ' ...
-        'here.\n    Quote the interval alongside the percentile: it rests on ' ...
-        'the top one or\n    two values.\n'], ...
-        numel(have), numel(have), cover_pct);
+    fprintf(fid, ['\n    That is the %dth percentile of the %d per-anatomy ' ...
+        'medians.\n'], cover_pct, numel(have));
+    fprintf(fid, ['    It describes these %d warps. The warps are affine ' ...
+        'transformations of\n    ONE anatomy rather than a sample from a ' ...
+        'population of bodies, so it is\n    not a prediction for an unseen ' ...
+        'subject. Quote the interval alongside:\n    the percentile rests on ' ...
+        'the top one or two values.\n'], numel(have));
 
     fprintf(fid, ['\n  SOLVER DIFFERENCE AGAINST ANATOMICAL DIFFERENCE\n' ...
         '    Cross-solver is BEM vs FEM on one anatomy. Within-solver is one\n' ...
@@ -492,20 +491,27 @@ end
 %
 % One figure per sensor axis, three subplots — one per dipole orientation.
 %
-% PER-SOURCE, POOLED ACROSS ANATOMIES is the default rather than one median
-% per anatomy. Thirty medians make a histogram with more bins than data;
-% pooling every source of every anatomy gives a distribution with real
-% shape, and it is the same quantity, just not pre-averaged. Set
-% hist_per_source = false to histogram the per-anatomy medians instead.
+% RELATIVE ERROR ON THE Y-AXIS, NUMBER OF COMPARISONS ON THE X.
+% The bars run horizontally, so the axis carrying relative error is shared
+% with every other figure in the analysis and the three families can be read
+% off against each other at a glance.
 %
-% The within-solver families are drawn as outlines over the top, so the
-% separation that the main claim rests on is visible directly: the
-% cross-solver mass sitting left of both within-solver masses.
+% The x-axis is a count of comparisons: paired BEM-against-FEM comparisons
+% for the cross-solver family, and anatomy pairs for the within-solver
+% families.
 %
-% Normalised to proportion, not counts — there are far more within-solver
-% pairs than anatomies, so raw counts would not be comparable.
+% ONE MEDIAN PER COMPARISON is the unit, matching the headline value, which
+% is a median across the cord. Set hist_per_source = true to pool every
+% source of every comparison instead — that gives a smoother shape, but the
+% counts then run to tens of thousands and no longer read as "number of
+% comparisons".
+%
+% The count disparity is real and is left visible: there are n(n-1)/2
+% within-solver pairs against n cross-solver comparisons. The within-solver
+% families are drawn as outlines so the smaller cross-solver bars are not
+% buried.
 
-hist_per_source = true;    % SET THIS
+hist_per_source = false;   % SET THIS
 overlay_within  = true;    % SET THIS
 
 fprintf('\nHistograms of the BEM-FEM difference...\n');
@@ -536,7 +542,7 @@ for ax = 1:n_sensor_axes
     xhi = prctile_1d(allv, 99.5);
     if ~isfinite(xhi) || xhi <= 0, xhi = max(allv); end
 
-    fig = figure('Color','w','Position',[100 100 1500 440]);
+    fig = figure('Color','w','Position',[100 100 1500 460]);
     tl  = tiledlayout(1, n_ori, 'TileSpacing','compact','Padding','loose');
     title(tl, sprintf(['BEM vs FEM on matched warped anatomies — ' ...
         'sensor axis %d'], ax), 'FontSize', 14, 'FontWeight','bold');
@@ -546,44 +552,48 @@ for ax = 1:n_sensor_axes
         v = Hx{oi};
         if isempty(v), continue; end
 
-        histogram(axh, v, 'BinLimits', [0 xhi], 'NumBins', 40, ...
-            'Normalization','probability', ...
+        nb = ternary_num(hist_per_source, 40, 20);
+
+        histogram(axh, v, 'BinLimits', [0 xhi], 'NumBins', nb, ...
+            'Orientation', 'horizontal', 'Normalization', 'count', ...
             'FaceColor',[0.80 0.30 0.20], 'FaceAlpha', 0.65, ...
             'EdgeColor','none');
 
         if overlay_within
             if ~isempty(Hb{oi})
-                histogram(axh, Hb{oi}, 'BinLimits', [0 xhi], 'NumBins', 40, ...
-                    'Normalization','probability', 'DisplayStyle','stairs', ...
+                histogram(axh, Hb{oi}, 'BinLimits', [0 xhi], 'NumBins', nb, ...
+                    'Orientation','horizontal', 'Normalization','count', ...
+                    'DisplayStyle','stairs', ...
                     'EdgeColor',[0.20 0.40 0.70], 'LineWidth', 1.4);
             end
             if ~isempty(Hf{oi})
-                histogram(axh, Hf{oi}, 'BinLimits', [0 xhi], 'NumBins', 40, ...
-                    'Normalization','probability', 'DisplayStyle','stairs', ...
+                histogram(axh, Hf{oi}, 'BinLimits', [0 xhi], 'NumBins', nb, ...
+                    'Orientation','horizontal', 'Normalization','count', ...
+                    'DisplayStyle','stairs', ...
                     'EdgeColor',[0.45 0.45 0.45], 'LineWidth', 1.4);
             end
         end
 
         md = median(v);
-        xline(axh, md, '--k', 'LineWidth', 1.8, ...
-            'Label', sprintf('%.2f%%', md), 'LabelOrientation','horizontal', ...
-            'LabelVerticalAlignment','top', 'FontSize', 10);
+        yline(axh, md, '--k', 'LineWidth', 1.8, ...
+            'Label', sprintf('median %.2f%%', md), ...
+            'LabelHorizontalAlignment','right', ...
+            'LabelVerticalAlignment','bottom', 'FontSize', 10);
 
-        xlim(axh, [0 xhi]);
+        ylim(axh, [0 xhi]);
         grid(axh,'on'); box(axh,'off');
         set(axh, 'FontSize', 11, 'TickDir','out', 'LineWidth', 1.1);
-        xlabel(axh, 'Relative error (%)', 'FontSize', 12);
+        xlabel(axh, 'Number of comparisons', 'FontSize', 12);
         if oi == 1
-            ylabel(axh, ternary_str(hist_per_source, ...
-                'Proportion of sources', 'Proportion of anatomies'), ...
-                'FontSize', 12);
+            ylabel(axh, 'Relative error (%)', 'FontSize', 12);
         end
         title(axh, sprintf('%s   (n = %d)', ...
             ori_titles.(orientation_labels{oi}), numel(v)), 'FontSize', 12);
 
         if oi == n_ori && overlay_within
-            lg = legend(axh, {'BEM vs FEM','within BEM','within FEM'}, ...
-                'Location','northeast','FontSize',10); lg.Box = 'off';
+            lg = legend(axh, {'BEM vs FEM (paired)','within BEM (pairs)', ...
+                'within FEM (pairs)'}, 'Location','northeast','FontSize',10);
+            lg.Box = 'off';
         end
     end
 
@@ -747,4 +757,9 @@ end
 
 function s = ternary_str(c, a, b)
     if c, s = a; else, s = b; end
+end
+
+
+function v = ternary_num(c, a, b)
+    if c, v = a; else, v = b; end
 end

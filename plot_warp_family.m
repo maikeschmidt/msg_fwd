@@ -1,8 +1,8 @@
 % plot_warp_family - Publication figure of the warped anatomy family
 %
-% Draws the reference torso as a solid filled silhouette with a few warped
-% torsos laid faintly over it, in sagittal and coronal view, so the range of
-% body shapes the analysis covers can be seen at a glance.
+% Draws the reference torso as a dark outline with a few shaded warped
+% torsos laid over it, in sagittal and coronal view, so the range of body
+% shapes the analysis covers can be seen at a glance.
 %
 % This is the figure for the paper. cr_plot_warps in msg_coreg is the
 % pre-flight check on the same warps — it adds a scale-factor panel and
@@ -10,10 +10,11 @@
 % printed. Keep both: they answer different questions.
 %
 % WHAT IT SHOWS
-%   The reference anatomy as a solid filled body, with a few warped
-%   anatomies filled faintly over the top. Where the faint bodies sit close
-%   to the solid one the warps barely move the torso; where they extend
-%   beyond it the family spans a real range of shapes. The spinal cord is
+%   The reference anatomy as a dark outline, with a few warped anatomies
+%   shaded over it. Where the shaded bodies sit close to the outline the
+%   warps barely move the torso; where they extend beyond it the family
+%   spans a real range of shapes. The reference is left unfilled so that a
+%   warp lying inside it stays visible, which a solid fill would hide. The spinal cord is
 %   drawn warped with its own torso, because the warp is one affine map
 %   applied to every mesh at once — an unwarped cord inside a warped torso
 %   would look as though the cord had escaped the body, which is a drawing
@@ -114,7 +115,7 @@ tl  = tiledlayout(1, 2, 'TileSpacing','compact','Padding','loose');
 
 % A single hue for every warp keeps the eye on the spread rather than
 % inviting the reader to track individual warps, which carry no order.
-ref_col  = [0.26 0.32 0.40];   % solid reference body
+ref_col  = [0.10 0.10 0.10];   % reference outline
 warp_col = [0.20 0.45 0.75];   % the faint overlaid bodies
 cord_col = [0.80 0.33 0.15];
 
@@ -126,13 +127,9 @@ for v = 1:size(views,1)
     cx = views{v,1}; cy = views{v,2};
     ax = nexttile(tl); hold(ax,'on');
 
-    % Reference first and solid, so the faint warped bodies read as laid
-    % over it rather than behind it.
-    silhouette(ax, V0(:,cx), V0(:,cy), ref_col, 1.0, S.shrink, 'none');
-    if S.show_cord
-        silhouette(ax, C0(:,cx), C0(:,cy), cord_col, 1.0, S.shrink, 'none');
-    end
-
+    % Shaded warped bodies first, then the reference as an outline over the
+    % top. An unfilled reference lets every warp stay visible where it sits
+    % inside the reference outline, which a solid fill would hide.
     for i = 1:numel(show)
         M  = W.matrices{show(i)};
         Vw = apply_T(M, V0);
@@ -145,6 +142,11 @@ for v = 1:size(views,1)
         end
     end
 
+    silhouette(ax, V0(:,cx), V0(:,cy), 'none', 1.0, S.shrink, ref_col, 2.4);
+    if S.show_cord
+        silhouette(ax, C0(:,cx), C0(:,cy), 'none', 1.0, S.shrink, ref_col, 1.5);
+    end
+
     axis(ax, 'equal');
     xlabel(ax, views{v,3}); ylabel(ax, views{v,4});
     title(ax, views{v,5}, 'FontSize', 12);
@@ -155,7 +157,8 @@ for v = 1:size(views,1)
     if v == 1
         % Proxy patches, so the legend shows the fills at a legible opacity
         % rather than the very faint ones actually drawn.
-        p1 = patch(ax, NaN, NaN, ref_col,  'EdgeColor','none');
+        p1 = patch(ax, NaN, NaN, 'none', 'EdgeColor', ref_col, ...
+                   'LineWidth', 2.4);
         p2 = patch(ax, NaN, NaN, warp_col, 'FaceAlpha', 0.45, ...
                    'EdgeColor', warp_col);
         lbl = {'Reference anatomy', ...
@@ -172,7 +175,7 @@ for v = 1:size(views,1)
 end
 
 title(tl, sprintf(['Family of warped anatomies (%d geometries)\n' ...
-    'reference solid, %d warps overlaid'], n_warp, numel(show)), ...
+    'reference outlined, %d warps shaded over it'], n_warp, numel(show)), ...
     'FontSize', 14, 'FontWeight', 'bold');
 
 exportgraphics(fig, fullfile(S.save_dir, 'warp_family.png'), 'Resolution', 600);
@@ -191,7 +194,7 @@ function p = apply_T(T, pts)
     p = p(:, 1:3);
 end
 
-function h = silhouette(ax, x, y, col, alpha, shrink, edge_col)
+function h = silhouette(ax, x, y, col, alpha, shrink, edge_col, lw)
 % Filled silhouette of a projected point cloud.
 %
 % `boundary` traces the actual outline of the projection with a shrink
@@ -222,7 +225,9 @@ function h = silhouette(ax, x, y, col, alpha, shrink, edge_col)
         k = convhull(x(:), y(:));
     end
 
+    if nargin < 8 || isempty(lw), lw = 0.9; end
+
     h = patch(ax, 'XData', x(k), 'YData', y(k), ...
               'FaceColor', col, 'FaceAlpha', alpha, ...
-              'EdgeColor', edge_col, 'LineWidth', 0.9);
+              'EdgeColor', edge_col, 'LineWidth', lw);
 end

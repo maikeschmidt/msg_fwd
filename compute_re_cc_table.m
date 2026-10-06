@@ -47,9 +47,10 @@
 %   reference.
 %
 % BOOTSTRAP:
-%   Confidence intervals are percentile bootstrap CIs of the MEDIAN,
-%   resampling SOURCE POSITIONS with replacement (n_boot draws). This
-%   answers "what am I bootstrapping?" — the sampling unit is the source
+%   Spread is reported as the interquartile range over SOURCE POSITIONS.
+%   There is no bootstrap interval: resampling source positions treats
+%   neighbouring points along the cord as independent draws when they are
+%   not, which narrows the interval while adding machinery to a quantity
 %   position along the cord, so the CI expresses how much the reported
 %   median would move if the cord had been sampled at a different set of
 %   positions. It is NOT a claim about inter-subject variability; that
@@ -59,8 +60,6 @@
 % CONFIGURATION (set in this script):
 %   table_models   — [n x 2] cell array: {model_key, display_name}
 %   target_axis    — sensor axis to report (default: 3, radial)
-%   n_boot         — bootstrap draws (default: 10000)
-%   ci_level       — CI coverage (default: 0.95)
 %
 % NOTES:
 %   - All models truncated to the minimum sensor count before computing
@@ -114,8 +113,6 @@ axes_to_report = 1:n_sensor_axes_cfg;   % SET THIS to a subset if needed
 for target_axis = axes_to_report
 
 % Bootstrap settings
-n_boot   = 10000;
-ci_level = 0.95;
 rng(20260806, 'twister');   % reproducible CIs
 
 % Vector conventions to report: three single orientations plus concatenated
@@ -178,9 +175,7 @@ fprintf(fid, 'Generated : %s\n', datestr(now));
 fprintf(fid, 'Axis      : sensor axis %d\n', target_axis);
 fprintf(fid, 'Sensors   : truncated to %d per orientation\n', min_sensors);
 fprintf(fid, 'Edges     : first and last source excluded\n');
-fprintf(fid, 'Bootstrap : %d draws, %.0f%% percentile CI of the median,\n', ...
-    n_boot, ci_level * 100);
-fprintf(fid, '            resampling SOURCE POSITIONS with replacement\n\n');
+fprintf(fid, 'Spread    : interquartile range over source positions\n\n');
 fprintf(fid, 'RE      = ||L1-L2||_2 / ||L1||_2 * 100          [reference-normalised]\n');
 fprintf(fid, 'RE_sym  = ||L1-L2||_1 / (||L1||_1+||L2||_1)*100 [symmetric]\n');
 fprintf(fid, 'r2      = (Pearson r)^2                          [scale invariant]\n');
@@ -194,11 +189,11 @@ fprintf(fid, 'the ALL row (concatenated [LR;RC;VD]) matches the heatmaps.\n\n');
 
 % CSV header
 fprintf(fcsv, ['reference_model,comparison_model,orientation,n_sources,' ...
-    're_median,re_ci_lo,re_ci_hi,re_iqr_lo,re_iqr_hi,re_min,re_max,re_max_pos_mm,' ...
+    're_median,re_iqr_lo,re_iqr_hi,re_min,re_max,re_max_pos_mm,' ...
     'resym_median,' ...
-    'r2_median,r2_ci_lo,r2_ci_hi,r2_iqr_lo,r2_iqr_hi,r2_min,r2_max,r2_min_pos_mm,' ...
-    'rdm_median,rdm_ci_lo,rdm_ci_hi,' ...
-    'lnmag_median,lnmag_ci_lo,lnmag_ci_hi,' ...
+    'r2_median,r2_iqr_lo,r2_iqr_hi,r2_min,r2_max,r2_min_pos_mm,' ...
+    'rdm_median,rdm_iqr_lo,rdm_iqr_hi,' ...
+    'lnmag_median,lnmag_iqr_lo,lnmag_iqr_hi,' ...
     'gain_pct,gain_pct_lo,gain_pct_hi,re_predicted_from_gain_rdm\n']);
 
 divider = repmat('-', 1, 100);
@@ -248,10 +243,10 @@ for ii = 1:n_tbl
             % Source position in mm for worst-case reporting
             src_mm = (keep) * src_spacing_mm;
 
-            re_s  = summarise(re_vec,  n_boot, ci_level);
-            r2_s  = summarise(r2_vec,  n_boot, ci_level);
-            rdm_s = summarise(rdm_vec, n_boot, ci_level);
-            lnm_s = summarise(lnm_vec, n_boot, ci_level);
+            re_s  = summarise(re_vec);
+            r2_s  = summarise(r2_vec);
+            rdm_s = summarise(rdm_vec);
+            lnm_s = summarise(lnm_vec);
 
             % Gain factor implied by lnMAG, which is what actually gets
             % quoted in prose: exp(lnMAG) = ||L2|| / ||L1||, so
@@ -259,8 +254,8 @@ for ii = 1:n_tbl
             % This is the number to compare against statements such as
             % "segmented models increase LR amplitude by 35-72%".
             gain_pct    = (exp(lnm_s.med)   - 1) * 100;
-            gain_pct_lo = (exp(lnm_s.ci(1)) - 1) * 100;
-            gain_pct_hi = (exp(lnm_s.ci(2)) - 1) * 100;
+            gain_pct_lo = (exp(lnm_s.iqr(1)) - 1) * 100;
+            gain_pct_hi = (exp(lnm_s.iqr(2)) - 1) * 100;
 
             [~, re_max_idx] = max(re_vec, [], 'omitnan');
             [~, r2_min_idx] = min(r2_vec, [], 'omitnan');
@@ -269,17 +264,17 @@ for ii = 1:n_tbl
 
             fprintf(fid, '\n  [%s]  n = %d sources\n', ori_label, sum(~isnan(re_vec)));
             fprintf(fid, '    RE (%%)   median %7.3f   95%% CI [%7.3f, %7.3f]   IQR [%7.3f, %7.3f]   range [%7.3f, %7.3f]   max at %d mm\n', ...
-                re_s.med, re_s.ci(1), re_s.ci(2), re_s.iqr(1), re_s.iqr(2), ...
+                re_s.med, re_s.iqr(1), re_s.iqr(2), ...
                 re_s.min, re_s.max, re_max_mm);
             fprintf(fid, '    RE_sym   median %7.3f   (symmetric definition)\n', ...
                 median(resym, 'omitnan'));
             fprintf(fid, '    r2       median %7.4f   95%% CI [%7.4f, %7.4f]   IQR [%7.4f, %7.4f]   range [%7.4f, %7.4f]   min at %d mm\n', ...
-                r2_s.med, r2_s.ci(1), r2_s.ci(2), r2_s.iqr(1), r2_s.iqr(2), ...
+                r2_s.med, r2_s.iqr(1), r2_s.iqr(2), ...
                 r2_s.min, r2_s.max, r2_min_mm);
             fprintf(fid, '    RDM      median %7.4f   95%% CI [%7.4f, %7.4f]   (topography only)\n', ...
-                rdm_s.med, rdm_s.ci(1), rdm_s.ci(2));
+                rdm_s.med, rdm_s.iqr(1), rdm_s.iqr(2));
             fprintf(fid, '    lnMAG    median %+7.4f   95%% CI [%+7.4f, %+7.4f]   (gain only)\n', ...
-                lnm_s.med, lnm_s.ci(1), lnm_s.ci(2));
+                lnm_s.med, lnm_s.iqr(1), lnm_s.iqr(2));
             fprintf(fid, '    -> amplitude change %+7.2f%%   95%% CI [%+7.2f%%, %+7.2f%%]\n', ...
                 gain_pct, gain_pct_lo, gain_pct_hi);
 
@@ -300,14 +295,14 @@ for ii = 1:n_tbl
             fprintf(fcsv, '%s,%s,%s,%d,', ...
                 valid_names{ii}, valid_names{jj}, ori_label, sum(~isnan(re_vec)));
             fprintf(fcsv, '%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%d,', ...
-                re_s.med, re_s.ci(1), re_s.ci(2), re_s.iqr(1), re_s.iqr(2), ...
+                re_s.med, re_s.iqr(1), re_s.iqr(2), ...
                 re_s.min, re_s.max, re_max_mm);
             fprintf(fcsv, '%.4f,', median(resym, 'omitnan'));
             fprintf(fcsv, '%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f,%d,', ...
-                r2_s.med, r2_s.ci(1), r2_s.ci(2), r2_s.iqr(1), r2_s.iqr(2), ...
+                r2_s.med, r2_s.iqr(1), r2_s.iqr(2), ...
                 r2_s.min, r2_s.max, r2_min_mm);
-            fprintf(fcsv, '%.6f,%.6f,%.6f,', rdm_s.med, rdm_s.ci(1), rdm_s.ci(2));
-            fprintf(fcsv, '%.6f,%.6f,%.6f,', lnm_s.med, lnm_s.ci(1), lnm_s.ci(2));
+            fprintf(fcsv, '%.6f,%.6f,%.6f,', rdm_s.med, rdm_s.iqr(1), rdm_s.iqr(2));
+            fprintf(fcsv, '%.6f,%.6f,%.6f,', lnm_s.med, lnm_s.iqr(1), lnm_s.iqr(2));
             fprintf(fcsv, '%.4f,%.4f,%.4f,%.4f\n', ...
                 gain_pct, gain_pct_lo, gain_pct_hi, re_pred);
         end
@@ -317,7 +312,7 @@ end
 fprintf(fid, '\n%s\n', divider);
 fprintf(fid, 'NOTE: "max at" and "min at" identify the worst-case source per pair.\n');
 fprintf(fid, 'NOTE: These positions may differ between RE and r2.\n');
-fprintf(fid, 'NOTE: CIs are percentile bootstrap CIs of the median over source\n');
+fprintf(fid, 'NOTE: spread is the interquartile range over source\n');
 fprintf(fid, '      positions. For inter-subject variability see msg_fwd/stats/.\n');
 
 fclose(fid);
@@ -333,27 +328,20 @@ fprintf('\nAll %d sensor axes written.\n', numel(axes_to_report));
 
 % LOCAL FUNCTIONS
 
-function s = summarise(v, n_boot, ci_level)
-% Median, IQR, range and percentile bootstrap CI of the median.
+function s = summarise(v, varargin)
+% Median, interquartile range and range over source positions.
+%
+% No bootstrap interval. Resampling source positions treats neighbouring
+% points along the cord as independent draws when they are not, which makes
+% the interval narrower than it should be while adding a layer of machinery
+% to a quantity that is computed exactly. The IQR describes the spread over
+% sources directly and needs no resampling.
     v = v(~isnan(v));
-    s = struct('med', NaN, 'ci', [NaN NaN], 'iqr', [NaN NaN], ...
-               'min', NaN, 'max', NaN);
+    s = struct('med', NaN, 'iqr', [NaN NaN], 'min', NaN, 'max', NaN);
     if isempty(v), return; end
 
     s.med = median(v);
-    s.iqr = [prctile(v, 25), prctile(v, 75)];
+    s.iqr = [pctl(v, 25), pctl(v, 75)];
     s.min = min(v);
     s.max = max(v);
-
-    if numel(v) < 3
-        s.ci = [s.med, s.med];
-        return;
-    end
-
-    n     = numel(v);
-    idx   = randi(n, n, n_boot);       % [n x n_boot] resampled indices
-    boots = median(v(idx), 1);         % median of each bootstrap sample
-
-    alpha = (1 - ci_level) / 2;
-    s.ci  = [prctile(boots, alpha * 100), prctile(boots, (1 - alpha) * 100)];
 end

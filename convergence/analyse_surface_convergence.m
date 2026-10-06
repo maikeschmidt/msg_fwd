@@ -92,7 +92,7 @@ fprintf(fid, ['Both solvers are refined by the SAME parameter (fraction of\n' ..
               'therefore directly comparable.\n\n']);
 
 fprintf(fcsv, ['method,keep_fraction,h_torso_mm,n_dof,time_s,orientation,' ...
-    're_median,re_ci_lo,re_ci_hi,re_max,r2_median,r2_min\n']);
+    're_median,re_iqr_lo,re_iqr_hi,re_max,r2_median,r2_min\n']);
 
 R = struct();   % per method
 
@@ -234,7 +234,6 @@ for s = 1:size(specs, 1)
             Rm.re(i, oi) = median(re, 'omitnan');
             Rm.r2(i, oi) = median(r2, 'omitnan');
 
-            ci = st_boot_ci_median(re, n_boot, ci_level);
 
             fprintf(fid, '  %6.2f %10.2f %10d %10.1f %5s %9.3f %9.5f\n', ...
                 keeps(i), h_srf(i), dofs(i), tms(i), ori, ...
@@ -242,7 +241,7 @@ for s = 1:size(specs, 1)
 
             fprintf(fcsv, '%s,%.2f,%.4f,%d,%.2f,%s,%.4f,%.4f,%.4f,%.4f,%.6f,%.6f\n', ...
                 meth, keeps(i), h_srf(i), dofs(i), tms(i), ori, ...
-                Rm.re(i,oi), ci(1), ci(2), max(re), Rm.r2(i,oi), min(r2));
+                Rm.re(i,oi), pctl(re,25), pctl(re,75), max(re), Rm.r2(i,oi), min(r2));
         end
     end
 

@@ -175,7 +175,7 @@ if ~isempty(csf_report)
     fprintf(fid, '  Effective thickness   : %.4f m\n\n', csf_report.mean_thickness);
 end
 
-fprintf(fcsv, 'comparison,description,orientation,re_median,re_ci_lo,re_ci_hi,re_max,r2_median,r2_ci_lo,r2_ci_hi,r2_min,rdm_median,lnmag_median\n');
+fprintf(fcsv, 'comparison,description,orientation,re_median,re_iqr_lo,re_iqr_hi,re_max,r2_median,r2_iqr_lo,r2_iqr_hi,r2_min,rdm_median,lnmag_median\n');
 
 S = struct();
 
@@ -210,13 +210,11 @@ for c = 1:n_cmp
         S.(tag).gain(oi, :) = (exp(lnm) - 1) * 100;
         S.(tag).dist        = keep * src_spacing_mm;
 
-        ci_re = st_boot_ci_median(re, n_boot, ci_level);
-        ci_r2 = st_boot_ci_median(r2, n_boot, ci_level);
 
         fprintf(fid, '  [%s] RE median %7.3f%%  95%% CI [%6.3f, %6.3f]  max %7.3f%%\n', ...
-            ori, median(re,'omitnan'), ci_re(1), ci_re(2), max(re));
+            ori, median(re,'omitnan'), pctl(re,25), pctl(re,75), max(re));
         fprintf(fid, '       r2 median %7.5f   95%% CI [%7.5f, %7.5f]  min %7.5f\n', ...
-            median(r2,'omitnan'), ci_r2(1), ci_r2(2), min(r2));
+            median(r2,'omitnan'), pctl(r2,25), pctl(r2,75), min(r2));
         fprintf(fid, '       RDM median %6.4f   lnMAG median %+7.4f\n', ...
             median(rdm,'omitnan'), median(lnm,'omitnan'));
 
@@ -224,8 +222,8 @@ for c = 1:n_cmp
             median(re,'omitnan'), median(r2,'omitnan'));
 
         fprintf(fcsv, '%s,%s,%s,%.4f,%.4f,%.4f,%.4f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f\n', ...
-            tag, desc, ori, median(re,'omitnan'), ci_re(1), ci_re(2), max(re), ...
-            median(r2,'omitnan'), ci_r2(1), ci_r2(2), min(r2), ...
+            tag, desc, ori, median(re,'omitnan'), pctl(re,25), pctl(re,75), max(re), ...
+            median(r2,'omitnan'), pctl(r2,25), pctl(r2,75), min(r2), ...
             median(rdm,'omitnan'), median(lnm,'omitnan'));
     end
 end
