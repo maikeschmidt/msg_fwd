@@ -168,11 +168,11 @@ for L = 1:numel(A)
 
     fprintf(fid, '%8.2f %10d %9d %11.4f %11.4f %11.4f %13.4f\n', ...
         A(L).keep, A(L).n_vert, A(L).n_sens, ...
-        median(d), pct(d,95), max(d), median(so));
+        median(d), pctl(d,95), max(d), median(so));
 
     fprintf(fcsv, '%.2f,%d,%d,%d,%.5f,%.5f,%.5f,%.5f,%.5f,%.5f\n', ...
         A(L).keep, A(L).n_vert, A(L).n_sens, n, ...
-        median(d), pct(d,95), max(d), median(so), pct(so,5), pct(so,95));
+        median(d), pctl(d,95), max(d), median(so), pctl(so,5), pctl(so,95));
 
     for k = 1:n
         fprintf(fsen, '%.2f,%d,%.5f,%.5f\n', A(L).keep, k, d(k), so(k));
@@ -192,13 +192,13 @@ if ~isempty(i_full)
         repmat('=',1,78), repmat('=',1,78));
     fprintf(fid, 'Sensors generated on the full torso sit a median of %.3f mm\n', median(d));
     fprintf(fid, '(95th percentile %.3f mm, max %.3f mm) from those generated\n', ...
-        pct(d,95), max(d));
+        pctl(d,95), max(d));
     fprintf(fid, 'on the 50%% torso.\n\n');
     fprintf(fid, 'Realised standoff from the full torso surface:\n');
     fprintf(fid, '  production array (50%%) : median %.3f mm [%.3f, %.3f]\n', ...
-        median(so_ref), pct(so_ref,5), pct(so_ref,95));
+        median(so_ref), pctl(so_ref,5), pctl(so_ref,95));
     fprintf(fid, '  array on full torso    : median %.3f mm [%.3f, %.3f]\n', ...
-        median(so_full), pct(so_full,5), pct(so_full,95));
+        median(so_full), pctl(so_full,5), pctl(so_full,95));
     fprintf(fid, '  nominal                : %g mm\n\n', S_sens.depth);
     fprintf(fid, ['A displacement small relative to the standoff means the\n' ...
                   'production array is where it would have been had the full\n' ...
@@ -268,11 +268,4 @@ function d = nearest_dist(P, V)
     end
 end
 
-function y = pct(x, p)
-    x = sort(x(~isnan(x)));
-    n = numel(x);
-    if n == 0, y = NaN; return; end
-    pos = max(1, min(n, p/100*n + 0.5));
-    lo = floor(pos); hi = ceil(pos);
-    if lo == hi, y = x(lo); else, y = x(lo) + (pos-lo)*(x(hi)-x(lo)); end
-end
+

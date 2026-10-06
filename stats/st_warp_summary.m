@@ -296,7 +296,7 @@ for ax = 1:n_sensor_axes
 
         med     = median(re);
         ci_med  = st_boot_ci_median(re, n_boot, ci_level);
-        p_cover = prctile_1d(re, cover_pct);
+        p_cover = pctl(re, cover_pct);
         ci_cov  = boot_ci_pct(re, cover_pct, n_boot, ci_level);
 
         if have_ref && ~isnan(ref_val)
@@ -329,10 +329,10 @@ for ax = 1:n_sensor_axes
         end
 
         fprintf(fdis, '%d,%s,RE,%d,%.4f,%.4f,%.4f,%.4f,%.4f,', ...
-            ax, ori, numel(re), med, prctile_1d(re,25), prctile_1d(re,75), ...
+            ax, ori, numel(re), med, pctl(re,25), pctl(re,75), ...
             ci_med(1), ci_med(2));
         fprintf(fdis, '%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.2f,', ...
-            prctile_1d(re,50), prctile_1d(re,75), prctile_1d(re,90), ...
+            pctl(re,50), pctl(re,75), pctl(re,90), ...
             p_cover, ci_cov(1), ci_cov(2), min(re), max(re), ref_val, ref_pct);
         fprintf(fdis, '%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%d\n', ...
             S(ax,oi).wb_med, S(ax,oi).wb_ci(1), S(ax,oi).wb_ci(2), ...
@@ -357,7 +357,7 @@ for ax = 1:n_sensor_axes
         s = S(ax,oi);
         fprintf(fid, '  %-5s %7.3f%% %7.3f %7.3f-%-9.3f %7.3f%% %7.3f-%-9.3f\n', ...
             orientation_labels{oi}, s.med, ...
-            prctile_1d(s.per_warp(:,1),75) - prctile_1d(s.per_warp(:,1),25), ...
+            pctl(s.per_warp(:,1),75) - pctl(s.per_warp(:,1),25), ...
             s.ci(1), s.ci(2), s.cover, s.cover_ci(1), s.cover_ci(2));
     end
 
@@ -478,7 +478,7 @@ for ax = 1:n_sensor_axes
         end
 
         yline(ax_h, s.cover, '--', 'Color',[0.80 0.30 0.20], 'LineWidth', 1.2, ...
-            'Label', sprintf('%dth pct = %.2f%%', cover_pct, s.cover), ...
+            'Label', sprintf('%dpct = %.2f%%', cover_pct, s.cover), ...
             'LabelHorizontalAlignment','left', 'HandleVisibility','off');
 
         if ~isnan(s.ref_val)
@@ -601,23 +601,11 @@ fprintf('Figures: %s\n', save_dir);
 
 % LOCAL FUNCTIONS
 
-function y = prctile_1d(x, p)
-% Percentile without the Statistics toolbox, linear interpolation between
-% order statistics — the same convention st_boot_ci_median uses.
-    x = sort(x(~isnan(x)));
-    n = numel(x);
-    if n == 0, y = NaN; return; end
-    if n == 1, y = x; return; end
-    pos = (p/100) * (n - 1) + 1;
-    lo  = floor(pos); hi = ceil(pos);
-    if lo == hi, y = x(lo); else, y = x(lo) + (pos-lo)*(x(hi)-x(lo)); end
-end
-
 function P = pct(M, p)
 % Column-wise percentile over the first dimension.
     P = nan(1, size(M,2));
     for c = 1:size(M,2)
-        P(c) = prctile_1d(M(:,c), p);
+        P(c) = pctl(M(:,c), p);
     end
 end
 
@@ -628,10 +616,10 @@ function ci = boot_ci_pct(v, p, n_boot, level)
     n = numel(v);
     b = nan(n_boot, 1);
     for k = 1:n_boot
-        b(k) = prctile_1d(v(randi(n, n, 1)), p);
+        b(k) = pctl(v(randi(n, n, 1)), p);
     end
     a  = (1 - level) / 2;
-    ci = [prctile_1d(b, a*100), prctile_1d(b, (1-a)*100)];
+    ci = [pctl(b, a*100), pctl(b, (1-a)*100)];
 end
 
 function W = pairwise_within(lf, meth, have, ax, vopts, mopts)
@@ -699,7 +687,7 @@ function ci = boot_ci_within(W, n_warp, n_boot, level)
     end
 
     a_t = (1 - level) / 2;
-    ci  = [prctile_1d(b, a_t*100), prctile_1d(b, (1-a_t)*100)];
+    ci  = [pctl(b, a_t*100), pctl(b, (1-a_t)*100)];
 end
 
 
@@ -772,7 +760,7 @@ function draw_hist_figure(Srow, ax_idx, ori_labels, ori_titles, save_dir, ...
             xg = xmax * 1.06;
 
             marks = { md,  '-',  [0.10 0.10 0.10], sprintf('median  %.2f%%', md); ...
-                      p95, '--', [0.75 0.25 0.15], sprintf('%d%%  %.2f%%', cover_pct, p95) };
+                      p95, '--', [0.75 0.25 0.15], sprintf('%dpct  %.2f%%', cover_pct, p95) };
             if ~isnan(rf)
                 marks(end+1,:) = { rf, ':', [0.20 0.45 0.25], ...
                                    sprintf('reference  %.2f%%', rf) };

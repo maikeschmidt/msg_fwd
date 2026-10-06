@@ -1,10 +1,20 @@
 function y = pctl(x, p)
 % pctl - Percentile of a vector, without the Statistics toolbox
 %
-% Linear interpolation between order statistics, which is the convention
-% MATLAB's prctile uses by default and the one every other summary in this
-% toolbox assumes. Defined here once so the analyses agree with each other
-% and none of them depends on a toolbox being installed.
+% Linear interpolation between order statistics, matching MATLAB's prctile:
+% the sorted values are taken to sit at percentiles 100*((1:n)-0.5)/n and
+% the result is interpolated between them, clamped at the ends.
+%
+% Defined here once, and used by every percentile in the toolbox, so that a
+% figure and the table beside it cannot quote the same quantity computed two
+% different ways. The two conventions in common use disagree materially on
+% small samples: for n = 30 at the 95th percentile, this one returns the
+% 29th sorted value exactly, while the (p/100)*(n-1)+1 convention returns a
+% point 55% of the way from the 28th to the 29th.
+%
+% Matching MATLAB means a number here can be checked against prctile
+% directly, and st_boot_ci_median already uses this convention for its
+% interval endpoints.
 %
 % NaNs are dropped. An empty vector returns NaN rather than erroring, so a
 % comparison with no usable sources reports a blank instead of stopping a
@@ -36,7 +46,7 @@ n = numel(x);
 if n == 0, y = NaN;  return; end
 if n == 1, y = x(1); return; end
 
-pos = (p/100) * (n - 1) + 1;
+pos = max(1, min(n, (p/100) * n + 0.5));
 lo  = floor(pos);
 hi  = ceil(pos);
 

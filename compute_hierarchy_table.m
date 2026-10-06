@@ -590,7 +590,7 @@ for c = 1:numel(C)
                 C(c).factor, C(c).label, C(c).solver, C(c).name, ax, omode, ...
                 sum(~isnan(re)));
             fprintf(fcsv, '%.4f,%.4f,%.4f,%.4f,%.4f,', ...
-                re_med, prctile_safe(re,25), prctile_safe(re,75), ...
+                re_med, pctl(re,25), pctl(re,75), ...
                 min(re), max(re));
             fprintf(fcsv, '%.6f,%.6f,%.6f,%.6f,%.6f,%.4f,%.4f\n', ...
                 median(r2,'omitnan'), min(r2), max(r2), ...
@@ -793,16 +793,6 @@ type(fullfile(save_dir,'hierarchy_report.txt'));
 function s = mk(factor, label, solver, name, lf, ka, kb)
     s = struct('factor', factor, 'label', label, 'solver', solver, ...
                'name', name, 'lf', lf, 'key_a', ka, 'key_b', kb);
-end
-
-function y = prctile_safe(x, p)
-    x = sort(x(~isnan(x)));
-    n = numel(x);
-    if n == 0, y = NaN; return; end
-    if n == 1, y = x;   return; end
-    pos = max(1, min(n, p/100*n + 0.5));
-    lo = floor(pos); hi = ceil(pos);
-    if lo == hi, y = x(lo); else, y = x(lo) + (pos-lo)*(x(hi)-x(lo)); end
 end
 
 function f = fmt(v, dp)
