@@ -114,10 +114,6 @@ is_meg        = true;
 cover_pct = 95;
 
 n_boot   = 10000;
-% Draws used only to build the pale resampled distribution in the figures.
-% Fewer than n_boot because the pooled values are for shape, not for an
-% interval, and 435 pairs times 10,000 draws is several million values.
-n_boot_show = 2000;
 ci_level = 0.95;
 rng(20260930, 'twister');
 
@@ -318,17 +314,8 @@ for ax = 1:n_sensor_axes
         % resampled set, because the pairs are not independent of each other.
         S(ax,oi).wb_med = median(wb.re, 'omitnan');
         S(ax,oi).wf_med = median(wf.re, 'omitnan');
-        [S(ax,oi).wb_ci, S(ax,oi).wb_boot] = ...
-            boot_ci_within(wb, numel(have), n_boot, ci_level, n_boot_show);
-        [S(ax,oi).wf_ci, S(ax,oi).wf_boot] = ...
-            boot_ci_within(wf, numel(have), n_boot, ci_level, n_boot_show);
-
-        % Pooled resamples of the cross-solver family: draw anatomies with
-        % replacement and keep the values drawn, not the median of each
-        % draw. Pooled, they trace the same distribution as the 30 observed
-        % values with far more points, which is what the pale background in
-        % the histograms is.
-        S(ax,oi).cross_boot = pooled_resample(re, n_boot_show);
+        S(ax,oi).wb_ci = boot_ci_within(wb, numel(have), n_boot, ci_level);
+        S(ax,oi).wf_ci = boot_ci_within(wf, numel(have), n_boot, ci_level);
 
         % Where the reference anatomy sits WITHIN each solver: the reference
         % compared against each warp, in that solver alone. The cross-solver
@@ -523,12 +510,14 @@ end
 % cross-solver comparisons, and on shared axes the smaller family is buried.
 %
 % In each panel:
-%   solid bars   the observed comparisons
-%   pale bars    the same comparisons resampled with replacement, pooled
-%                over draws and rescaled to the observed total, so it is a
-%                smoother tracing of the same distribution rather than a
-%                second quantity
-%   lines        median, where the reference anatomy sits, and the 95% value
+%   bars         the observed comparisons
+%   lines        median, where the reference anatomy sits, and the 95%
+%                value, each labelled in a gutter on the right
+%
+% The median and the 95% value are taken from the OBSERVED comparisons, not
+% from the bootstrap. The bootstrap supplies only the intervals around them,
+% which are in the report — a resample is for the uncertainty on a point
+% estimate, not for relocating it.
 %
 % Relative error is on the y-axis so it is the shared axis with every other
 % figure in the analysis; the x-axis counts comparisons.
@@ -543,7 +532,6 @@ for ax = 1:n_sensor_axes
     draw_hist_figure(S(ax,:), ax, orientation_labels, ori_titles, ...
         save_dir, hist_bins, cover_pct, ...
         struct('fields',  {{'per_warp_re'}}, ...
-               'boots',   {{'cross_boot'}}, ...
                'refs',    {{'ref_val'}}, ...
                'labels',  {{'BEM vs FEM (paired)'}}, ...
                'colors',  {{[0.16 0.38 0.70]}}, ...
@@ -555,7 +543,6 @@ for ax = 1:n_sensor_axes
     draw_hist_figure(S(ax,:), ax, orientation_labels, ori_titles, ...
         save_dir, hist_bins, cover_pct, ...
         struct('fields',  {{'within_bem_re','within_fem_re'}}, ...
-               'boots',   {{'wb_boot','wf_boot'}}, ...
                'refs',    {{'wb_ref','wf_ref'}}, ...
                'labels',  {{'Within BEM (anatomy pairs)', ...
                             'Within FEM (anatomy pairs)'}}, ...
@@ -679,7 +666,7 @@ function W = pairwise_within(lf, meth, have, ax, vopts, mopts)
 end
 
 
-function [ci, pooled] = boot_ci_within(W, n_warp, n_boot, level, n_show)
+function ci = boot_ci_within(W, n_warp, n_boot, level)
 % Cluster bootstrap for a within-solver family.
 %
 % The pairs are not independent — each anatomy appears in n-1 of them — so
@@ -691,7 +678,6 @@ function [ci, pooled] = boot_ci_within(W, n_warp, n_boot, level, n_show)
 % error is zero by construction and keeping them would drag the median down.
 
     ok = ~isnan(W.re);
-    pooled = [];
     if ~any(ok), ci = [NaN NaN]; return; end
 
     % Lookup from an anatomy pair to its stored relative error
@@ -709,10 +695,7 @@ function [ci, pooled] = boot_ci_within(W, n_warp, n_boot, level, n_show)
                 if val ~= 0, v(end+1) = val; end %#ok<AGROW>
             end
         end
-        if ~isempty(v)
-            b(t) = median(v);
-            if t <= n_show, pooled = [pooled, v]; end %#ok<AGROW>
-        end
+        if ~isempty(v), b(t) = median(v); end
     end
 
     a_t = (1 - level) / 2;
@@ -734,10 +717,13 @@ function draw_hist_figure(Srow, ax_idx, ori_labels, ori_titles, save_dir, ...
                           nbins, cover_pct, P)
 % One figure: a row per family, a column per dipole orientation.
 %
-% Solid bars are the observed comparisons. Pale bars are those comparisons
-% resampled with replacement and pooled over draws, rescaled to the observed
-% total so the two sit on one count axis — the pale shape is the same
-% distribution traced with more points, not a separate quantity.
+% Bars are the observed comparisons. The median, the 95% value and the
+% reference anatomy are drawn as lines and labelled in a gutter kept clear
+% on the right of each panel, so no label sits over the data.
+%
+% The median and the 95% value come from the observed comparisons. The
+% bootstrap in the report supplies the intervals around them and nothing
+% else.
 
     n_ori = numel(ori_labels);
     n_fam = numel(P.fields);
@@ -761,8 +747,7 @@ function draw_hist_figure(Srow, ax_idx, ori_labels, ori_titles, save_dir, ...
     title(tl, P.title, 'FontSize', 14, 'FontWeight','bold');
 
     for f = 1:n_fam
-        col  = P.colors{f};
-        pale = col + (1 - col) * 0.68;      % same hue, much lighter
+        col = P.colors{f};
 
         for oi = 1:n_ori
             axh = nexttile(tl); hold(axh,'on');
@@ -771,43 +756,36 @@ function draw_hist_figure(Srow, ax_idx, ori_labels, ori_titles, save_dir, ...
             v = v(~isnan(v));
             if isempty(v), continue; end
 
-            b = Srow(oi).(P.boots{f});
-            b = b(~isnan(b));
-
-            % Resampled first, underneath, rescaled to the observed total
-            if ~isempty(b)
-                cb = histcounts(b, edges);
-                cb = cb * (numel(v) / max(sum(cb), 1));
-                barh(axh, edges(1:end-1) + diff(edges)/2, cb, 1.0, ...
-                    'FaceColor', pale, 'EdgeColor','none', ...
-                    'DisplayName','resampled (rescaled)');
-            end
-
             cv = histcounts(v, edges);
-            barh(axh, edges(1:end-1) + diff(edges)/2, cv, 0.62, ...
-                'FaceColor', col, 'EdgeColor','none', ...
-                'DisplayName', sprintf('observed (n = %d)', numel(v)));
+            barh(axh, edges(1:end-1) + diff(edges)/2, cv, 0.9, ...
+                'FaceColor', col, 'EdgeColor','none');
 
             md  = median(v);
             p95 = pctl(v, cover_pct);
             rf  = Srow(oi).(P.refs{f});
 
-            yline(axh, md, '-', 'Color',[0.10 0.10 0.10], 'LineWidth', 1.8, ...
-                'Label', sprintf('median %.2f%%', md), ...
-                'LabelHorizontalAlignment','right', ...
-                'LabelVerticalAlignment','bottom', 'FontSize', 9, ...
-                'DisplayName','median');
-            yline(axh, p95, '--', 'Color',[0.75 0.25 0.15], 'LineWidth', 1.8, ...
-                'Label', sprintf('%d%% value %.2f%%', cover_pct, p95), ...
-                'LabelHorizontalAlignment','right', ...
-                'LabelVerticalAlignment','top', 'FontSize', 9, ...
-                'DisplayName', sprintf('%d%% value', cover_pct));
+            % A gutter on the right holds the labels, so they never overlap
+            % the bars. The lines run the full width into it, which ties
+            % each label to its own line.
+            xmax = max(max(cv), 1);
+            xlim(axh, [0 xmax * 1.42]);
+            xg = xmax * 1.06;
+
+            marks = { md,  '-',  [0.10 0.10 0.10], sprintf('median  %.2f%%', md); ...
+                      p95, '--', [0.75 0.25 0.15], sprintf('%d%%  %.2f%%', cover_pct, p95) };
             if ~isnan(rf)
-                yline(axh, rf, ':', 'Color',[0.20 0.45 0.25], 'LineWidth', 1.8, ...
-                    'Label','reference anatomy', ...
-                    'LabelHorizontalAlignment','left', ...
-                    'LabelVerticalAlignment','bottom', 'FontSize', 9, ...
-                    'DisplayName','reference anatomy');
+                marks(end+1,:) = { rf, ':', [0.20 0.45 0.25], ...
+                                   sprintf('reference  %.2f%%', rf) };
+            end
+
+            for m = 1:size(marks,1)
+                yv = marks{m,1};
+                if isnan(yv), continue; end
+                plot(axh, [0 xmax*1.42], [yv yv], marks{m,2}, ...
+                     'Color', marks{m,3}, 'LineWidth', 1.8);
+                text(axh, xg, yv, marks{m,4}, 'Color', marks{m,3}, ...
+                     'HorizontalAlignment','left', ...
+                     'VerticalAlignment','middle', 'FontSize', 9);
             end
 
             ylim(axh, [0 yhi]);
@@ -823,10 +801,10 @@ function draw_hist_figure(Srow, ax_idx, ori_labels, ori_titles, save_dir, ...
                      'VerticalAlignment','bottom', 'FontSize', 10, ...
                      'FontAngle','italic');
             end
-            if f == 1 && oi == 1
-                lg = legend(axh, 'Location','southeast','FontSize',8);
-                lg.Box = 'off';
-            end
+            text(axh, 0.02, 0.98, sprintf('n = %d', numel(v)), ...
+                 'Units','normalized', 'HorizontalAlignment','left', ...
+                 'VerticalAlignment','top', 'FontSize', 9, ...
+                 'Color', [0.35 0.35 0.35]);
         end
     end
 
@@ -834,17 +812,6 @@ function draw_hist_figure(Srow, ax_idx, ori_labels, ori_titles, save_dir, ...
     saveas(fig,          fullfile(save_dir, [P.fname '.fig']));
     close(fig);
     fprintf('  axis %d -> %s.png\n', ax_idx, P.fname);
-end
-
-
-function pooled = pooled_resample(v, n_draw)
-% Draw the sample with replacement n_draw times and keep every value drawn.
-% Pooled, these trace the same distribution as the observed values with far
-% more points — a smoother version of the same thing, not a new quantity.
-    v = v(~isnan(v));
-    n = numel(v);
-    if n == 0, pooled = []; return; end
-    pooled = reshape(v(randi(n, n, n_draw)), 1, []);
 end
 
 
