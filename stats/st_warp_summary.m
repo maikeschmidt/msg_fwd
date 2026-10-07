@@ -193,7 +193,8 @@ fprintf(fdis, ['axis,orientation,metric,n_warps,median,iqr_lo,iqr_hi,' ...
     'ci_lo,ci_hi,p50,p75,p90,p95,p95_ci_lo,p95_ci_hi,min,max,' ...
     'reference_value,reference_percentile,' ...
     'within_bem_median,within_bem_ci_lo,within_bem_ci_hi,' ...
-    'within_fem_median,within_fem_ci_lo,within_fem_ci_hi,n_pairs\n']);
+    'within_fem_median,within_fem_ci_lo,within_fem_ci_hi,n_pairs,' ...
+    'within_bem_p95,within_bem_reference,within_fem_p95,within_fem_reference\n']);
 fprintf(fwrp, 'axis,orientation,warp,re,r2,rdm,lnmag,gain_pct\n');
 fprintf(fcrd, ['axis,orientation,source_index,distance_mm,' ...
     're_median,re_p05,re_p25,re_p75,re_p95,re_min,re_max\n']);
@@ -317,6 +318,13 @@ for ax = 1:n_sensor_axes
         S(ax,oi).wb_ci = boot_ci_within(wb, numel(have), n_boot, ci_level);
         S(ax,oi).wf_ci = boot_ci_within(wf, numel(have), n_boot, ci_level);
 
+        % The same three numbers the figures mark, for every family, so the
+        % tables carry everything the figures stopped writing on themselves.
+        S(ax,oi).wb_cover = pctl(wb.re, cover_pct);
+        S(ax,oi).wf_cover = pctl(wf.re, cover_pct);
+        S(ax,oi).wb_n     = sum(~isnan(wb.re));
+        S(ax,oi).wf_n     = sum(~isnan(wf.re));
+
         % Where the reference anatomy sits WITHIN each solver: the reference
         % compared against each warp, in that solver alone. The cross-solver
         % figure has ref_val for this; without it the within-solver figure
@@ -334,10 +342,13 @@ for ax = 1:n_sensor_axes
         fprintf(fdis, '%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.2f,', ...
             pctl(re,50), pctl(re,75), pctl(re,90), ...
             p_cover, ci_cov(1), ci_cov(2), min(re), max(re), ref_val, ref_pct);
-        fprintf(fdis, '%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%d\n', ...
+        fprintf(fdis, '%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%d,', ...
             S(ax,oi).wb_med, S(ax,oi).wb_ci(1), S(ax,oi).wb_ci(2), ...
             S(ax,oi).wf_med, S(ax,oi).wf_ci(1), S(ax,oi).wf_ci(2), ...
             numel(wb.re));
+        fprintf(fdis, '%.4f,%.4f,%.4f,%.4f\n', ...
+            S(ax,oi).wb_cover, S(ax,oi).wb_ref, ...
+            S(ax,oi).wf_cover, S(ax,oi).wf_ref);
     end
 end
 
@@ -411,6 +422,29 @@ for ax = 1:n_sensor_axes
                 'do not claim it here.\n'], orientation_labels{oi}, ...
                 ternary_str(sep_b,'separated','overlapping'), ...
                 ternary_str(sep_f,'separated','overlapping'));
+        end
+    end
+
+    % Everything the distribution figures mark with a line. The figures
+    % carry no text, so these are the numbers to read them with.
+    fprintf(fid, ['\n  VALUES MARKED ON THE DISTRIBUTION FIGURES\n' ...
+        '    The median, the %dpct value and the reference anatomy, for each\n' ...
+        '    family. Medians and percentiles are over the observed\n' ...
+        '    comparisons; see above for the intervals around them.\n\n'], ...
+        cover_pct);
+    fprintf(fid, '    %-5s %-26s %7s %9s %9s %11s\n', ...
+        'ori', 'family', 'n', 'median', ...
+        sprintf('%dpct', cover_pct), 'reference');
+
+    for oi = 1:n_ori
+        s = S(ax,oi);
+        rows = { 'BEM vs FEM (paired)', numel(have), s.med,    s.cover,    s.ref_val; ...
+                 'within BEM (pairs)',  s.wb_n,      s.wb_med, s.wb_cover, s.wb_ref; ...
+                 'within FEM (pairs)',  s.wf_n,      s.wf_med, s.wf_cover, s.wf_ref };
+        for r = 1:size(rows,1)
+            fprintf(fid, '    %-5s %-26s %7d %8.3f%% %8.3f%% %10.3f%%\n', ...
+                ternary_str(r == 1, orientation_labels{oi}, ''), ...
+                rows{r,1}, rows{r,2}, rows{r,3}, rows{r,4}, rows{r,5});
         end
     end
 
@@ -706,12 +740,15 @@ function draw_hist_figure(Srow, ax_idx, ori_labels, ori_titles, save_dir, ...
 %
 % Relative error runs along the x-axis and the bar height counts
 % comparisons. The median, the 95pct value and the reference anatomy are
-% vertical lines, with their values listed in a block at the top right of
-% each panel so no label sits over a bar.
+% vertical lines, in that order black, red dashed, green dotted.
 %
-% The median and the 95pct value come from the observed comparisons. The
-% bootstrap in the report supplies the intervals around them and nothing
-% else.
+% No values are written on the figure. They are tabulated in
+% warp_summary_report.txt under VALUES MARKED ON THE DISTRIBUTION FIGURES,
+% and in warp_summary_distribution.csv, so the figure and the table cannot
+% drift apart and the panels stay clean enough to compare by eye.
+%
+% Every panel shares one x-limit and one y-limit, taken across the whole
+% figure, so the orientations and the families are directly comparable.
 
     n_ori = numel(ori_labels);
     n_fam = numel(P.fields);
@@ -726,9 +763,28 @@ function draw_hist_figure(Srow, ax_idx, ori_labels, ori_titles, save_dir, ...
     end
     allv = allv(~isnan(allv));
     if isempty(allv), return; end
-    xhi = pctl(allv, 99.5);
-    if ~isfinite(xhi) || xhi <= 0, xhi = max(allv); end
-    edges = linspace(0, xhi, nbins + 1);
+    xdata = pctl(allv, 99.5);
+    if ~isfinite(xdata) || xdata <= 0, xdata = max(allv); end
+    edges = linspace(0, xdata, nbins + 1);
+
+    % A margin past the data, so the tallest bars and the marker lines do
+    % not sit against the axis box.
+    xhi = xdata * 1.25;
+
+    % One y-limit for every panel, from the tallest bar anywhere in the
+    % figure. Per-panel limits would rescale each orientation to its own
+    % peak and the panels could no longer be compared by eye, which is the
+    % whole point of putting them side by side.
+    ymax = 1;
+    for f = 1:n_fam
+        for oi = 1:n_ori
+            vv = Srow(oi).(P.fields{f});
+            vv = vv(~isnan(vv));
+            if isempty(vv), continue; end
+            ymax = max(ymax, max(histcounts(vv, edges)));
+        end
+    end
+    yhi = ymax * 1.08;
 
     fig = figure('Color','w','Position',[100 100 1500 300 + 240*n_fam]);
     tl  = tiledlayout(n_fam, n_ori, 'TileSpacing','compact','Padding','loose');
@@ -752,53 +808,40 @@ function draw_hist_figure(Srow, ax_idx, ori_labels, ori_titles, save_dir, ...
             p95 = pctl(v, cover_pct);
             rf  = Srow(oi).(P.refs{f});
 
-            marks = { md,  '-',  [0.10 0.10 0.10], sprintf('median  %.2f%%', md); ...
-                      p95, '--', [0.75 0.25 0.15], sprintf('%dpct  %.2f%%', cover_pct, p95) };
+            % Values are in warp_summary_report.txt and the distribution
+            % CSV, not written on the figure.
+            marks = { md,  '-',  [0.10 0.10 0.10]; ...
+                      p95, '--', [0.75 0.25 0.15] };
             if ~isnan(rf)
-                marks(end+1,:) = { rf, ':', [0.20 0.45 0.25], ...
-                                   sprintf('reference  %.2f%%', rf) };
+                marks(end+1,:) = { rf, ':', [0.20 0.45 0.25] };
             end
 
-            % Headroom above the tallest bar for the label block, so the
-            % labels never sit over the data.
-            ymax = max(max(cv), 1);
-            ylim(axh, [0 ymax * 1.34]);
+            ylim(axh, [0 yhi]);
             xlim(axh, [0 xhi]);
 
             for m = 1:size(marks,1)
                 xv = marks{m,1};
                 if isnan(xv), continue; end
-                plot(axh, [xv xv], [0 ymax*1.34], marks{m,2}, ...
+                plot(axh, [xv xv], [0 yhi], marks{m,2}, ...
                      'Color', marks{m,3}, 'LineWidth', 1.8);
-            end
-
-            % The values stacked at the top right, colour-matched to their
-            % lines. Vertical lines cannot carry a legible label of their
-            % own without rotating it, so they are listed instead.
-            for m = 1:size(marks,1)
-                if isnan(marks{m,1}), continue; end
-                text(axh, 0.975, 0.97 - (m-1)*0.095, marks{m,4}, ...
-                     'Units','normalized', 'Color', marks{m,3}, ...
-                     'HorizontalAlignment','right', ...
-                     'VerticalAlignment','top', 'FontSize', 9);
             end
 
             grid(axh,'on'); box(axh,'off');
             set(axh, 'FontSize', 11, 'TickDir','out', 'LineWidth', 1.1, ...
                      'Layer','top');
             if f == n_fam, xlabel(axh, 'Relative error (%)', 'FontSize', 12); end
-            if oi == 1,    ylabel(axh, 'Number of comparisons', 'FontSize', 12); end
-            if f == 1,     title(axh, ori_titles.(ori_labels{oi}), 'FontSize', 12); end
-            if oi == n_ori
-                text(axh, 1.0, 1.0, P.labels{f}, 'Units','normalized', ...
-                     'HorizontalAlignment','right', ...
-                     'VerticalAlignment','bottom', 'FontSize', 10, ...
-                     'FontAngle','italic');
+            if oi == 1
+                % With more than one family the rows have to be told apart,
+                % so the family name goes on the y-label of the leftmost
+                % panel — axis labelling rather than text over the data.
+                if n_fam > 1
+                    ylabel(axh, {P.labels{f}, 'Number of comparisons'}, ...
+                           'FontSize', 11);
+                else
+                    ylabel(axh, 'Number of comparisons', 'FontSize', 12);
+                end
             end
-            text(axh, 0.02, 0.97, sprintf('n = %d', numel(v)), ...
-                 'Units','normalized', 'HorizontalAlignment','left', ...
-                 'VerticalAlignment','top', 'FontSize', 9, ...
-                 'Color', [0.35 0.35 0.35]);
+            if f == 1,     title(axh, ori_titles.(ori_labels{oi}), 'FontSize', 12); end
         end
     end
 
