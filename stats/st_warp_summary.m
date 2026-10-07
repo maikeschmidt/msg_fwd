@@ -511,16 +511,15 @@ end
 %
 % In each panel:
 %   bars         the observed comparisons
-%   lines        median, where the reference anatomy sits, and the 95%
-%                value, each labelled in a gutter on the right
+%   lines        median, where the reference anatomy sits, and the 95pct
+%                value, with their values listed at the top right
 %
 % The median and the 95% value are taken from the OBSERVED comparisons, not
 % from the bootstrap. The bootstrap supplies only the intervals around them,
 % which are in the report — a resample is for the uncertainty on a point
 % estimate, not for relocating it.
 %
-% Relative error is on the y-axis so it is the shared axis with every other
-% figure in the analysis; the x-axis counts comparisons.
+% Relative error is on the x-axis and the bar height counts comparisons.
 
 hist_bins = 20;      % SET THIS
 
@@ -705,18 +704,19 @@ function draw_hist_figure(Srow, ax_idx, ori_labels, ori_titles, save_dir, ...
                           nbins, cover_pct, P)
 % One figure: a row per family, a column per dipole orientation.
 %
-% Bars are the observed comparisons. The median, the 95% value and the
-% reference anatomy are drawn as lines and labelled in a gutter kept clear
-% on the right of each panel, so no label sits over the data.
+% Relative error runs along the x-axis and the bar height counts
+% comparisons. The median, the 95pct value and the reference anatomy are
+% vertical lines, with their values listed in a block at the top right of
+% each panel so no label sits over a bar.
 %
-% The median and the 95% value come from the observed comparisons. The
+% The median and the 95pct value come from the observed comparisons. The
 % bootstrap in the report supplies the intervals around them and nothing
 % else.
 
     n_ori = numel(ori_labels);
     n_fam = numel(P.fields);
 
-    % Shared y-limits across every panel, so orientations and families are
+    % Shared x-limits across every panel, so orientations and families are
     % read against each other rather than each rescaled to its own spread.
     allv = [];
     for f = 1:n_fam
@@ -726,9 +726,9 @@ function draw_hist_figure(Srow, ax_idx, ori_labels, ori_titles, save_dir, ...
     end
     allv = allv(~isnan(allv));
     if isempty(allv), return; end
-    yhi = pctl(allv, 99.5);
-    if ~isfinite(yhi) || yhi <= 0, yhi = max(allv); end
-    edges = linspace(0, yhi, nbins + 1);
+    xhi = pctl(allv, 99.5);
+    if ~isfinite(xhi) || xhi <= 0, xhi = max(allv); end
+    edges = linspace(0, xhi, nbins + 1);
 
     fig = figure('Color','w','Position',[100 100 1500 300 + 240*n_fam]);
     tl  = tiledlayout(n_fam, n_ori, 'TileSpacing','compact','Padding','loose');
@@ -745,19 +745,12 @@ function draw_hist_figure(Srow, ax_idx, ori_labels, ori_titles, save_dir, ...
             if isempty(v), continue; end
 
             cv = histcounts(v, edges);
-            barh(axh, edges(1:end-1) + diff(edges)/2, cv, 0.9, ...
+            bar(axh, edges(1:end-1) + diff(edges)/2, cv, 0.9, ...
                 'FaceColor', col, 'EdgeColor','none');
 
             md  = median(v);
             p95 = pctl(v, cover_pct);
             rf  = Srow(oi).(P.refs{f});
-
-            % A gutter on the right holds the labels, so they never overlap
-            % the bars. The lines run the full width into it, which ties
-            % each label to its own line.
-            xmax = max(max(cv), 1);
-            xlim(axh, [0 xmax * 1.42]);
-            xg = xmax * 1.06;
 
             marks = { md,  '-',  [0.10 0.10 0.10], sprintf('median  %.2f%%', md); ...
                       p95, '--', [0.75 0.25 0.15], sprintf('%dpct  %.2f%%', cover_pct, p95) };
@@ -766,22 +759,35 @@ function draw_hist_figure(Srow, ax_idx, ori_labels, ori_titles, save_dir, ...
                                    sprintf('reference  %.2f%%', rf) };
             end
 
+            % Headroom above the tallest bar for the label block, so the
+            % labels never sit over the data.
+            ymax = max(max(cv), 1);
+            ylim(axh, [0 ymax * 1.34]);
+            xlim(axh, [0 xhi]);
+
             for m = 1:size(marks,1)
-                yv = marks{m,1};
-                if isnan(yv), continue; end
-                plot(axh, [0 xmax*1.42], [yv yv], marks{m,2}, ...
+                xv = marks{m,1};
+                if isnan(xv), continue; end
+                plot(axh, [xv xv], [0 ymax*1.34], marks{m,2}, ...
                      'Color', marks{m,3}, 'LineWidth', 1.8);
-                text(axh, xg, yv, marks{m,4}, 'Color', marks{m,3}, ...
-                     'HorizontalAlignment','left', ...
-                     'VerticalAlignment','middle', 'FontSize', 9);
             end
 
-            ylim(axh, [0 yhi]);
+            % The values stacked at the top right, colour-matched to their
+            % lines. Vertical lines cannot carry a legible label of their
+            % own without rotating it, so they are listed instead.
+            for m = 1:size(marks,1)
+                if isnan(marks{m,1}), continue; end
+                text(axh, 0.975, 0.97 - (m-1)*0.095, marks{m,4}, ...
+                     'Units','normalized', 'Color', marks{m,3}, ...
+                     'HorizontalAlignment','right', ...
+                     'VerticalAlignment','top', 'FontSize', 9);
+            end
+
             grid(axh,'on'); box(axh,'off');
             set(axh, 'FontSize', 11, 'TickDir','out', 'LineWidth', 1.1, ...
                      'Layer','top');
-            if f == n_fam, xlabel(axh, 'Number of comparisons', 'FontSize', 12); end
-            if oi == 1,    ylabel(axh, 'Relative error (%)', 'FontSize', 12); end
+            if f == n_fam, xlabel(axh, 'Relative error (%)', 'FontSize', 12); end
+            if oi == 1,    ylabel(axh, 'Number of comparisons', 'FontSize', 12); end
             if f == 1,     title(axh, ori_titles.(ori_labels{oi}), 'FontSize', 12); end
             if oi == n_ori
                 text(axh, 1.0, 1.0, P.labels{f}, 'Units','normalized', ...
@@ -789,7 +795,7 @@ function draw_hist_figure(Srow, ax_idx, ori_labels, ori_titles, save_dir, ...
                      'VerticalAlignment','bottom', 'FontSize', 10, ...
                      'FontAngle','italic');
             end
-            text(axh, 0.02, 0.98, sprintf('n = %d', numel(v)), ...
+            text(axh, 0.02, 0.97, sprintf('n = %d', numel(v)), ...
                  'Units','normalized', 'HorizontalAlignment','left', ...
                  'VerticalAlignment','top', 'FontSize', 9, ...
                  'Color', [0.35 0.35 0.35]);
