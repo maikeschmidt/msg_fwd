@@ -32,10 +32,15 @@
 %   the paths below and run this.
 %
 % OUTPUTS (to save_dir):
-%   surface_convergence_report.txt
-%   surface_convergence_results.csv
-%   surface_convergence_compare.png/.fig     both solvers, one axis
-%   surface_convergence_cost.png/.fig        accuracy versus compute time
+%   surface_convergence_report.txt                 every sensor axis
+%   surface_convergence_results.csv                every sensor axis
+%   surface_convergence_selfcheck.txt              every sensor axis
+%   surface_convergence_compare_axis<N>.png/.fig   both solvers, one refinement axis
+%   surface_convergence_cost_axis<N>.png/.fig      accuracy versus compute time
+%   surface_convergence_vs_original_<method>_axis<N>.png/.fig
+%
+%   Every sweep is analysed once per sensor axis in axes_to_report (the two
+%   tangential axes and the radial axis by default).
 %
 % -------------------------------------------------------------------------
 % Copyright (c) 2026 University College London
@@ -62,9 +67,9 @@ bem_dir = convergence_bem_allsurf;                  % SET THIS
 fem_dir = convergence_fem_surface;          % SET THIS
 save_dir = fullfile(save_base_dir, 'surface_convergence');                       % SET THIS
 
-array_name    = 'back';
-target_axis   = 3;
-n_sensor_axes = 3;
+array_name     = 'back';
+n_sensor_axes  = 3;
+axes_to_report = 1:n_sensor_axes;   % SET THIS: 1-2 tangential, 3 radial
 is_meg        = true;
 
 production_keep = 0.50;   % the decimation level used for production runs
@@ -83,7 +88,7 @@ fcsv = fopen(fullfile(save_dir, 'surface_convergence_results.csv'), 'w');
 
 fprintf(fid, '=== SURFACE-DRIVEN CONVERGENCE: BEM vs FEM ===\n');
 fprintf(fid, 'Generated : %s\n', datestr(now));
-fprintf(fid, 'Array     : %s   Sensor axis: %d\n', array_name, target_axis);
+fprintf(fid, 'Array     : %s   Sensor axes: %s\n', array_name, mat2str(axes_to_report));
 fprintf(fid, 'Metrics   : re_mode=%s  rsq_mode=%s\n\n', ...
     metric_opts.re_mode, metric_opts.rsq_mode);
 fprintf(fid, ['Both solvers are refined by the SAME parameter (fraction of\n' ...
@@ -91,10 +96,10 @@ fprintf(fid, ['Both solvers are refined by the SAME parameter (fraction of\n' ..
               'referenced to the SAME undecimated geometry. The curves are\n' ...
               'therefore directly comparable.\n\n']);
 
-fprintf(fcsv, ['method,keep_fraction,h_torso_mm,n_dof,time_s,orientation,' ...
+fprintf(fcsv, ['axis,method,keep_fraction,h_torso_mm,n_dof,time_s,orientation,' ...
     're_median,re_iqr_lo,re_iqr_hi,re_max,r2_median,r2_min\n']);
 
-R = struct();   % per method
+R = struct();   % per method; R.(meth) is indexed by sensor axis
 
 
 % LOAD AND ANALYSE EACH SWEEP
@@ -187,11 +192,6 @@ for s = 1:size(specs, 1)
     end
 
     n_lvl = numel(have);
-    Rm = struct('re', nan(n_lvl, n_ori), 'r2', nan(n_lvl, n_ori), ...
-                'keeps', keeps, 'h', h_srf, 'dof', dofs, 'time', tms, ...
-                'ref_key', ref_key, 'ref_label', ref_label, ...
-                'using_og', using_og, ...
-                'ref_keep', man(ref_L).keep_fraction);
 
     fprintf(fid, '\n%s\n%s SURFACE CONVERGENCE\n%s\n', ...
         repmat('=',1,78), upper(meth), repmat('=',1,78));
@@ -213,6 +213,15 @@ for s = 1:size(specs, 1)
         fprintf(fid, '\n');
     end
 
+    for target_axis = axes_to_report
+
+    Rm = struct('re', nan(n_lvl, n_ori), 'r2', nan(n_lvl, n_ori), ...
+                'keeps', keeps, 'h', h_srf, 'dof', dofs, 'time', tms, ...
+                'ref_key', ref_key, 'ref_label', ref_label, ...
+                'using_og', using_og, ...
+                'ref_keep', man(ref_L).keep_fraction);
+
+    fprintf(fid, '\n  --- Sensor axis %d ---\n', target_axis);
     fprintf(fid, '  %6s %10s %10s %10s %5s %9s %9s\n', ...
         'keep', 'h_surf', dof_field, 'time(s)', 'ori', 'RE(%)', 'r2');
 
@@ -239,8 +248,8 @@ for s = 1:size(specs, 1)
                 keeps(i), h_srf(i), dofs(i), tms(i), ori, ...
                 Rm.re(i,oi), Rm.r2(i,oi));
 
-            fprintf(fcsv, '%s,%.2f,%.4f,%d,%.2f,%s,%.4f,%.4f,%.4f,%.4f,%.6f,%.6f\n', ...
-                meth, keeps(i), h_srf(i), dofs(i), tms(i), ori, ...
+            fprintf(fcsv, '%d,%s,%.2f,%.4f,%d,%.2f,%s,%.4f,%.4f,%.4f,%.4f,%.6f,%.6f\n', ...
+                target_axis, meth, keeps(i), h_srf(i), dofs(i), tms(i), ori, ...
                 Rm.re(i,oi), pctl(re,25), pctl(re,75), max(re), Rm.r2(i,oi), min(r2));
         end
     end
@@ -287,18 +296,39 @@ for s = 1:size(specs, 1)
         end
     end
 
-    R.(meth) = Rm;
+    R.(meth)(target_axis) = Rm;
+
+    end   % target_axis
+
     R.([meth '_lf'])   = lf;
     R.([meth '_man'])  = man;
     R.([meth '_have']) = have;
 end
 
 
+fid2 = fopen(fullfile(save_dir, 'surface_convergence_selfcheck.txt'), 'w');
+fprintf(fid2, '=== SELF-CONVERGENCE (vs the finest level of each sweep) ===\n');
+fprintf(fid2, 'Generated : %s\n\n', datestr(now));
+
+% Everything below runs once per sensor axis. R is narrowed to that axis
+% so the comparison, self-check and figures read one result per solver.
+R_all = R;
+
+for target_axis = axes_to_report
+
+R = R_all;
+for mm = {'bem', 'fem'}
+    if isfield(R, mm{1}), R.(mm{1}) = R_all.(mm{1})(target_axis); end
+end
+
+fprintf('Sensor axis %d...\n', target_axis);
+
+
 % DIRECT COMPARISON
 
 if isfield(R, 'bem') && isfield(R, 'fem')
-    fprintf(fid, '\n%s\nBEM vs FEM ON THE SAME REFINEMENT AXIS\n%s\n', ...
-        repmat('=',1,78), repmat('=',1,78));
+    fprintf(fid, '\n%s\nBEM vs FEM ON THE SAME REFINEMENT AXIS — sensor axis %d\n%s\n', ...
+        repmat('=',1,78), target_axis, repmat('=',1,78));
     fprintf(fid, '  %6s %5s %12s %12s   %s\n', ...
         'keep', 'ori', 'BEM RE(%)', 'FEM RE(%)', 'more sensitive');
 
@@ -331,9 +361,6 @@ if isfield(R, 'bem') && isfield(R, 'fem')
         '    near-source discretisation.\n']);
 end
 
-fclose(fid);
-fclose(fcsv);
-
 
 % SELF-CONVERGENCE, AS A SECONDARY CHECK
 %
@@ -346,10 +373,6 @@ fclose(fcsv);
 % together: a sweep that has settled but sits at a constant offset from the
 % published model has converged to a different answer, and only the pair of
 % curves shows that.
-
-fid2 = fopen(fullfile(save_dir, 'surface_convergence_selfcheck.txt'), 'w');
-fprintf(fid2, '=== SELF-CONVERGENCE (vs the finest level of each sweep) ===\n');
-fprintf(fid2, 'Generated : %s\n\n', datestr(now));
 
 for s = 1:size(specs, 1)
     meth = specs{s,1};
@@ -364,7 +387,8 @@ for s = 1:size(specs, 1)
     self_key   = sprintf('%s_L%02d', meth, have_m(imx));
     R_self     = nan(n_lvl, n_ori);
 
-    fprintf(fid2, '%s: reference = keep %.2f\n', upper(meth), Rm_m.keeps(imx));
+    fprintf(fid2, '%s, sensor axis %d: reference = keep %.2f\n', ...
+        upper(meth), target_axis, Rm_m.keeps(imx));
     fprintf(fid2, '  %6s %5s %9s\n', 'keep', 'ori', 'RE(%)');
 
     for i = 1:n_lvl
@@ -391,15 +415,13 @@ for s = 1:size(specs, 1)
         'orientation_labels', {orientation_labels}, ...
         'ori_titles', ori_titles, ...
         'xlabel', 'Surface keep fraction', ...
-        'title', sprintf('%s surface refinement against the reference (MRI-derived %s)', ...
-                 upper(meth)), ...
+        'title', sprintf('%s surface refinement against the reference (MRI-derived %s) — axis %d', ...
+                 upper(meth), upper(meth), target_axis), ...
         'save_dir', save_dir, ...
-        'fname', sprintf('surface_convergence_vs_original_%s', meth), ...
+        'fname', sprintf('surface_convergence_vs_original_%s_axis%d', meth, target_axis), ...
         'reverse_x', false, 'log_x', false, 'colors', pair_colors, ...
         'self_re', R_self));
 end
-
-fclose(fid2);
 
 
 % FIGURES
@@ -443,9 +465,9 @@ if isfield(R, 'bem') || isfield(R, 'fem')
         set(ax,'FontSize',11,'TickDir','out');
     end
 
-    exportgraphics(fig, fullfile(save_dir,'surface_convergence_compare.png'), ...
-        'Resolution', 600);
-    saveas(fig, fullfile(save_dir,'surface_convergence_compare.fig'));
+    fname = sprintf('surface_convergence_compare_axis%d', target_axis);
+    exportgraphics(fig, fullfile(save_dir,[fname '.png']), 'Resolution', 600);
+    saveas(fig, fullfile(save_dir,[fname '.fig']));
     close(fig);
 
     % Accuracy versus cost
@@ -471,15 +493,23 @@ if isfield(R, 'bem') || isfield(R, 'fem')
         yline(tol_pct, ':k', 'Alpha', 0.5, 'HandleVisibility','off');
         set(gca,'XScale','log','YScale','log'); grid on;
         xlabel('Total compute time (s)'); ylabel('Mean RE vs undecimated (%)');
-        title({'Accuracy versus computation cost','lower-left is better'}, ...
-            'FontSize', 13, 'FontWeight','bold');
+        title({sprintf('Accuracy versus computation cost — axis %d', target_axis), ...
+            'lower-left is better'}, 'FontSize', 13, 'FontWeight','bold');
         legend(lg, 'Location','best'); set(gca,'FontSize',11,'TickDir','out');
-        exportgraphics(fig, fullfile(save_dir,'surface_convergence_cost.png'), ...
-            'Resolution', 600);
-        saveas(fig, fullfile(save_dir,'surface_convergence_cost.fig'));
+        fname = sprintf('surface_convergence_cost_axis%d', target_axis);
+        exportgraphics(fig, fullfile(save_dir,[fname '.png']), 'Resolution', 600);
+        saveas(fig, fullfile(save_dir,[fname '.fig']));
     end
     close(fig);
 end
+
+end   % target_axis
+
+R = R_all;
+
+fclose(fid);
+fclose(fcsv);
+fclose(fid2);
 
 fprintf('\n=== Complete ===\n');
 fprintf('Report : %s\n', fullfile(save_dir,'surface_convergence_report.txt'));

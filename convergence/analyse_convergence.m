@@ -24,11 +24,15 @@
 %   Set the paths, then run.
 %
 % OUTPUTS (to save_dir):
-%   convergence_report.txt              full numeric report
-%   convergence_results.csv             machine readable
-%   convergence_fem_axis<N>.png/.fig    FEM error vs h, vs DOF, vs time
-%   convergence_bem_axis<N>.png/.fig    BEM equivalent
-%   convergence_tradeoff.png/.fig       accuracy vs runtime, both methods
+%   convergence_report.txt                          full numeric report, every axis
+%   convergence_results.csv                         machine readable, every axis
+%   convergence_fem_axis<N>.png/.fig                FEM error vs h, vs DOF, vs time
+%   convergence_bem_axis<N>.png/.fig                BEM equivalent
+%   convergence_tradeoff_axis<N>.png/.fig           accuracy vs runtime, both methods
+%   convergence_vs_reference_<method>_axis<N>.png   reference vs self-convergence
+%
+%   Every sweep is analysed once per sensor axis in axes_to_report (the two
+%   tangential axes and the radial axis by default).
 %
 % DEPENDENCIES:
 %   config_models, lf_metrics, lf_metrics_series, organise_leadfield
@@ -64,9 +68,9 @@ bem_conv_dir = convergence_bem_allsurf;   % SET THIS
 %     surfaces never change.
 save_dir     = fullfile(save_base_dir, 'convergence');         % SET THIS
 
-array_name    = 'back';
-target_axis   = 3;
-n_sensor_axes = 3;
+array_name     = 'back';
+n_sensor_axes  = 3;
+axes_to_report = 1:n_sensor_axes;   % SET THIS: 1-2 tangential, 3 radial
 is_meg        = true;
 % Convergence compares levels WITHIN one solver, so a common wrong scale
 % would cancel in the RE ratio. Resolved properly regardless, so the
@@ -90,14 +94,14 @@ fcsv = fopen(fullfile(save_dir, 'convergence_results.csv'), 'w');
 
 fprintf(fid, '=== MESH CONVERGENCE ANALYSIS ===\n');
 fprintf(fid, 'Generated : %s\n', datestr(now));
-fprintf(fid, 'Array     : %s   Sensor axis: %d\n', array_name, target_axis);
+fprintf(fid, 'Array     : %s   Sensor axes: %s\n', array_name, mat2str(axes_to_report));
 fprintf(fid, 'Metrics   : re_mode=%s  rsq_mode=%s (see lf_metrics.m)\n', ...
     metric_opts.re_mode, metric_opts.rsq_mode);
 fprintf(fid, 'Reference : the MRI-derived model for each solver, so each error is\n');
 fprintf(fid, '            a distance from the reported result. Self-convergence\n');
 fprintf(fid, '            against each sweep''s finest level is reported at the end.\n\n');
 
-fprintf(fcsv, 'method,level,resolution_param,h_mm,n_dof,time_s,orientation,re_median,re_max,r2_median,r2_min\n');
+fprintf(fcsv, 'axis,method,level,resolution_param,h_mm,n_dof,time_s,orientation,re_median,re_max,r2_median,r2_min\n');
 
 results = struct();
 
@@ -164,11 +168,6 @@ if isfile(fem_manifest_file)
         end
         fprintf(fid, '\n');
 
-        R = analyse_sweep(lf, ref_key, have, man, 'fem', ...
-            orientation_labels, target_axis, metric_opts, fid, fcsv, ...
-            'maxvol_mm3', 'n_nodes');
-
-        results.fem     = R;
         results.fem_lf  = lf;      % lf is reused by the BEM block below
         results.fem_man = man;
         results.fem_have = have;
@@ -180,9 +179,18 @@ if isfile(fem_manifest_file)
         % NaN so nothing is excluded; pass the finest level only when the
         % reference fell back to it.
         excl = ternary_num(using_og, NaN, ref_L);
-        report_order_and_tradeoff(R, man, have, excl, 'FEM', ...
-            'maxvol_mm3', 'mm^3', 'n_nodes', tol_pct, ...
-            fem_production_maxvol_mm3, fid, orientation_labels);
+
+        for target_axis = axes_to_report
+            fprintf(fid, '\n  --- Sensor axis %d ---\n', target_axis);
+            R = analyse_sweep(lf, ref_key, have, man, 'fem', ...
+                orientation_labels, target_axis, metric_opts, fid, fcsv, ...
+                'maxvol_mm3', 'n_nodes');
+            results.fem(target_axis) = R;
+
+            report_order_and_tradeoff(R, man, have, excl, 'FEM', ...
+                'maxvol_mm3', 'mm^3', 'n_nodes', tol_pct, ...
+                fem_production_maxvol_mm3, fid, orientation_labels);
+        end
     end
 else
     fprintf('FEM manifest not found — skipping FEM.\n');
@@ -233,11 +241,6 @@ if isfile(bem_manifest_file)
             repmat('=',1,78), repmat('=',1,78));
         fprintf(fid, 'Reference: %s\n\n', ref_label);
 
-        R = analyse_sweep(lf, ref_key, have, man, 'bem', ...
-            orientation_labels, target_axis, metric_opts, fid, fcsv, ...
-            'keep_fraction', 'n_vert_torso');
-
-        results.bem      = R;
         results.bem_lf   = lf;
         results.bem_man  = man;
         results.bem_have = have;
@@ -245,9 +248,18 @@ if isfile(bem_manifest_file)
         results.bem_using_og = using_og;
 
         excl = ternary_num(using_og, NaN, ref_L);
-        report_order_and_tradeoff(R, man, have, excl, 'BEM', ...
-            'keep_fraction', 'fraction kept', 'n_vert_torso', tol_pct, ...
-            bem_production_keep, fid, orientation_labels);
+
+        for target_axis = axes_to_report
+            fprintf(fid, '\n  --- Sensor axis %d ---\n', target_axis);
+            R = analyse_sweep(lf, ref_key, have, man, 'bem', ...
+                orientation_labels, target_axis, metric_opts, fid, fcsv, ...
+                'keep_fraction', 'n_vert_torso');
+            results.bem(target_axis) = R;
+
+            report_order_and_tradeoff(R, man, have, excl, 'BEM', ...
+                'keep_fraction', 'fraction kept', 'n_vert_torso', tol_pct, ...
+                bem_production_keep, fid, orientation_labels);
+        end
 
     end
 else
@@ -260,16 +272,19 @@ fclose(fcsv);
 
 
 %% FIGURES
+% results.fem / results.bem are indexed by sensor axis.
+
+for target_axis = axes_to_report
 
 if isfield(results, 'fem')
-    plot_convergence(results.fem, results.fem_man, results.fem_have, ...
+    plot_convergence(results.fem(target_axis), results.fem_man, results.fem_have, ...
         results.fem_ref, 'FEM', 'maxvol_mm3', 'Max tet volume (mm^3)', ...
         'n_nodes', 'Nodes', orientation_labels, ori_titles, ...
         save_dir, sprintf('convergence_fem_axis%d', target_axis), tol_pct);
 end
 
 if isfield(results, 'bem')
-    plot_convergence(results.bem, results.bem_man, results.bem_have, ...
+    plot_convergence(results.bem(target_axis), results.bem_man, results.bem_have, ...
         results.bem_ref, 'BEM', 'keep_fraction', 'Fraction of faces kept', ...
         'n_vert_torso', 'Torso vertices', orientation_labels, ori_titles, ...
         save_dir, sprintf('convergence_bem_axis%d', target_axis), tol_pct);
@@ -281,7 +296,7 @@ if isfield(results, 'fem') || isfield(results, 'bem')
     if isfield(results, 'fem')
         t = [results.fem_man(results.fem_have).time_mesh_s] + ...
             [results.fem_man(results.fem_have).time_solve_s];
-        e = mean(results.fem.re_med, 2, 'omitnan')';
+        e = mean(results.fem(target_axis).re_med, 2, 'omitnan')';
         m = e > 0;
         plot(t(m), e(m), '-o', 'LineWidth', 2, 'MarkerSize', 8, ...
             'Color', ratio_colors(2,:), 'MarkerFaceColor', ratio_colors(2,:));
@@ -290,7 +305,7 @@ if isfield(results, 'fem') || isfield(results, 'bem')
     if isfield(results, 'bem')
         t = [results.bem_man(results.bem_have).time_build_s] + ...
             [results.bem_man(results.bem_have).time_solve_s];
-        e = mean(results.bem.re_med, 2, 'omitnan')';
+        e = mean(results.bem(target_axis).re_med, 2, 'omitnan')';
         m = e > 0;
         plot(t(m), e(m), '-s', 'LineWidth', 2, 'MarkerSize', 8, ...
             'Color', ratio_colors(1,:), 'MarkerFaceColor', ratio_colors(1,:));
@@ -300,14 +315,17 @@ if isfield(results, 'fem') || isfield(results, 'bem')
         'Label', sprintf('%.1f%% tolerance', tol_pct), 'HandleVisibility','off');
     set(gca, 'XScale','log', 'YScale','log');
     grid on; xlabel('Total compute time (s)'); ylabel('Mean RE vs the reference model (%)');
-    title({'Accuracy versus computation cost', ...
+    title({sprintf('Accuracy versus computation cost — axis %d', target_axis), ...
            'lower-left is better'}, 'FontSize', 13, 'FontWeight','bold');
     legend(lg, 'Location','best'); set(gca,'FontSize',11,'TickDir','out');
 
-    exportgraphics(fig, fullfile(save_dir, 'convergence_tradeoff.png'), 'Resolution', 600);
-    saveas(fig, fullfile(save_dir, 'convergence_tradeoff.fig'));
+    fname = sprintf('convergence_tradeoff_axis%d', target_axis);
+    exportgraphics(fig, fullfile(save_dir, [fname '.png']), 'Resolution', 600);
+    saveas(fig, fullfile(save_dir, [fname '.fig']));
     close(fig);
 end
+
+end   % target_axis
 
 % SELF-CONVERGENCE, AS A SECONDARY CHECK
 %
@@ -324,12 +342,13 @@ sweep_spec = { ...
     'fem', 'maxvol_mm3',    'Max tetrahedron volume (mm^3)'; ...
     'bem', 'h_torso_mm',    'Torso mesh spacing h (mm)'};
 
+for target_axis = axes_to_report
 for s = 1:size(sweep_spec,1)
     sw = sweep_spec{s,1};
     if ~isfield(results, sw) || ~isfield(results, [sw '_lf']), continue; end
 
     lf_sw  = results.([sw '_lf']);
-    R_sw   = results.(sw);
+    R_sw   = results.(sw)(target_axis);
     man_s  = results.([sw '_man']);
     have_s = results.([sw '_have']);
 
@@ -362,13 +381,14 @@ for s = 1:size(sweep_spec,1)
     plot_convergence_vs_reference(xv(:), EXT, struct( ...
         'orientation_labels', {orientation_labels}, ...
         'ori_titles', ori_titles, 'xlabel', sweep_spec{s,3}, ...
-        'title', sprintf('%s refinement against the reference (MRI-derived %s)', ...
-                 upper(sw), upper(sw)), ...
+        'title', sprintf('%s refinement against the reference (MRI-derived %s) — axis %d', ...
+                 upper(sw), upper(sw), target_axis), ...
         'save_dir', save_dir, ...
-        'fname', sprintf('convergence_vs_reference_%s', sw), ...
+        'fname', sprintf('convergence_vs_reference_%s_axis%d', sw, target_axis), ...
         'reverse_x', true, 'log_x', true, 'colors', pair_colors, ...
         'self_re', R_self));
 end
+end   % target_axis
 
 
 fprintf('\n=== Complete ===\n');
@@ -421,8 +441,8 @@ function R = analyse_sweep(lf, ref_key, have, man, method, ...
                 hh = man(L).h_torso_mm;
             end
 
-            fprintf(fcsv, '%s,%d,%g,%.4f,%d,%.2f,%s,%.4f,%.4f,%.6f,%.6f\n', ...
-                method, L, man(L).(res_field), hh, man(L).(dof_field), tt, ...
+            fprintf(fcsv, '%d,%s,%d,%g,%.4f,%d,%.2f,%s,%.4f,%.4f,%.6f,%.6f\n', ...
+                target_axis, method, L, man(L).(res_field), hh, man(L).(dof_field), tt, ...
                 ori, R.re_med(i,oi), R.re_max(i,oi), R.r2_med(i,oi), R.r2_min(i,oi));
         end
     end

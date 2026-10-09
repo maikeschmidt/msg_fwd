@@ -26,10 +26,14 @@
 %   Run run_fem_cord_refinement first, then set the paths and run this.
 %
 % OUTPUTS (to save_dir):
-%   cord_refinement_report.txt
-%   cord_refinement_results.csv
-%   cord_refinement_curves.png/.fig           error vs cord element size / cost
-%   cord_refinement_decomposition.png/.fig
+%   cord_refinement_report.txt                         every sensor axis
+%   cord_refinement_results.csv                        every sensor axis
+%   cord_refinement_curves_axis<N>.png/.fig            error vs cord element size / cost
+%   cord_refinement_decomposition_axis<N>.png/.fig
+%   cord_refinement_vs_original_axis<N>.png/.fig
+%
+%   Every level is analysed once per sensor axis in axes_to_report (the two
+%   tangential axes and the radial axis by default).
 %
 % -------------------------------------------------------------------------
 % Copyright (c) 2026 University College London
@@ -54,9 +58,9 @@ fprintf('=== Cord-local refinement analysis ===\n\n');
 cordref_dir = convergence_fem_cord;   % SET THIS
 save_dir    = fullfile(save_base_dir, 'cord_refinement');         % SET THIS
 
-array_name    = 'back';
-target_axis   = 3;
-n_sensor_axes = 3;
+array_name     = 'back';
+n_sensor_axes  = 3;
+axes_to_report = 1:n_sensor_axes;   % SET THIS: 1-2 tangential, 3 radial
 is_meg        = true;
 
 tol_pct = 1.0;   % error below which the near-source mesh is treated as converged
@@ -189,7 +193,7 @@ fcsv = fopen(fullfile(save_dir, 'cord_refinement_results.csv'), 'w');
 
 fprintf(fid, '=== NEAR-SOURCE (CORD) MESH REFINEMENT ===\n');
 fprintf(fid, 'Generated : %s\n', datestr(now));
-fprintf(fid, 'Array     : %s   Sensor axis: %d\n', array_name, target_axis);
+fprintf(fid, 'Array     : %s   Sensor axes: %s\n', array_name, mat2str(axes_to_report));
 fprintf(fid, 'Global tetrahedron bound held FIXED at %g mm^3.\n', ...
     man(have(1)).global_maxvol_mm3);
 fprintf(fid, 'Only the spinal cord compartment is refined.\n\n');
@@ -198,9 +202,15 @@ fprintf(fid, 'number says how far that level sits from the result the paper\n');
 fprintf(fid, 'reports. Self-convergence against the finest level of the sweep\n');
 fprintf(fid, 'is reported separately further down.\n\n');
 
-fprintf(fcsv, ['reference,cord_maxvol_mm3,h_cord_mm,n_tets_cord,n_tets_total,time_s,' ...
+fprintf(fcsv, ['axis,reference,cord_maxvol_mm3,h_cord_mm,n_tets_cord,n_tets_total,time_s,' ...
     'orientation,re_median,re_iqr_lo,re_iqr_hi,re_max,r2_median,r2_min,' ...
     'rdm_median,gain_pct\n']);
+
+for target_axis = axes_to_report
+
+fprintf('\n##### Sensor axis %d #####\n', target_axis);
+fprintf(fid, '\n%s\nSENSOR AXIS %d\n%s\n', ...
+    repmat('#',1,78), target_axis, repmat('#',1,78));
 
 R = struct('key', {prim.key}, 'label', {prim.label}, ...
            're',   repmat({nan(n_lvl, n_ori)}, 1, n_prim), ...
@@ -257,8 +267,8 @@ for p = 1:n_prim
                 man(L).cord_maxvol_mm3, man(L).h_cord_mm, man(L).n_tets_cord, ...
                 t_total(i), ori, R(p).re(i,oi), R(p).r2(i,oi));
 
-            fprintf(fcsv, '%s,%g,%.4f,%d,%d,%.2f,%s,%.4f,%.4f,%.4f,%.4f,%.6f,%.6f,%.6f,%.4f\n', ...
-                prim(p).key, man(L).cord_maxvol_mm3, man(L).h_cord_mm, ...
+            fprintf(fcsv, '%d,%s,%g,%.4f,%d,%d,%.2f,%s,%.4f,%.4f,%.4f,%.4f,%.6f,%.6f,%.6f,%.4f\n', ...
+                target_axis, prim(p).key, man(L).cord_maxvol_mm3, man(L).h_cord_mm, ...
                 man(L).n_tets_cord, man(L).n_tets, t_total(i), ori, ...
                 R(p).re(i,oi), pctl(re,25), pctl(re,75), max(re), ...
                 R(p).r2(i,oi), min(r2), R(p).rdm(i,oi), R(p).gain(i,oi));
@@ -287,8 +297,8 @@ p_bem = find(strcmp({prim.key}, 'bem_original'), 1);
 
 % CONVERGENCE VERDICT
 
-fprintf(fid, '\n%s\nIS THE NEAR-SOURCE FIELD RESOLVED?\n%s\n', ...
-    repmat('=',1,78), repmat('=',1,78));
+fprintf(fid, '\n%s\nIS THE NEAR-SOURCE FIELD RESOLVED? — axis %d\n%s\n', ...
+    repmat('=',1,78), target_axis, repmat('=',1,78));
 
 % Observed trend against cord element size, measured against the FEM
 % original. The reference is outside the sweep, so no level is excluded.
@@ -427,19 +437,17 @@ plot_convergence_vs_reference(cord_mm3, EXT, struct( ...
     'orientation_labels', {orientation_labels}, ...
     'ori_titles',  ori_titles, ...
     'xlabel',      'Cord-local max tetrahedron volume (mm^3)', ...
-    'title',       'Cord refinement against the reference models', ...
+    'title',       sprintf('Cord refinement against the reference models — axis %d', ...
+                           target_axis), ...
     'save_dir',    save_dir, ...
-    'fname',       'cord_refinement_vs_original', ...
+    'fname',       sprintf('cord_refinement_vs_original_axis%d', target_axis), ...
     'reverse_x',   true, ...
     'log_x',       true, ...
     'colors',      pair_colors, ...
     'self_re',     R_self));
 
-fclose(fid);
-fclose(fcsv);
-
 for p = 1:n_prim
-    fprintf('  Most refined vs %-26s : %s\n', prim(p).label, ...
+    fprintf('  Axis %d, most refined vs %-26s : %s\n', target_axis, prim(p).label, ...
         strjoin(arrayfun(@(x) sprintf('%.3f%%', x), R(p).re(i_fine,:), 'uni', 0), ' / '));
 end
 
@@ -480,8 +488,9 @@ for p = 1:n_prim
         set(ax,'FontSize',11,'TickDir','out');
     end
 end
-exportgraphics(fig, fullfile(save_dir,'cord_refinement_curves.png'),'Resolution',600);
-saveas(fig, fullfile(save_dir,'cord_refinement_curves.fig'));
+fname = sprintf('cord_refinement_curves_axis%d', target_axis);
+exportgraphics(fig, fullfile(save_dir,[fname '.png']),'Resolution',600);
+saveas(fig, fullfile(save_dir,[fname '.fig']));
 close(fig);
 
 if ~isempty(S_dec)
@@ -493,9 +502,14 @@ if ~isempty(S_dec)
                                        'models — axis %d'], target_axis), ...
         'colors',             lines(max(numel(S_dec),3)), ...
         'save_dir',           save_dir, ...
-        'save_name',          'cord_refinement_decomposition');
+        'save_name',          sprintf('cord_refinement_decomposition_axis%d', target_axis));
     plot_metric_decomposition(S_dec, popts);
 end
+
+end   % target_axis
+
+fclose(fid);
+fclose(fcsv);
 
 fprintf('\n=== Complete ===\n');
 fprintf('Report : %s\n', fullfile(save_dir,'cord_refinement_report.txt'));

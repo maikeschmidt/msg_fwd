@@ -22,8 +22,12 @@
 %   bone_cond_within_method_axis<N>.png/.fig     analysis A
 %   bone_cond_bem_vs_fem_axis<N>.png/.fig        analysis B
 %   bone_cond_cross_matrix_axis<N>.png/.fig      analysis C
-%   bone_conductivity_report.txt                 all three, numeric
-%   bone_conductivity_results.csv                machine readable
+%   bone_cond_decomposition_<method>_axis<N>.png/.fig
+%   bone_conductivity_report.txt                 all three, numeric, every axis
+%   bone_conductivity_results.csv                machine readable, every axis
+%
+%   Every analysis is run once per sensor axis in axes_to_report (the two
+%   tangential axes and the radial axis by default).
 %
 % DEPENDENCIES:
 %   config_models, lf_metrics, lf_metrics_series, organise_leadfield
@@ -54,9 +58,9 @@ save_dir = fullfile(save_base_dir, 'bone_conductivity');                        
 
 geom_short  = 'anatom_full_realistic';   % SET THIS: matches the filenames
 array_name  = 'back';                       % SET THIS: 'back' | 'front'
-target_axis = 3;                            % radial axis for OPM
 
-n_sensor_axes = 3;
+n_sensor_axes  = 3;
+axes_to_report = 1:n_sensor_axes;           % SET THIS: 1-2 tangential, 3 radial
 is_meg        = true;
 % NOTE: unit scaling is NOT a single constant. BEM and FEM leadfields are
 % saved in different units depending on which script produced them, so the
@@ -144,13 +148,22 @@ fcsv = fopen(csv_file, 'w');
 
 fprintf(fid, '=== BONE CONDUCTIVITY SENSITIVITY ===\n');
 fprintf(fid, 'Generated : %s\n', datestr(now));
-fprintf(fid, 'Array     : %s   Sensor axis: %d\n', array_name, target_axis);
+fprintf(fid, 'Array     : %s   Sensor axes: %s\n', array_name, mat2str(axes_to_report));
 fprintf(fid, 'Sweep     : %s S/m\n', mat2str(sigma, 4));
 fprintf(fid, 'Reference : %.5f S/m\n', sig_ref);
 fprintf(fid, 'Metrics   : re_mode=%s  rsq_mode=%s (see lf_metrics.m)\n\n', ...
     metric_opts.re_mode, metric_opts.rsq_mode);
 
-fprintf(fcsv, 'analysis,orientation,method,sigma_bem,sigma_fem,re_median,r2_median,rdm_median,lnmag_median\n');
+fprintf(fcsv, 'axis,analysis,orientation,method,sigma_bem,sigma_fem,re_median,r2_median,rdm_median,lnmag_median\n');
+
+methods   = {'bem', 'fem'};
+have_meth = {have_bem, have_fem};
+
+for target_axis = axes_to_report
+
+fprintf('\n##### Sensor axis %d #####\n', target_axis);
+fprintf(fid, '\n%s\nSENSOR AXIS %d\n%s\n', ...
+    repmat('#',1,78), target_axis, repmat('#',1,78));
 
 
 %% ANALYSIS A: WITHIN-METHOD SENSITIVITY
@@ -158,9 +171,6 @@ fprintf(fcsv, 'analysis,orientation,method,sigma_bem,sigma_fem,re_median,r2_medi
 fprintf('[A] Within-method sensitivity...\n');
 fprintf(fid, '\n%s\n(A) WITHIN-METHOD SENSITIVITY vs sigma_ref = %.5f S/m\n%s\n', ...
     repmat('=',1,78), sig_ref, repmat('=',1,78));
-
-methods   = {'bem', 'fem'};
-have_meth = {have_bem, have_fem};
 
 % [method x orientation x sigma]
 A_re  = nan(2, n_ori, n_vals);
@@ -227,8 +237,8 @@ for m = 1:2
 
             fprintf(fid, '          %8.5f %10.3f %10.5f\n', ...
                 sigma(v), A_re(m,oi,v), A_r2(m,oi,v));
-            fprintf(fcsv, 'within,%s,%s,%.5f,%.5f,%.4f,%.6f,%.6f,%.6f\n', ...
-                ori, meth, sigma(v), sigma(v), ...
+            fprintf(fcsv, '%d,within,%s,%s,%.5f,%.5f,%.4f,%.6f,%.6f,%.6f\n', ...
+                target_axis, ori, meth, sigma(v), sigma(v), ...
                 A_re(m,oi,v), A_r2(m,oi,v), ...
                 median(M.rdm(keep),'omitnan'), median(M.lnmag(keep),'omitnan'));
         end
@@ -275,8 +285,8 @@ for oi = 1:n_ori
         B_r2(oi, v) = median(M.rsq(keep), 'omitnan');
 
         fprintf(fid, '        %8.5f %10.3f %10.5f\n', sigma(v), B_re(oi,v), B_r2(oi,v));
-        fprintf(fcsv, 'matched,%s,bem_vs_fem,%.5f,%.5f,%.4f,%.6f,%.6f,%.6f\n', ...
-            ori, sigma(v), sigma(v), B_re(oi,v), B_r2(oi,v), ...
+        fprintf(fcsv, '%d,matched,%s,bem_vs_fem,%.5f,%.5f,%.4f,%.6f,%.6f,%.6f\n', ...
+            target_axis, ori, sigma(v), sigma(v), B_re(oi,v), B_r2(oi,v), ...
             median(M.rdm(keep),'omitnan'), median(M.lnmag(keep),'omitnan'));
     end
 end
@@ -319,8 +329,8 @@ for oi = 1:n_ori
             C_re(oi, i, j) = median(M.re(keep),  'omitnan');
             C_r2(oi, i, j) = median(M.rsq(keep), 'omitnan');
 
-            fprintf(fcsv, 'cross,%s,bem_vs_fem,%.5f,%.5f,%.4f,%.6f,%.6f,%.6f\n', ...
-                ori, sigma(i), sigma(j), C_re(oi,i,j), C_r2(oi,i,j), ...
+            fprintf(fcsv, '%d,cross,%s,bem_vs_fem,%.5f,%.5f,%.4f,%.6f,%.6f,%.6f\n', ...
+                target_axis, ori, sigma(i), sigma(j), C_re(oi,i,j), C_r2(oi,i,j), ...
                 median(M.rdm(keep),'omitnan'), median(M.lnmag(keep),'omitnan'));
         end
     end
@@ -344,9 +354,6 @@ for oi = 1:n_ori
         orientation_labels{oi}, median(dg));
     fprintf(fid, 'worst mismatched RE = %.3f%%\n', max(offd));
 end
-
-fclose(fid);
-fclose(fcsv);
 
 
 %% FIGURES
@@ -455,6 +462,11 @@ for m = 1:2
     plot_metric_decomposition(D, popts);
     fprintf('  Saved: bone_cond_decomposition_%s_axis%d\n', meth, target_axis);
 end
+
+end   % target_axis
+
+fclose(fid);
+fclose(fcsv);
 
 fprintf('\n=== Complete ===\n');
 fprintf('Report : %s\n', rep_file);

@@ -24,6 +24,10 @@
 % OUTPUTS (to <save_base_dir>/decomposition/):
 %   decomposition_<pairname>_axis<N>.png/.fig    one figure per pair group
 %   decomposition_summary_axis<N>.png/.fig       gain vs RDM across pairs
+%   decomposition_summary_axis<N>.csv            the same numbers
+%
+%   Every figure is produced once per sensor axis in axes_to_report (the
+%   two tangential axes and the radial axis by default).
 %
 % METRICS:
 %   RE        relative error, percent
@@ -51,8 +55,6 @@ fprintf('Generating amplitude/topography decomposition figures...\n');
 
 % CONFIGURATION
 
-target_axis = 3;   % SET THIS: radial axis for OPM
-
 save_dir = fullfile(save_base_dir, 'decomposition');
 if ~exist(save_dir, 'dir'); mkdir(save_dir); end
 
@@ -76,6 +78,23 @@ groups = {
 };
 
 n_ori = numel(orientation_labels);
+
+% Sensor axes, taken from the first model the groups use that is loaded
+% (MSG models are triaxial; leadfields_organised may also hold 2-axis ESG).
+group_keys = {};
+for g = 1:size(groups, 1)
+    group_keys = [group_keys; groups{g,3}(:,1); groups{g,3}(:,2)]; %#ok<AGROW>
+end
+group_keys = group_keys(isfield(leadfields, group_keys));
+if isempty(group_keys)
+    error('None of the models in the decomposition groups are loaded.');
+end
+n_sensor_axes  = leadfields.(group_keys{1}).n_sensor_axes;
+axes_to_report = 1:n_sensor_axes;   % SET THIS: 1-2 tangential, 3 radial
+
+for target_axis = axes_to_report
+
+fprintf(' Sensor axis %d\n', target_axis);
 
 % Collected for the cross-group summary
 summary_rows = {};
@@ -228,5 +247,7 @@ if ~isempty(summary_rows)
     writetable(T, fullfile(save_dir, ...
         sprintf('decomposition_summary_axis%d.csv', target_axis)));
 end
+
+end   % target_axis
 
 fprintf('Decomposition figures saved to: %s\n', save_dir);

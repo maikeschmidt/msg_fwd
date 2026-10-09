@@ -30,10 +30,13 @@
 % only one that changes resolution near the sources.
 %
 % OUTPUTS (to <save_base_dir>/convergence_all/)
-%   convergence_all_report.txt      reading order, with the verdicts
-%   convergence_all_matrix.csv      every pair, every orientation
-%   convergence_all_matrix_<ori>.png/.fig    the cross-comparison heatmap
-%   convergence_all_vs_original.png/.fig     every sweep against the originals
+%   convergence_all_report.txt      reading order, with the verdicts, every axis
+%   convergence_all_matrix.csv      every pair, every axis, every orientation
+%   convergence_all_matrix_<ori>_axis<N>.png/.fig    the cross-comparison heatmap
+%   convergence_all_vs_original_axis<N>.png/.fig     every sweep against the originals
+%
+%   The cross-comparison is run once per sensor axis in axes_to_report (the
+%   two tangential axes and the radial axis by default).
 %
 % -------------------------------------------------------------------------
 % Copyright (c) 2026 University College London
@@ -55,9 +58,9 @@ fprintf('=== All refinement sweeps, cross-compared ===\n\n');
 
 % CONFIGURATION
 
-array_name    = core_array;
-target_axis   = 3;
-n_sensor_axes = 3;
+array_name     = core_array;
+n_sensor_axes  = 3;
+axes_to_report = 1:n_sensor_axes;   % SET THIS: 1-2 tangential, 3 radial
 is_meg        = true;
 
 save_dir = fullfile(save_base_dir, 'convergence_all');
@@ -154,14 +157,45 @@ end
 fprintf('\n%d entries in the comparison.\n\n', n_e);
 
 
+% REPORT
+
+fid = fopen(fullfile(save_dir,'convergence_all_report.txt'), 'w');
+fprintf(fid, '=== ALL REFINEMENT SWEEPS, CROSS-COMPARED ===\n');
+fprintf(fid, 'Generated : %s\n', datestr(now));
+fprintf(fid, 'Axes      : %s   Metric: RE (reference-normalised), median across sources\n', ...
+    mat2str(axes_to_report));
+fprintf(fid, ['Each sweep contributes its FINEST level. The cord is never\n' ...
+              'decimated in the surface sweeps, so those vary the volume\n' ...
+              'conductor around a fixed source space; only the cord sweep\n' ...
+              'changes resolution near the sources.\n\n']);
+
+fprintf(fid, 'ENTRIES\n');
+for i = 1:n_e
+    if isnan(SW(i).n_lvl)
+        fprintf(fid, '  %-14s %s\n', SW(i).id, SW(i).label);
+    else
+        fprintf(fid, '  %-14s %s, %d levels, finest parameter %g\n', ...
+            SW(i).id, SW(i).label, SW(i).n_lvl, SW(i).param);
+    end
+end
+
+
 % CROSS-COMPARISON
 
 n_ori = numel(orientation_labels);
-RE  = nan(n_e, n_e, n_ori);
-R2  = nan(n_e, n_e, n_ori);
+ids   = {SW.id};
 
 fcsv = fopen(fullfile(save_dir,'convergence_all_matrix.csv'), 'w');
-fprintf(fcsv, 'reference,comparison,orientation,re_median,r2_median,rdm_median,gain_pct\n');
+fprintf(fcsv, 'axis,reference,comparison,orientation,re_median,r2_median,rdm_median,gain_pct\n');
+
+for target_axis = axes_to_report
+
+fprintf('Sensor axis %d...\n', target_axis);
+fprintf(fid, '\n%s\nSENSOR AXIS %d\n%s\n', ...
+    repmat('#',1,78), target_axis, repmat('#',1,78));
+
+RE  = nan(n_e, n_e, n_ori);
+R2  = nan(n_e, n_e, n_ori);
 
 for i = 1:n_e
     for j = 1:n_e
@@ -179,40 +213,18 @@ for i = 1:n_e
             RE(i,j,oi) = median(M.re(kp),  'omitnan');
             R2(i,j,oi) = median(M.rsq(kp), 'omitnan');
             ln = median(M.lnmag(kp), 'omitnan');
-            fprintf(fcsv, '%s,%s,%s,%.4f,%.6f,%.6f,%.4f\n', ...
-                SW(i).id, SW(j).id, orientation_labels{oi}, ...
+            fprintf(fcsv, '%d,%s,%s,%s,%.4f,%.6f,%.6f,%.4f\n', ...
+                target_axis, SW(i).id, SW(j).id, orientation_labels{oi}, ...
                 RE(i,j,oi), R2(i,j,oi), median(M.rdm(kp),'omitnan'), ...
                 (exp(ln)-1)*100);
         end
     end
 end
-fclose(fcsv);
 
-
-% REPORT
-
-fid = fopen(fullfile(save_dir,'convergence_all_report.txt'), 'w');
-fprintf(fid, '=== ALL REFINEMENT SWEEPS, CROSS-COMPARED ===\n');
-fprintf(fid, 'Generated : %s\n', datestr(now));
-fprintf(fid, 'Axis      : %d   Metric: RE (reference-normalised), median across sources\n', target_axis);
-fprintf(fid, ['Each sweep contributes its FINEST level. The cord is never\n' ...
-              'decimated in the surface sweeps, so those vary the volume\n' ...
-              'conductor around a fixed source space; only the cord sweep\n' ...
-              'changes resolution near the sources.\n\n']);
-
-fprintf(fid, 'ENTRIES\n');
-for i = 1:n_e
-    if isnan(SW(i).n_lvl)
-        fprintf(fid, '  %-14s %s\n', SW(i).id, SW(i).label);
-    else
-        fprintf(fid, '  %-14s %s, %d levels, finest parameter %g\n', ...
-            SW(i).id, SW(i).label, SW(i).n_lvl, SW(i).param);
-    end
-end
 
 for oi = 1:n_ori
-    fprintf(fid, '\n%s\nRE (%%) — rows are the reference, %s\n%s\n', ...
-        repmat('=',1,78), orientation_labels{oi}, repmat('=',1,78));
+    fprintf(fid, '\n%s\nRE (%%) — rows are the reference, %s, axis %d\n%s\n', ...
+        repmat('=',1,78), orientation_labels{oi}, target_axis, repmat('=',1,78));
     fprintf(fid, '%-14s', '');
     for j = 1:n_e, fprintf(fid, '%12s', SW(j).id); end
     fprintf(fid, '\n');
@@ -227,9 +239,8 @@ for oi = 1:n_ori
 end
 
 % The headline readings
-fprintf(fid, '\n%s\nWHAT THIS SHOWS\n%s\n', repmat('=',1,78), repmat('=',1,78));
-
-ids = {SW.id};
+fprintf(fid, '\n%s\nWHAT THIS SHOWS — axis %d\n%s\n', ...
+    repmat('=',1,78), target_axis, repmat('=',1,78));
 pairs_of_interest = { ...
     'fem_volume',  'bem_allsurf', 'FEM volume bound vs BEM all surfaces'; ...
     'fem_surface', 'bem_allsurf', 'FEM surface vs BEM all surfaces'; ...
@@ -251,8 +262,8 @@ for k = 1:size(pairs_of_interest,1)
 end
 
 % Every sweep against the reference models (MRI-derived)
-fprintf(fid, '\n%s\nEVERY SWEEP AGAINST THE PUBLISHED MODELS\n%s\n', ...
-    repmat('=',1,78), repmat('=',1,78));
+fprintf(fid, '\n%s\nEVERY SWEEP AGAINST THE PUBLISHED MODELS — axis %d\n%s\n', ...
+    repmat('=',1,78), target_axis, repmat('=',1,78));
 for ref_id = {'bem_original','fem_original'}
     ir = find(strcmp(ids, ref_id{1}), 1);
     if isempty(ir), continue; end
@@ -267,18 +278,6 @@ for ref_id = {'bem_original','fem_original'}
         fprintf(fid, '\n');
     end
 end
-
-fprintf(fid, ['\nREADING THIS\n' ...
-  'Sweeps that agree with each other AND with the reference model (MRI-derived) have\n' ...
-  'converged to the same solution, which is evidence the reference model (MRI-derived)\n' ...
-  'was already resolved. A sweep that disagrees with the others points at\n' ...
-  'the discretisation it varies.\n' ...
-  '\nNote the FEM volume bound is not the active constraint at these\n' ...
-  'resolutions — the surfaces already force finer elements — so a small\n' ...
-  'number there means the lever was slack, not that the FEM is\n' ...
-  'insensitive to resolution. The surface and cord sweeps are the ones\n' ...
-  'that move the discretisation.\n']);
-fclose(fid);
 
 
 % FIGURES
@@ -300,9 +299,9 @@ for oi = 1:n_ori
         end
     end
     xlabel('comparison', 'FontSize', 12); ylabel('reference', 'FontSize', 12);
-    title(sprintf('%s — all refinement sweeps and the reference models', ...
-        ori_titles.(orientation_labels{oi})), 'FontSize', 13, 'FontWeight','bold');
-    f = sprintf('convergence_all_matrix_%s', orientation_labels{oi});
+    title(sprintf('%s — all refinement sweeps and the reference models — axis %d', ...
+        ori_titles.(orientation_labels{oi}), target_axis), 'FontSize', 13, 'FontWeight','bold');
+    f = sprintf('convergence_all_matrix_%s_axis%d', orientation_labels{oi}, target_axis);
     exportgraphics(fig, fullfile(save_dir,[f '.png']), 'Resolution', 600);
     saveas(fig, fullfile(save_dir,[f '.fig'])); close(fig);
 end
@@ -315,7 +314,8 @@ if ~isempty(i_b) || ~isempty(i_f)
     if ~isempty(sel)
         fig = figure('Color','w','Position',[100 100 1400 460]);
         tl = tiledlayout(1, n_ori, 'TileSpacing','compact','Padding','loose');
-        title(tl, 'Every refinement sweep against the reference models', ...
+        title(tl, sprintf('Every refinement sweep against the reference models — axis %d', ...
+            target_axis), ...
             'FontSize', 14, 'FontWeight','bold');
         for oi = 1:n_ori
             ax = nexttile(tl); hold(ax,'on');
@@ -333,12 +333,28 @@ if ~isempty(i_b) || ~isempty(i_f)
                     'Location','best','FontSize',10); lg.Box='off';
             end
         end
-        exportgraphics(fig, fullfile(save_dir,'convergence_all_vs_original.png'), ...
-            'Resolution', 600);
-        saveas(fig, fullfile(save_dir,'convergence_all_vs_original.fig'));
+        f = sprintf('convergence_all_vs_original_axis%d', target_axis);
+        exportgraphics(fig, fullfile(save_dir,[f '.png']), 'Resolution', 600);
+        saveas(fig, fullfile(save_dir,[f '.fig']));
         close(fig);
     end
 end
+
+end   % target_axis
+
+fclose(fcsv);
+
+fprintf(fid, ['\nREADING THIS\n' ...
+  'Sweeps that agree with each other AND with the reference model (MRI-derived) have\n' ...
+  'converged to the same solution, which is evidence the reference model (MRI-derived)\n' ...
+  'was already resolved. A sweep that disagrees with the others points at\n' ...
+  'the discretisation it varies.\n' ...
+  '\nNote the FEM volume bound is not the active constraint at these\n' ...
+  'resolutions — the surfaces already force finer elements — so a small\n' ...
+  'number there means the lever was slack, not that the FEM is\n' ...
+  'insensitive to resolution. The surface and cord sweeps are the ones\n' ...
+  'that move the discretisation.\n']);
+fclose(fid);
 
 fprintf('\n=== Complete ===\nReport: %s\n', ...
     fullfile(save_dir,'convergence_all_report.txt'));

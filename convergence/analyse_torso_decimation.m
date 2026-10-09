@@ -45,12 +45,15 @@
 %   (3) are skipped and family (1) is reported alone.
 %
 % OUTPUTS (to save_dir):
-%   torso_decimation_report.txt
-%   torso_decimation_results.csv         every family, level and orientation
-%   torso_decimation_within_solver.png   families (1) and (2)
-%   torso_decimation_cross_solver.png    family (3), with (1) and (2) behind
-%   torso_decimation_per_source.png      cross-solver RE along the cord
-%   torso_decimation_decomposition.png   gain vs topography at each level
+%   torso_decimation_report.txt                  every sensor axis
+%   torso_decimation_results.csv                 every axis, family, level and orientation
+%   torso_decimation_within_solver_axis<N>.png   families (1) and (2)
+%   torso_decimation_cross_solver_axis<N>.png    family (3), with (1) and (2) behind
+%   torso_decimation_per_source_axis<N>.png      cross-solver RE along the cord
+%   torso_decimation_decomposition_axis<N>.png   gain vs topography at each level
+%
+%   Every family is computed once per sensor axis in axes_to_report (the two
+%   tangential axes and the radial axis by default).
 %
 % -------------------------------------------------------------------------
 % Copyright (c) 2026 University College London
@@ -78,9 +81,9 @@ fem_conv_dir = convergence_fem_torso;   % SET THIS, or '' to skip the FEM
 
 save_dir = fullfile(save_base_dir, 'torso_decimation');   % SET THIS
 
-array_name    = 'back';
-target_axis   = 3;
-n_sensor_axes = 3;
+array_name     = 'back';
+n_sensor_axes  = 3;
+axes_to_report = 1:n_sensor_axes;   % SET THIS: 1-2 tangential, 3 radial
 is_meg        = true;
 
 % The decimation level used for production. Everything is compared against
@@ -185,7 +188,7 @@ fcsv = fopen(fullfile(save_dir, 'torso_decimation_results.csv'), 'w');
 
 fprintf(fid, '=== IMPACT OF TORSO MESH DECIMATION ===\n');
 fprintf(fid, 'Generated : %s\n', datestr(now));
-fprintf(fid, 'Array     : %s   Sensor axis: %d\n\n', array_name, target_axis);
+fprintf(fid, 'Array     : %s   Sensor axes: %s\n\n', array_name, mat2str(axes_to_report));
 fprintf(fid, 'Only the TORSO surface varies across levels. Cord, bone, heart\n');
 fprintf(fid, 'and lung surfaces are at full resolution throughout, so the\n');
 fprintf(fid, 'source space is identical at every level.\n\n');
@@ -193,8 +196,16 @@ fprintf(fid, 'REFERENCE for all comparisons: keep = %.2f, the production\n', ...
     reference_keep);
 fprintf(fid, 'decimation level, taken from this same sweep.\n\n');
 
-fprintf(fcsv, ['family,keep_fraction,n_vert_torso,h_torso_mm,orientation,' ...
+fprintf(fcsv, ['axis,family,keep_fraction,n_vert_torso,h_torso_mm,orientation,' ...
     're_median,re_iqr_lo,re_iqr_hi,re_max,r2_median,r2_min,rdm_median,gain_pct\n']);
+
+for target_axis = axes_to_report
+
+fprintf('\n##### Sensor axis %d #####\n', target_axis);
+fprintf(fid, '%s\nSENSOR AXIS %d\n%s\n\n', ...
+    repmat('#',1,78), target_axis, repmat('#',1,78));
+
+clear F
 
 % Family (1): within BEM
 F(1).name  = 'within_bem';
@@ -286,8 +297,8 @@ for f = 1:n_fam
                 F(f).man(L).h_torso_mm, ori, F(f).re(i,oi), F(f).r2(i,oi), ...
                 F(f).rdm(i,oi), F(f).gain(i,oi));
 
-            fprintf(fcsv, '%s,%.2f,%d,%.4f,%s,%.4f,%.4f,%.4f,%.4f,%.6f,%.6f,%.6f,%.4f\n', ...
-                F(f).name, F(f).man(L).keep_fraction, F(f).man(L).n_vert_torso, ...
+            fprintf(fcsv, '%d,%s,%.2f,%d,%.4f,%s,%.4f,%.4f,%.4f,%.4f,%.6f,%.6f,%.6f,%.4f\n', ...
+                target_axis, F(f).name, F(f).man(L).keep_fraction, F(f).man(L).n_vert_torso, ...
                 F(f).man(L).h_torso_mm, ori, F(f).re(i,oi), pctl(re,25), pctl(re,75), ...
                 max(re), F(f).r2(i,oi), min(r2), F(f).rdm(i,oi), F(f).gain(i,oi));
         end
@@ -306,7 +317,7 @@ end
 
 % THE HEADLINE
 
-fprintf(fid, '%s\nHEADLINE\n%s\n', repmat('=',1,78), repmat('=',1,78));
+fprintf(fid, '%s\nHEADLINE — axis %d\n%s\n', repmat('=',1,78), target_axis, repmat('=',1,78));
 
 i_coarse = 1;   % levels are stored in ascending keep order
 fprintf(fid, 'Coarsest level in the sweep: keep = %.2f\n\n', F(1).keeps(i_coarse));
@@ -362,9 +373,7 @@ if has_cross
         end
     end
 end
-
-fclose(fid);
-fclose(fcsv);
+fprintf(fid, '\n');
 
 fprintf('Coarsest vs production, BEM RE : %s\n', ...
     strjoin(arrayfun(@(x) sprintf('%.3f%%',x), F(1).re(i_coarse,:), 'uni', 0), ' / '));
@@ -412,9 +421,10 @@ for f = 1:n_within
         set(ax,'FontSize',11,'TickDir','out');
     end
 end
-exportgraphics(fig, fullfile(save_dir,'torso_decimation_within_solver.png'), ...
+exportgraphics(fig, fullfile(save_dir, ...
+    sprintf('torso_decimation_within_solver_axis%d.png', target_axis)), ...
     'Resolution',600);
-saveas(fig, fullfile(save_dir,'torso_decimation_within_solver.fig'));
+saveas(fig, fullfile(save_dir, sprintf('torso_decimation_within_solver_axis%d.fig', target_axis)));
 close(fig);
 
 
@@ -457,9 +467,10 @@ if has_cross
             set(ax,'FontSize',11,'TickDir','out');
         end
     end
-    exportgraphics(fig, fullfile(save_dir,'torso_decimation_cross_solver.png'), ...
+    exportgraphics(fig, fullfile(save_dir, ...
+        sprintf('torso_decimation_cross_solver_axis%d.png', target_axis)), ...
         'Resolution',600);
-    saveas(fig, fullfile(save_dir,'torso_decimation_cross_solver.fig'));
+    saveas(fig, fullfile(save_dir, sprintf('torso_decimation_cross_solver_axis%d.fig', target_axis)));
     close(fig);
 
 
@@ -492,9 +503,10 @@ if has_cross
         if oi == 1, legend(ax,'Location','best','FontSize',8); end
         set(ax,'FontSize',11,'TickDir','out');
     end
-    exportgraphics(fig, fullfile(save_dir,'torso_decimation_per_source.png'), ...
+    exportgraphics(fig, fullfile(save_dir, ...
+        sprintf('torso_decimation_per_source_axis%d.png', target_axis)), ...
         'Resolution',600);
-    saveas(fig, fullfile(save_dir,'torso_decimation_per_source.fig'));
+    saveas(fig, fullfile(save_dir, sprintf('torso_decimation_per_source_axis%d.fig', target_axis)));
     close(fig);
 end
 
@@ -537,9 +549,14 @@ if ~isempty(S_dec)
                                        'mesh (50%% torso) — axis %d'], target_axis), ...
         'colors',             lines(max(numel(S_dec),3)), ...
         'save_dir',           save_dir, ...
-        'save_name',          'torso_decimation_decomposition');
+        'save_name',          sprintf('torso_decimation_decomposition_axis%d', target_axis));
     plot_metric_decomposition(S_dec, popts);
 end
+
+end   % target_axis
+
+fclose(fid);
+fclose(fcsv);
 
 fprintf('\n=== Complete ===\n');
 fprintf('Report : %s\n', fullfile(save_dir,'torso_decimation_report.txt'));

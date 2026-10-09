@@ -29,10 +29,13 @@
 %   Set the paths below, then run.
 %
 % OUTPUTS (to save_dir):
-%   csf_effect_report.txt              full numeric report
-%   csf_effect_results.csv             machine readable
-%   csf_effect_per_source.png/.fig     per-source RE and r2 curves
-%   csf_effect_summary.png/.fig        cord-median summary per comparison
+%   csf_effect_report.txt                    full numeric report, every axis
+%   csf_effect_results.csv                   machine readable, every axis
+%   csf_effect_per_source_axis<N>.png/.fig   per-source RE and r2 curves
+%   csf_effect_summary_axis<N>.png/.fig      cord-median summary per comparison
+%
+%   Every comparison is run once per sensor axis in axes_to_report (the two
+%   tangential axes and the radial axis by default).
 %
 % DEPENDENCIES:
 %   config_models, lf_metrics, lf_metrics_series, lf_pair_vectors,
@@ -69,9 +72,9 @@ save_dir = fullfile(save_base_dir, 'csf_effect');   % SET THIS
 
 geom_short  = 'anatom_full_realistic';   % SET THIS: matches the filenames
 array_name  = 'back';                       % SET THIS
-target_axis = 3;                            % radial axis for OPM
 
-n_sensor_axes = 3;
+n_sensor_axes  = 3;
+axes_to_report = 1:n_sensor_axes;           % SET THIS: 1-2 tangential, 3 radial
 is_meg        = true;
 
 % NOTE: unit scaling is NOT a single constant. BEM and FEM leadfields are
@@ -160,7 +163,7 @@ fcsv = fopen(fullfile(save_dir, 'csf_effect_results.csv'), 'w');
 
 fprintf(fid, '=== CSF EFFECT ON THE MSG FORWARD SOLUTION ===\n');
 fprintf(fid, 'Generated : %s\n', datestr(now));
-fprintf(fid, 'Array     : %s   Sensor axis: %d\n', array_name, target_axis);
+fprintf(fid, 'Array     : %s   Sensor axes: %s\n', array_name, mat2str(axes_to_report));
 fprintf(fid, 'Metrics   : re_mode=%s  rsq_mode=%s (see lf_metrics.m)\n\n', ...
     metric_opts.re_mode, metric_opts.rsq_mode);
 fprintf(fid, ['The CSF and no-CSF solutions come from ONE identical tetrahedral\n' ...
@@ -175,7 +178,13 @@ if ~isempty(csf_report)
     fprintf(fid, '  Effective thickness   : %.4f m\n\n', csf_report.mean_thickness);
 end
 
-fprintf(fcsv, 'comparison,description,orientation,re_median,re_iqr_lo,re_iqr_hi,re_max,r2_median,r2_iqr_lo,r2_iqr_hi,r2_min,rdm_median,lnmag_median\n');
+fprintf(fcsv, 'axis,comparison,description,orientation,re_median,re_iqr_lo,re_iqr_hi,re_max,r2_median,r2_iqr_lo,r2_iqr_hi,r2_min,rdm_median,lnmag_median\n');
+
+for target_axis = axes_to_report
+
+fprintf('\n##### Sensor axis %d #####\n', target_axis);
+fprintf(fid, '\n%s\nSENSOR AXIS %d\n%s\n', ...
+    repmat('#',1,78), target_axis, repmat('#',1,78));
 
 S = struct();
 
@@ -221,8 +230,8 @@ for c = 1:n_cmp
         fprintf('    [%s] RE %.3f%%  r2 %.5f\n', ori, ...
             median(re,'omitnan'), median(r2,'omitnan'));
 
-        fprintf(fcsv, '%s,%s,%s,%.4f,%.4f,%.4f,%.4f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f\n', ...
-            tag, desc, ori, median(re,'omitnan'), pctl(re,25), pctl(re,75), max(re), ...
+        fprintf(fcsv, '%d,%s,%s,%s,%.4f,%.4f,%.4f,%.4f,%.6f,%.6f,%.6f,%.6f,%.6f,%.6f\n', ...
+            target_axis, tag, desc, ori, median(re,'omitnan'), pctl(re,25), pctl(re,75), max(re), ...
             median(r2,'omitnan'), pctl(r2,25), pctl(r2,75), min(r2), ...
             median(rdm,'omitnan'), median(lnm,'omitnan'));
     end
@@ -231,8 +240,8 @@ end
 
 % HEADLINE STATEMENT
 
-fprintf(fid, '\n%s\nHEADLINE: WHAT OMITTING CSF COSTS\n%s\n', ...
-    repmat('=',1,78), repmat('=',1,78));
+fprintf(fid, '\n%s\nHEADLINE: WHAT OMITTING CSF COSTS — axis %d\n%s\n', ...
+    repmat('=',1,78), target_axis, repmat('=',1,78));
 
 reA = S.A_csf_effect.re;
 fprintf(fid, ['Including a CSF compartment in the FEM changed the predicted\n' ...
@@ -256,9 +265,6 @@ if have_bem
                   'If it is large, any BEM recommendation should be qualified\n' ...
                   'accordingly.\n']);
 end
-
-fclose(fid);
-fclose(fcsv);
 
 
 % FIGURES
@@ -286,7 +292,7 @@ popts = struct( ...
                                    '— axis %d'], target_axis), ...
     'colors',             lines(max(n_cmp, 3)), ...
     'save_dir',           save_dir, ...
-    'save_name',          'csf_effect_per_source');
+    'save_name',          sprintf('csf_effect_per_source_axis%d', target_axis));
 
 plot_metric_decomposition(D, popts);
 
@@ -300,12 +306,19 @@ bar(vals'); grid on;
 set(gca, 'XTickLabel', cellfun(@(o) ori_titles.(o), orientation_labels, 'uni', 0));
 ylabel('Cord-median RE (%)');
 legend(comparisons(:,4), 'Location','best', 'FontSize', 9);
-title('CSF effect summary', 'FontSize', 13, 'FontWeight','bold');
+title(sprintf('CSF effect summary — axis %d', target_axis), ...
+    'FontSize', 13, 'FontWeight','bold');
 set(gca,'FontSize',11,'TickDir','out');
 
-exportgraphics(fig, fullfile(save_dir, 'csf_effect_summary.png'), 'Resolution', 600);
-saveas(fig, fullfile(save_dir, 'csf_effect_summary.fig'));
+fname = sprintf('csf_effect_summary_axis%d', target_axis);
+exportgraphics(fig, fullfile(save_dir, [fname '.png']), 'Resolution', 600);
+saveas(fig, fullfile(save_dir, [fname '.fig']));
 close(fig);
+
+end   % target_axis
+
+fclose(fid);
+fclose(fcsv);
 
 fprintf('\n=== Complete ===\n');
 fprintf('Report : %s\n', fullfile(save_dir, 'csf_effect_report.txt'));
