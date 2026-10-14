@@ -35,8 +35,9 @@
 %   Only 'og' comparisons name keys that exist in leadfields_organised.mat.
 %   The warp, csf, bone_cond, convergence, cord_refine and organ rows are
 %   declarations of intent: their lead fields live in separate folders and
-%   are loaded by their own analysis scripts (analyse_csf_effect,
-%   analyse_bone_conductivity, and so on). They are listed here so the full
+%   are loaded by their own analysis scripts (analyse_csf_effect here;
+%   analyse_bone_conductivity and the convergence analyses in msg_models).
+%   They are listed here so the full
 %   set of reported comparisons can be read in one place, and so
 %   compute_hierarchy_table knows what to expect.
 %

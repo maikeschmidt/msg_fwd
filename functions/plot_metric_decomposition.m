@@ -3,8 +3,8 @@
 % Draws the full metric picture for one or more model comparisons: total
 % error, and its decomposition into an amplitude part and a topography
 % part, plus pattern similarity. Used by the main analysis, the CSF
-% analysis and the bone-conductivity analysis so every decomposition figure
-% in the toolbox looks and reads the same way.
+% analysis, msg_pert, and the bone-conductivity and mesh analyses in
+% msg_models, so every decomposition figure looks and reads the same way.
 %
 % WHY FOUR ROWS
 %   RE alone cannot distinguish "the model predicts the same field pattern
@@ -55,7 +55,7 @@
 %
 % SEE ALSO:
 %   lf_metrics, plot_decomposition, analyse_csf_effect,
-%   analyse_bone_conductivity
+%   analyse_bone_conductivity (msg_models)
 %
 % -------------------------------------------------------------------------
 % Copyright (c) 2026 University College London

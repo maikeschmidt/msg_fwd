@@ -21,14 +21,13 @@
 %
 % WORKFLOW:
 %   1. Load pre-computed geometry .mat file for each model variant
-%   2. Assemble and orient BEM boundary meshes (mm → m)
-%   3. Merge all boundaries and split into labelled anatomical components
-%   4. Generate seed points for each compartment (random interior sampling)
-%   5. Call surf2mesh/TetGen to produce a tetrahedral volume mesh
-%   6. Remap TetGen region IDs to tissue conductivity labels
-%   7. Run DUNEuro FEM forward model via fem_calc_fwds()
-%   8. Scale output to fT/nAm and convert to FieldTrip leadfield struct
-%   9. Save leadfield .mat file per geometry per sensor array
+%   2. Build the labelled tetrahedral volume mesh with fem_build_volume_mesh:
+%      orient boundaries (mm -> m), split into anatomical components, draw
+%      one seed point per region, run TetGen, remap regions to tissue labels
+%   3. Run DUNEuro FEM forward model via fem_calc_fwds()
+%   4. Scale output to fT/nAm and convert to FieldTrip leadfield struct
+%   5. Save leadfield .mat file per geometry per sensor array
+%   6. Append mesh and solve times to compute_time_log.csv in output_base
 %
 % GEOMETRY VARIANTS PROCESSED:
 %   Anatomical model:
@@ -68,15 +67,14 @@
 %   cord_leadfield_<model>_fem_<array>.mat - FieldTrip leadfield struct,
 %                   scaled to fT/nAm, saved per geometry and sensor array
 %                   (front / back) in subfolders named after each geometry
+%   volume_mesh_<geometry>.mat - the volume mesh and how it was built
+%                   (mesh_info: seeds, RNG state, tissue counts, timings)
+%   compute_time_log.csv - wall-clock mesh and solve time per model
 %
 % DEPENDENCIES:
-%   - mergemesh()                    : ISO2Mesh mesh merging
-%   - surf2mesh()                    : ISO2Mesh surface-to-tetrahedral meshing
-%   - removeisolatednode()           : ISO2Mesh mesh cleanup
-%   - meshreorient()                 : ISO2Mesh tetrahedron reorientation
-%   - spm_mesh_split()               : splits merged mesh into components
-%   - hbf_CheckTriangleOrientation() : ensures consistent mesh winding
-%   - tt_is_inside()                 : point-in-mesh test for seed placement
+%   - fem_build_volume_mesh()        : tetrahedral meshing (ISO2Mesh/TetGen,
+%                                      spm_mesh_split, HBF, tt_is_inside)
+%   - log_compute_time()             : compute-time log
 %   - ft_convert_units()             : unit conversion (mm → m)
 %   - fem_calc_fwds()                : DUNEuro FEM forward solve
 %   - convert_duneuro_to_fieldtrip() : converts DUNEuro output to FieldTrip
@@ -85,7 +83,9 @@
 % NOTES:
 %   - Compartment seed points for TetGen are found by random interior
 %     sampling on a fine grid (step: 0.5 mm); spinal cord and each bone
-%     segment are seeded independently
+%     segment are seeded independently. This draw is the only random step:
+%     set mesh_seed to make the mesh reproducible. msg_models measures how
+%     much re-meshing the same geometry changes the mesh.
 %   - FEM output is in T/(A*m); scaling by 1e6 converts to fT/nAm
 %   - DUNEuro working directories are deleted and recreated for each
 %     geometry+array combination to force fresh minifile generation
@@ -216,9 +216,9 @@ filenames = { ...                                                               
 %   invalidates every existing lead field and forces a full recompute, so
 %   always report the value you actually ran with.
 %
-%   convergence/run_fem_convergence.m measures the effect of this choice:
-%   it prints element and node counts at every bound and the resulting
-%   change in the lead fields.
+%   msg_models (convergence/run_fem_convergence.m) measures the effect of
+%   this choice: it prints element and node counts at every bound and the
+%   resulting change in the lead fields.
 
 tetgen_maxvol_mm3    = 500;                       % see the note above
 tetgen_maxvol        = tetgen_maxvol_mm3 * 1e-9;  % mm^3 -> m^3
@@ -234,9 +234,16 @@ save_volume_mesh     = true;
 % run_fem_leadfields_warped — meshing takes minutes, solving takes hours.
 mesh_only            = true;
 
-% Compartment ordering — must match the field names in the geometry .mat file
-% and the conductivity assignments below
-ordering = {'wm', 'bone', 'heart', 'lungs', 'torso'};
+% Region seeds for TetGen are drawn at random (see fem_build_volume_mesh).
+% [] keeps the global random stream, as earlier runs did; set an integer to
+% make the volume mesh reproducible. The state used is saved with the
+% cached volume mesh either way.
+mesh_seed            = [];
+
+% Compute times are appended to this log, one row per mesh and per solve.
+% msg_models/compute_time collects it.
+time_log             = fullfile(output_base, 'compute_time_log.csv');
+if ~exist(output_base, 'dir'), mkdir(output_base); end
 
 % MAIN LOOP — iterate over each geometry file
 
@@ -261,42 +268,7 @@ for fIdx = 1:numel(filenames)
     reduce_torso    = contains(geom_fname_noext, 'anatom');
     reduction_torso = 0.5;  % keep 50% of faces
 
-    %% STEP 1: Build and orient boundary meshes
-    % Meshes are loaded in the order defined by `ordering`, converted to
-    % metres, and checked for consistent triangle winding (required by HBF).
-    
-    clear bnd
-    for ii = 1:numel(ordering)
-        field    = ['mesh_' ordering{ii}];
-        mesh_tmp = geoms.(field);
-
-        pos = mesh_tmp.vertices;
-        tri = mesh_tmp.faces;
-
-        % Downsample torso to reduce FEM mesh complexity
-        if ii == 5 && reduce_torso
-            patch_in.vertices = pos;
-            patch_in.faces    = tri;
-            patch_out = reducepatch(patch_in, reduction_torso);
-            pos = patch_out.vertices;
-            tri = patch_out.faces;
-        end
-
-        bnd(ii).pos  = pos;
-        bnd(ii).tri  = tri;
-        bnd(ii).unit = 'mm';
-        bnd(ii).name = ordering{ii};
-
-        % Ensure outward-facing triangle normals (orient == 2 means flipped)
-        orient = hbf_CheckTriangleOrientation(bnd(ii).pos, bnd(ii).tri);
-        if orient == 2
-            bnd(ii).tri = bnd(ii).tri(:, [1 3 2]);
-        end
-
-        bnd(ii) = ft_convert_units(bnd(ii), 'm');
-    end
-
-    %% STEP 2: Load spinal cord source model
+    %% STEP 1: Load spinal cord source model
     % Centreline sources generated by cr_generate_spine_center() in msg_coreg
     
     src        = [];
@@ -305,7 +277,7 @@ for fIdx = 1:numel(filenames)
     src.unit   = 'mm';
     src        = ft_convert_units(src, 'm');
 
-    %% STEP 3: Load sensor arrays
+    %% STEP 2: Load sensor arrays
     % Front and back triaxial OPM arrays, converted to metres.
     % To use a single full-body array instead, uncomment the grad lines
     % below and replace sensor_arrays/grads accordingly.
@@ -317,251 +289,38 @@ for fIdx = 1:numel(filenames)
     % grad = ft_convert_units(geoms.coils_3axis, 'm');
     % grad = ft_datatype_sens(grad);
 
-    %% STEP 4: Merge boundary meshes and split into labelled components
-    % All boundaries are merged into one mesh, then split back into
-    % individual connected components and assigned anatomical names.
-    % This is required by surf2mesh/TetGen to assign tissue labels.
-
-    % Merge all boundary meshes into a single mesh
-    bemMerge = {};
-    for ii = 1:numel(bnd)
-        bemMerge = cat(2, bemMerge, bnd(ii).pos, bnd(ii).tri);
-        fprintf('  Merging component: %s\n', bnd(ii).name);
-    end
-    [newnode, newelem] = mergemesh(bemMerge{:});
-
-    tmp.vertices = newnode;
-    tmp.faces    = newelem(:, 1:3);
-
-    % Split merged mesh back into individual connected components
-    klust = spm_mesh_split(tmp);
-
-    % Label each component by anatomical name.
-    % Expected component count = 1 (cord) + N (bone segments) + 2 (heart
-    % ventricles) + 2 (lungs) + 1 (torso) = N + 6 components total.
-    % bone_count is inferred from the total number of components.
-    
-    bone_count      = numel(klust) - 6;
-    component_names = cell(1, numel(klust));
-
-    for ii = 1:numel(klust)
-        if ii == 1
-            % First component: spinal cord white matter
-            component_names{ii} = 'wm';
-
-        elseif ii <= 1 + bone_count
-            % Next bone_count components: individual bone segments
-            % (vertebrae / ribs depending on spine mode)
-            component_names{ii} = ['bone_segment_' num2str(ii - 1)];
-
-        elseif ii == 2 + bone_count
-            % First heart ventricle
-            component_names{ii} = 'ventricle_1';
-
-        elseif ii == 3 + bone_count
-            % Second heart ventricle
-            component_names{ii} = 'ventricle_2';
-
-        elseif ii == 4 + bone_count
-            % First lung
-            component_names{ii} = 'lung_1';
-
-        elseif ii == 5 + bone_count
-            % Second lung
-            component_names{ii} = 'lung_2';
-
-        elseif ii == 6 + bone_count
-            % Outer torso surface (always last component)
-            component_names{ii} = 'torso';
-
-        else
-            % Fallback for any unexpected components
-            component_names{ii} = ['unknown_component_' num2str(ii)];
-            warning('Unexpected mesh component at index %d — check geometry.', ii);
-        end
-
-        klust(ii).name = component_names{ii};
-    end
-
-    % Check winding orientation of all split components
-    for ii = 1:numel(klust)
-        fprintf('  Checking triangle orientation: %s\n', klust(ii).name);
-        if hbf_CheckTriangleOrientation(klust(ii).vertices, klust(ii).faces) == 2
-            klust(ii).faces = klust(ii).faces(:, [1 3 2]);
-        end
-    end
-
-    % Re-merge the labelled components into a single mesh for surf2mesh
-    bemMerge = {};
-    for ii = 1:numel(klust)
-        bemMerge = cat(2, bemMerge, klust(ii).vertices, klust(ii).faces);
-        fprintf('  Re-merging component: %s\n', klust(ii).name);
-    end
-    [newnode, newelem] = mergemesh(bemMerge{:});
-    merged_mesh.p = newnode;
-    merged_mesh.e = newelem(:, 1:3);
-
-    %% STEP 5: Generate seed points for each compartment
-    % TetGen requires one interior seed point per tissue region to assign
-    % tissue labels to tetrahedra. Simple centroid averaging works for
-    % convex shapes (heart, lungs, torso) but fails for concave or
-    % irregular shapes (spinal cord, bone segments), so those use random
-    % interior sampling on a fine grid instead.
-    
-    organs = 1 + bone_count;   % index of first non-bone organ (heart ventricle 1)
-    cent   = zeros(numel(klust), 3);
-
-    % Convex organs (heart, lungs): centroid is reliably inside the mesh
-    for ii = organs:(numel(klust) - 1)
-        cent(ii, :) = mean(klust(ii).vertices);
-    end
-
-    % Torso: centroid may fall outside due to concavity — use upper-body
-    % region (80% up Y axis) as a more reliable interior point
-    V      = klust(end).vertices;
-    y_min  = min(V(:, 2));
-    y_max  = max(V(:, 2));
-    cent(numel(klust), :) = [mean(V(:,1)),  y_min + 0.8*(y_max - y_min),  mean(V(:,3))];
-
-    % Spinal cord (index 1): irregular shape — random interior sampling
-    fprintf('  Finding interior seed for spinal cord...\n');
-    box_min = min(klust(1).vertices);
-    box_max = max(klust(1).vertices);
-    boxstep = 0.0005;   % 0.5 mm grid step
-
-    % Sample along the two shorter axes; fix the longest axis at midpoint
-    % to avoid sampling the full 3D volume (too slow)
-    [~, dimmax] = max(abs(box_max - box_min));
-    rng         = arrayfun(@(d) box_min(d):boxstep:box_max(d), 1:3, 'uni', 0);
-    rng{dimmax} = 0.5 * (box_max(dimmax) + box_min(dimmax));
-
-    [xx, yy, zz] = ndgrid(rng{1}, rng{2}, rng{3});
-    candidates   = [xx(:), yy(:), zz(:)];
-
-    inside = arrayfun(@(ii) tt_is_inside(candidates(ii,:), ...
-        klust(1).vertices, klust(1).faces), 1:size(candidates,1))';
-
-    assert(any(inside), 'No valid interior seed found for spinal cord mesh!');
-    valid_idx      = find(inside);
-    cent(1, :)     = candidates(valid_idx(randi(numel(valid_idx))), :);
-    assert(tt_is_inside(cent(1,:), klust(1).vertices, klust(1).faces), ...
-        'Selected spinal cord seed is not inside the mesh!');
-
-    % Bone segments (indices 2 to 1+bone_count): same random sampling approach
-    for i = 1:bone_count
-        fprintf('  Finding interior seed for bone segment %d...\n', i);
-        box_min = min(klust(1 + i).vertices);
-        box_max = max(klust(1 + i).vertices);
-
-        [~, dimmax] = max(abs(box_max - box_min));
-        rng         = arrayfun(@(d) box_min(d):boxstep:box_max(d), 1:3, 'uni', 0);
-        rng{dimmax} = 0.5 * (box_max(dimmax) + box_min(dimmax));
-
-        [xx, yy, zz] = ndgrid(rng{1}, rng{2}, rng{3});
-        candidates   = [xx(:), yy(:), zz(:)];
-
-        inside = arrayfun(@(ii) tt_is_inside(candidates(ii,:), ...
-            klust(1+i).vertices, klust(1+i).faces), 1:size(candidates,1))';
-
-        if ~any(inside)
-            error('No valid interior seed found for bone segment %d!', i);
-        end
-        valid_idx      = find(inside);
-        cent(1+i, :)   = candidates(valid_idx(randi(numel(valid_idx))), :);
-        assert(tt_is_inside(cent(1+i,:), klust(1+i).vertices, klust(1+i).faces), ...
-            'Selected bone segment %d seed is not inside the mesh!', i);
-    end
-
-    %% STEP 6: Generate tetrahedral mesh with TetGen via surf2mesh
-    % surf2mesh calls TetGen to fill the merged surface mesh with
-    % tetrahedra. Each tetrahedron is assigned a region ID based on which
-    % seed point (cent) it contains.
-    
-    fprintf('  Generating tetrahedral mesh (TetGen)...\n');
-
-    % Validate the region seeds BEFORE handing them to TetGen. Rows for the
-    % heart, lungs and torso keep the CENTROID assigned above, and the
-    % centroid of a concave organ can fall outside it. A non-finite seed is
-    % worse still: savesurfpoly writes it verbatim, TetGen cannot parse it
-    % and exits without printing anything, which surfaces as the unhelpful
-    % 'Tetgen command failed:' with an empty message.
-    bad_seed = find(any(~isfinite(cent), 2));
-    if ~isempty(bad_seed)
-        error('run_fem_leadfields:badSeed', ...
-            ['Region seed(s) %s are non-finite. TetGen cannot parse these ' ...
-             'and will fail with an empty error message.'], mat2str(bad_seed'));
-    end
-    for ii = 1:numel(klust)
-        if ~tt_is_inside(cent(ii,:), klust(ii).vertices, klust(ii).faces)
-            warning('run_fem_leadfields:seedOutside', ...
-                ['Seed for %s is OUTSIDE its own surface. TetGen will ' ...
-                 'mislabel that compartment.'], klust(ii).name);
-        end
-    end
+    %% STEP 3: Tetrahedral volume mesh
+    % Boundary orientation, component labelling, region seeds, TetGen and
+    % tissue relabelling all happen in fem_build_volume_mesh, so the
+    % production meshes and the msg_models repeatability study share one
+    % implementation. Pass mesh_seed to make the region seeds (the only
+    % random step) reproducible; the state used is recorded in mesh_info
+    % either way.
+    mesh_opts = struct( ...
+        'maxvol_mm3',   tetgen_maxvol_mm3, ...
+        'opt_scale',    surf2mesh_opt_scale, ...
+        'reduce_torso', reduce_torso, ...
+        'torso_keep',   reduction_torso, ...
+        'seed',         mesh_seed, ...
+        'label',        geom_fname_noext, ...
+        'dump_dir',     output_base);
 
     try
-        [node, elem, ~] = surf2mesh(merged_mesh.p, merged_mesh.e, ...
-            min(merged_mesh.p), max(merged_mesh.p), ...
-            surf2mesh_opt_scale, tetgen_maxvol, cent, [], [], 'tetgen1.5');
+        [tet, mesh_info] = fem_build_volume_mesh(geoms, mesh_opts);
     catch meshErr
-        % Save exactly what TetGen was given, so the failure can be
-        % reproduced without re-running the whole pipeline. Without this the
-        % .poly is overwritten by the next geometry and the evidence is gone.
-        dump = fullfile(output_base, ...
-            sprintf('TETGEN_FAILED_%s.mat', geom_fname_noext));
-        comp_names = {klust.name};
-        save(dump, 'merged_mesh', 'cent', 'comp_names', 'tetgen_maxvol', ...
-             'surf2mesh_opt_scale', '-v7.3');
-
-        if exist('mwpath','file') == 2 && isfile(mwpath('post_vmesh.poly'))
-            copyfile(mwpath('post_vmesh.poly'), ...
-                fullfile(output_base, ...
-                sprintf('TETGEN_FAILED_%s.poly', geom_fname_noext)));
-        end
-
-        fprintf(2, '\n  TetGen FAILED on %s\n', geom_fname_noext);
+        fprintf(2, '\n  Meshing FAILED on %s\n', geom_fname_noext);
         fprintf(2, '  %s\n', meshErr.message);
-        fprintf(2, '  Input saved to %s\n', dump);
-        fprintf(2, '  Diagnose with:  diagnose_tetgen(''maxvol'', %g)\n', ...
-            tetgen_maxvol);
         fprintf(2, '  Continuing to the next geometry.\n\n');
         continue;
     end
+    bone_count = mesh_info.bone_count;
 
-    %% STEP 7: Remap TetGen region IDs to tissue conductivity labels
-    % TetGen assigns region IDs starting from 11 (offset of 10).
-    % These are remapped to the tissue indices used by DUNEuro:
-    %   1 = spinal cord,  2 = bone,  3 = heart,  4 = lungs,  5 = torso
-    
-    id = elem(:, 5) + 10;          % TetGen region offset
-
-    id(id == 11) = 1;              % spinal cord (always component 1)
-
-    for jj = 12:(11 + bone_count)
-        id(id == jj) = 2;          % all bone segments → tissue label 2
-    end
-
-    % Heart ventricles (2 components)
-    id(id == 12 + bone_count | id == 13 + bone_count) = 3;
-
-    % Lungs (2 components)
-    id(id == 14 + bone_count | id == 15 + bone_count) = 4;
-
-    % Torso (outer compartment, always last)
-    id(id == 16 + bone_count | id == 17 + bone_count) = 5;
-
-    elem(:, end) = id;
-
-    % Clean up isolated nodes and ensure correct tetrahedron orientation
-    [node, elem_clean] = removeisolatednode(node, elem(:, 1:4));
-    elem_reorient      = meshreorient(node, elem_clean(:, 1:4));
-    elem               = [elem_reorient, elem(:, 5)];
-
-    % Assemble final tetrahedral mesh struct for DUNEuro
-    tet.pos    = node;
-    tet.tet    = elem(:, 1:4);
-    tet.tissue = elem(:, 5);
-    tet.unit   = 'm';
+    log_compute_time(time_log, struct( ...
+        'model', regexprep(geom_fname_noext, '^geometries[_-]?', ''), ...
+        'method', 'fem', 'stage', 'mesh', 'seconds', mesh_info.time_s.total, ...
+        'n_sources', size(src.pos, 1), ...
+        'n_nodes', mesh_info.n_nodes, 'n_elements', mesh_info.n_tets, ...
+        'note', sprintf('maxvol %g mm^3', tetgen_maxvol_mm3)));
 
     % CACHE THE VOLUME MESH
     % Tetrahedralising is the fragile, expensive step. Saving the result
@@ -576,7 +335,7 @@ for fIdx = 1:numel(filenames)
         vm = struct('tet', tet, 'src', src, ...
                     'grad_front', grad_front, 'grad_back', grad_back, ...
                     'bone_count', bone_count, 'geom_file', geom_fname_noext, ...
-                    'tetgen_maxvol', tetgen_maxvol);
+                    'tetgen_maxvol', tetgen_maxvol, 'mesh_info', mesh_info);
         save(vm_file, '-struct', 'vm', '-v7.3');
         fprintf('  Cached volume mesh: %s\n', vm_file);
     end
@@ -586,7 +345,7 @@ for fIdx = 1:numel(filenames)
         continue;
     end
 
-    %% STEP 8: Run FEM forward model for front and back sensor arrays
+    %% STEP 4: Run FEM forward model for front and back sensor arrays
     % DUNEuro solves the FEM forward problem for each sensor array.
     % Output is in T/(A*m); scaling by 1e6 converts to fT/nAm to match
     % the BEM leadfield units used elsewhere in the pipeline.
@@ -630,7 +389,14 @@ for fIdx = 1:numel(filenames)
         fprintf('  Running FEM: %s — %s\n', model_short, array_name);
 
         % fem_calc_fwds returns T/(A*m); multiply by 1e6 to get fT/nAm
+        t_solve = tic;
         Lfem = fem_calc_fwds(S);
+        t_solve = toc(t_solve);
+        log_compute_time(time_log, struct( ...
+            'model', model_short, 'method', 'fem', 'array', array_name, ...
+            'stage', 'solve', 'seconds', t_solve, ...
+            'n_sources', size(src.pos, 1), 'n_channels', size(Lfem, 1), ...
+            'n_nodes', mesh_info.n_nodes, 'n_elements', mesh_info.n_tets));
         Lfem = Lfem * 1e6;  % now in fT/nAm — matches BEM leadfield scaling
 
         % Convert DUNEuro output to FieldTrip leadfield structure

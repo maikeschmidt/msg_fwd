@@ -106,6 +106,10 @@ fprintf('  Scale factor (fT/nAm) = %.6e\n\n', scale_fT_per_nAm);
 
 if ~exist(save_base, 'dir'); mkdir(save_base); end
 
+% Compute times are appended to this log, one row per lead field.
+% msg_models/compute_time collects it.
+time_log = fullfile(save_base, 'compute_time_log.csv');
+
 dipole_orientations = [1 0 0; 0 1 0; 0 0 1];   % LR, RC, VD
 
 % MAIN LOOP
@@ -191,7 +195,14 @@ for f = 1:numel(filenames)
             tag    = src_sets{ss, 2};
 
             leadfield_bs           = struct();
+            t_lf                   = tic;
             leadfield_bs.leadfield = bs_leadfield(grad, pos_mm);
+            t_lf                   = toc(t_lf);
+            log_compute_time(time_log, struct( ...
+                'model', regexprep([model tag], '^geometries[_-]?', ''), ...
+                'method', 'biot_savart', 'array', arr_label, ...
+                'stage', 'leadfield', 'seconds', t_lf, ...
+                'n_sources', size(pos_mm, 1), 'n_channels', size(grad.tra, 1)));
             leadfield_bs.label     = grad.label;
             leadfield_bs.pos       = pos_mm;
             leadfield_bs.unit      = 'mm';

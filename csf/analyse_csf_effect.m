@@ -270,7 +270,7 @@ end
 % FIGURES
 
 % Per-source curves — shared four-row decomposition figure, identical in
-% layout to plot_decomposition.m and analyse_bone_conductivity.m so the
+% layout to plot_decomposition.m and analyse_bone_conductivity.m (msg_models) so the
 % three can be read against each other directly.
 
 D = struct('label', {}, 're', {}, 'gain', {}, 'rdm', {}, 'rsq', {});

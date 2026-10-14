@@ -34,30 +34,19 @@
 %   Generate shifted geometry files in msg_pert, then run the relevant
 %   forward model scripts here, then return to msg_pert for analysis.
 %
+% NOTE — COMPUTATIONAL PARAMETERS:
+%   Mesh resolution and convergence, bone conductivity, repeated volume
+%   meshing and compute time are studied in the companion repository
+%   msg_models, which uses this toolbox's functions and metrics:
+%     https://github.com/maikeschmidt/msg_models
+%   compute_hierarchy_table reads its lead fields when they exist
+%   (include_model_factors = true).
+%
 % NOTE — SUPPORTING ANALYSES:
 %   These are NOT part of this pipeline, because each depends on lead fields
 %   that must be computed first and take hours to produce. Run them
 %   separately once those exist.
 %
-%     convergence/   Mesh resolution. THREE INDEPENDENT TESTS — none depends
-%                    on the results of the others:
-%
-%       SURFACE SWEEP (core): run_fem_surface_convergence +
-%       analyse_surface_convergence. Decimates the surface meshes and
-%       rebuilds the volume mesh from each, so the discretisation actually
-%       changes near the cord.
-%
-%       VOLUME SWEEP (secondary): run_fem_convergence + analyse_convergence.
-%       Bounds the effect of the tetrahedron volume limit. A weak lever
-%       here — see the note in run_fem_surface_convergence.
-%
-%       CORD REFINEMENT: run_fem_cord_refinement + analyse_cord_refinement.
-%       Refines only the region around the cord, where the sources are.
-%
-%       All sweeps are resumable and ordered coarsest first. The BEM output
-%       folder is tagged by sweep mode so the two BEM sweeps cannot collide.
-%
-%     conductivity/  Bone conductivity sweep, BEM and FEM
 %     csf/           CSF compartment in the FEM
 %     stats/         Group statistics over warped replicate geometries
 %     warping/       FEM lead fields on warped anatomies

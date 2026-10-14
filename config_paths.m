@@ -22,9 +22,16 @@
 %     og            the published models — the four bone variants, BEM+FEM
 %     warp          warped anatomies (replicates)
 %     csf           FEM with and without a CSF layer
-%     bone_cond     bone conductivity sweep
-%     convergence   mesh resolution sweep
 %     organ         BEM with thoracic organs removed
+%
+%   Computational-parameter datasets, written and analysed by msg_models
+%   (https://github.com/maikeschmidt/msg_models). Their locations are kept
+%   here so every repository, and compute_hierarchy_table, agrees on them:
+%
+%     bone_cond     bone conductivity sweep
+%     convergence   mesh resolution sweeps
+%     mesh_repeat   repeated volume meshing of the same geometry
+%     benchmark     controlled compute-time benchmark
 %
 % HELPERS DEFINED HERE
 %   bem_lf_file(base_dir, geom_short, array)
@@ -45,7 +52,8 @@
 %   Fields:           og_fields, organ_fields, warp_fields_bem,
 %                     warp_fields_fem, warp_volume_meshes, csf_fields,
 %                     bone_cond_fields_bem, bone_cond_fields_fem,
-%                     convergence_{bem,fem}_base and the per-sweep folders
+%                     convergence_{bem,fem}_base and the per-sweep folders,
+%                     mesh_repeat_fields, benchmark_fields
 %   Results:          save_base_dir
 %   Binaries:         duneuro_binpath
 %   Back-compat:      forward_fields_base, geoms_path
@@ -99,6 +107,8 @@ warp_volume_meshes = fullfile(data_root, 'replications', 'fields');
 % CSF layer, FEM only
 csf_fields = fullfile(data_root, 'CSF', 'fields', 'fem');
 
+% --- Computational parameters (msg_models) ------------------------------
+
 % Bone conductivity sweep
 bone_cond_fields_bem = fullfile(data_root, 'bone_cond_change', 'bem');
 bone_cond_fields_fem = fullfile(data_root, 'bone_cond_change', 'fem');
@@ -114,6 +124,13 @@ convergence_fem_torso   = fullfile(convergence_fem_base, 'surface_convergence_to
 convergence_fem_cord    = fullfile(convergence_fem_base, 'cord_refinement');
 convergence_bem_allsurf = fullfile(convergence_bem_base, 'convergence_allsurf');
 convergence_bem_torso   = fullfile(convergence_bem_base, 'convergence_torso');
+
+% Repeated volume meshing: the same geometry meshed many times, one
+% subfolder per geometry
+mesh_repeat_fields = fullfile(data_root, 'mesh_repeatability');
+
+% Controlled compute-time benchmark
+benchmark_fields   = fullfile(data_root, 'compute_benchmark');
 
 
 % RESULTS

@@ -64,6 +64,11 @@ cr_add_functions;   % initialise MSG toolbox and HBF library paths
 geoms_path  = og_geoms;   % SET THIS
 output_base = csf_fields;            % SET THIS
 
+% Compute times are appended to this log, one row per mesh and per solve.
+% msg_models/compute_time collects it.
+if ~exist(output_base, 'dir'), mkdir(output_base); end
+time_log = fullfile(output_base, 'compute_time_log.csv');
+
 % DUNEuro binary location
 % -------------------------------------------------------------------------
 % MUST be assigned to S.binpath, NOT S.bindir. fem_calc_fwds.m reads
@@ -264,9 +269,16 @@ for fIdx = 1:numel(filenames)
     %% STEP 6: Tetrahedral mesh
 
     fprintf('  Generating tetrahedral mesh (TetGen)...\n');
+    t_mesh = tic;
     [node, elem, ~] = surf2mesh(merged_mesh.p, merged_mesh.e, ...
         min(merged_mesh.p), max(merged_mesh.p), ...
         surf2mesh_opt_scale, tetgen_maxvol, cent, [], [], 'tetgen1.5');
+    t_mesh = toc(t_mesh);
+    log_compute_time(time_log, struct( ...
+        'model', regexprep(geom_fname_noext, '^geometries[_-]?', ''), ...
+        'method', 'fem', 'stage', 'mesh', 'seconds', t_mesh, ...
+        'n_nodes', size(node, 1), 'n_elements', size(elem, 1), ...
+        'note', 'csf study, tetgen only'));
 
     %% STEP 7: Remap TetGen region IDs to tissue labels
 
@@ -358,7 +370,15 @@ for fIdx = 1:numel(filenames)
             fprintf('  Running FEM: %s — %s — %s\n', ...
                 model_short, variant_name, array_name);
 
+            t_solve = tic;
             Lfem = fem_calc_fwds(S);
+            t_solve = toc(t_solve);
+            log_compute_time(time_log, struct( ...
+                'model', model_short, 'method', 'fem', 'array', array_name, ...
+                'stage', 'solve', 'seconds', t_solve, ...
+                'n_sources', size(src.pos, 1), 'n_channels', size(Lfem, 1), ...
+                'n_nodes', size(tet.pos, 1), 'n_elements', size(tet.tet, 1), ...
+                'note', ['csf study, ' variant_name]));
             Lfem = Lfem * 1e6;   % T/(A*m) -> fT/nAm
 
             leadfield_ft = convert_duneuro_to_fieldtrip(Lfem, src, grad_curr, S);

@@ -27,7 +27,7 @@
 %   conductivity   Each bone conductivity vs the reference value, within a
 %                  solver. "Does the literature value chosen matter?"
 %                  Cross-solver conductivity comparisons are deliberately
-%                  left to analyse_bone_conductivity.
+%                  left to analyse_bone_conductivity (msg_models).
 %   warping        BEM vs FEM on each warped anatomy. CROSS-SOLVER on matched
 %                  geometry: it measures whether BEM-FEM agreement holds up
 %                  when the anatomy changes underneath it, so read it for
@@ -44,6 +44,15 @@
 %                      rest of the volume is settled. Separate from
 %                      mesh_refinement because it is a different question.
 %   solver         BEM vs FEM on matched geometry.
+%
+% CORE AND COMPUTATIONAL FACTORS
+%   conductivity, mesh_refinement, source_refinement and the surface and
+%   torso decimation sweeps are computational parameters. Their lead fields
+%   are produced by msg_models (https://github.com/maikeschmidt/msg_models)
+%   and read here from the folders named in config_paths. Set
+%   include_model_factors = false to build the table from the core analysis
+%   alone; those factors are then left out of every output rather than
+%   reported as missing.
 %
 % AGGREGATION
 %   Every comparison yields per-source metrics; those are reduced to a median
@@ -104,6 +113,10 @@ save_dir = fullfile(save_base_dir, 'hierarchy');   % SET THIS
 % CSF sweep
 csf_dir        = dataset_dir(csf_fields, core_variant);
 csf_geom_short = 'anatom_full_realistic';                                            % SET THIS
+
+% Computational-parameter factors from msg_models (conductivity, mesh and
+% source refinement, surface and torso decimation). false = core analysis only.
+include_model_factors = true;   % SET THIS
 
 % Bone conductivity sweep
 cond_bem_dir    = dataset_dir(bone_cond_fields_bem, core_variant);
@@ -235,6 +248,11 @@ try
 catch err
     fprintf('  organ removal: SKIPPED (%s)\n', err.message);
 end
+
+if ~include_model_factors
+    fprintf(['  conductivity, mesh and source refinement, decimation: ' ...
+             'not included (include_model_factors = false)\n']);
+else
 
 % ---- 4: bone conductivity ---------------------------------------------
 for m = {'bem','fem'}
@@ -445,6 +463,8 @@ for sw = 1:size(conv_sweeps, 1)
     end
 end
 
+end   % include_model_factors
+
 % ---- 5: warped replicates --------------------------------------------
 %
 % CROSS-SOLVER, matched geometry. For each replicate the BEM and FEM are
@@ -617,6 +637,12 @@ factor_names = {'Bone segmentation','Bone geom. detail','CSF', ...
                 'Organ segmentation','Bone conductivity', ...
                 'Mesh refinement','Source space refinement', ...
                 'Solver, across warped anatomies','Solver choice'};
+if ~include_model_factors
+    keep_f = ~ismember(factor_order, ...
+        {'conductivity','mesh_refinement','source_refinement'});
+    factor_order = factor_order(keep_f);
+    factor_names = factor_names(keep_f);
+end
 
 axes_present = unique([Rall.axis]);
 

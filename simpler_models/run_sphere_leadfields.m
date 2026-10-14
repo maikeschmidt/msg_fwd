@@ -130,6 +130,11 @@ fprintf(' Requires SPM/FieldTrip on path\n\n');
 
 if ~exist(save_base, 'dir'); mkdir(save_base); end
 
+% log_compute_time lives in msg_fwd/functions. Compute times are appended
+% to this log, one row per lead field; msg_models/compute_time collects it.
+addpath(fullfile(fileparts(fileparts(mfilename('fullpath'))), 'functions'));
+time_log = fullfile(save_base, 'compute_time_log.csv');
+
 
 % MAIN LOOP
 
@@ -324,7 +329,14 @@ for f = 1:numel(filenames)
         % at line 211 of ft_prepare_leadfield. Without the patch the
         % output is T/(A*m); change scale to 1e6 if using unpatched FT.
 
+        t_lf  = tic;
         lf_ft = ft_prepare_leadfield(cfg);
+        t_lf  = toc(t_lf);
+        log_compute_time(time_log, struct( ...
+            'model', regexprep(model, '^geometries[_-]?', ''), ...
+            'method', 'sphere', 'array', arr_label, ...
+            'stage', 'leadfield', 'seconds', t_lf, ...
+            'n_sources', size(sources.pos, 1), 'n_channels', n_channels));
 
 
         % UNIT SCALING: T/nAm → fT/nAm

@@ -54,6 +54,7 @@ og_geom_dir     = og_geoms;             % unwarped base geometries
 warp_geom_dir   = warp_geoms;           % warped geometries the BEM ran on
 mesh_dir        = warp_volume_meshes;   % where run_fem_leadfields cached volume_mesh_*.mat
 output_base     = warp_fields_fem;      % where FEM lead fields go
+time_log        = fullfile(output_base, 'compute_time_log.csv');   % read by msg_models
 % duneuro_binpath comes from config_paths — the FOLDER holding
 % bst_duneuro_meeg_win64.exe, not the executable.
 
@@ -189,6 +190,13 @@ for vi = 1:numel(variants)
 
             t0   = tic;
             Lfem = fem_calc_fwds(S);
+            if ~exist(output_base, 'dir'), mkdir(output_base); end
+            log_compute_time(time_log, struct( ...
+                'model', short, 'method', 'fem', 'array', array_name, ...
+                'stage', 'solve', 'seconds', toc(t0), ...
+                'n_sources', size(src.pos, 1), 'n_channels', size(Lfem, 1), ...
+                'n_nodes', size(tet.pos, 1), 'n_elements', size(tet.tet, 1), ...
+                'note', 'warped replicate, transformed base mesh'));
             Lfem = Lfem * 1e6;             % T/(A*m) -> fT/nAm
 
             % Same conversion run_fem_leadfields uses. The raw DUNEuro

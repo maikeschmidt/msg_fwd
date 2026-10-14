@@ -49,6 +49,8 @@
 %                                   geometry variant and sensor array
 %                                   (front / back), in subfolders named
 %                                   after each geometry variant
+%   compute_time_log.csv          - wall-clock head-model and lead-field
+%                                   time per model, in lf_save_path
 %   leadfield_<model>_brain_bem_<array>.mat
 %                                 - brain lead fields (three-shell BEM),
 %                                   only when the geometry includes the
@@ -66,8 +68,10 @@
 %   - ft_prepare_headmodel()    : FieldTrip BEM head model (method: 'hbf')
 %   - ft_prepare_leadfield()    : FieldTrip leadfield computation
 %   - ft_convert_units()        : unit conversion (mm → m)
-%   - hbf_CheckTriangleOrientation() : ensures consistent mesh winding
-%   - reducepatch()             : downsamples torso mesh (factor: 0.5)
+%   - bem_build_boundaries()    : oriented boundaries and conductivities
+%                                 (winding repair, torso decimation 0.5,
+%                                 cord-in-bone conductivity pairing)
+%   - log_compute_time()        : compute-time log
 %
 % NOTES:
 %   - Torso mesh is downsampled by 50% before BEM assembly to reduce
@@ -117,6 +121,11 @@ cd('D:\');          % SET THIS: update to your working directory
 Metadata;           % SET THIS: script defining subject/study metadata and paths
 cr_add_functions;   % initialise MSG toolbox and HBF library paths
 
+% Compute times are appended to this log, one row per head model and per
+% lead field. msg_models/compute_time collects it.
+if ~exist(lf_save_path, 'dir'), mkdir(lf_save_path); end
+time_log = fullfile(lf_save_path, 'compute_time_log.csv');
+
 
 % GEOMETRY FILENAMES
 % All geometry .mat files to process. Add or remove variants as needed.
@@ -138,116 +147,17 @@ for fIdx = 1:numel(filenames)
     geoms     = load(geom_file);
 
 
-    %% STEP 1: Build and orient BEM boundary meshes
-    % Meshes are assembled in order from innermost (spinal cord) to
-    % outermost (torso), which is required by the HBF BEM solver.
-    % Units are converted from mm to metres for FieldTrip/HBF.
-    % The torso mesh is downsampled by 50% to reduce BEM matrix size.
-    
+    %% STEP 1: Boundaries and conductivities
+    % Five nested boundaries (cord, bone, heart, lungs, torso), innermost
+    % first, in metres and counter-clockwise, with the torso decimated to
+    % 50% of its faces; and the inner/outer conductivity pairs, including
+    % the cord's outer value, which depends on whether the bone encloses
+    % the cord. See bem_build_boundaries for the details of both.
 
-    % Compartment ordering: innermost → outermost (required by HBF)
-    ordering_cord  = {'wm', 'bone', 'heart', 'lungs', 'torso'};
-    reduction_torso = 0.5;  % keep 50% of torso faces
+    [bnd_cord, cond_cord, bnd_info] = bem_build_boundaries(geoms, ...
+        struct('torso_keep', 0.5, 'cratio', 40, 'label', filenames{fIdx}));
 
-    clear bnd_cord
-    for ii = 1:numel(ordering_cord)
-        field    = ['mesh_' ordering_cord{ii}];
-        mesh_tmp = geoms.(field);
-
-        pos = mesh_tmp.vertices;
-        tri = mesh_tmp.faces;
-
-        % Downsample torso only — other meshes used at full resolution
-        if ii == 5
-            patch_in.vertices = pos;
-            patch_in.faces    = tri;
-            patch_out = reducepatch(patch_in, reduction_torso);
-            pos = patch_out.vertices;
-            tri = patch_out.faces;
-        end
-
-        bnd_cord(ii).pos  = pos;
-        bnd_cord(ii).tri  = tri;
-        bnd_cord(ii).unit = 'mm';
-
-        % Ensure counter-clockwise (outward) triangle winding, which HBF
-        % requires. hbf_CheckTriangleOrientation returns 1 for CCW, 2 for
-        % CW, and 0 or -1 when it could not decide: 0 when its single test
-        % point landed outside the surface, which happens on thin or
-        % sharply folded meshes, and -1 when the surface is open.
-        %
-        % Handling only the 2 case leaves an undecided mesh exactly as it
-        % was found. If that mesh is clockwise, HBF then solves with the
-        % conductivity jump across the boundary reversed and the lead
-        % fields are wrong — with no scale or sign signature to give it
-        % away, so the model just comes out different.
-        %
-        % Undecided meshes therefore fall back to the signed volume, which
-        % uses every triangle instead of one point and so is unaffected by
-        % thin regions. An open surface is not a valid BEM boundary at all
-        % and stops the run.
-        bnd_cord(ii) = fix_winding(bnd_cord(ii), ordering_cord{ii}, ...
-                                   filenames{fIdx});
-
-        bnd_cord(ii) = ft_convert_units(bnd_cord(ii), 'm');
-    end
-
-
-    %% STEP 2: Assign compartment conductivities
-    % ci = inner conductivity, co = outer conductivity (S/m).
-    % cratio = bone-to-tissue conductivity ratio (1:40).
-    % Compartment order matches ordering_cord above.
-    %
-    %   Compartment    ci (S/m)      co (S/m)
-    %   -----------    ----------    --------
-    %   Spinal cord    0.33          see below
-    %   Bone           0.33/40       0.23
-    %   Heart          0.62          0.23
-    %   Lungs          0.05          0.23
-    %   Torso          0.23          0.00  (outermost — no outer medium)
-    %
-    % THE CORD'S OUTER CONDUCTIVITY DEPENDS ON THE BONE MODEL
-    %
-    %   HBF reads each pair as "conductivity just inside / just outside this
-    %   boundary", so wherever two surfaces nest, the inner surface's OUTER
-    %   value and the outer surface's INNER value describe the same region
-    %   and have to agree.
-    %
-    %   Where bone is segmented into separate vertebrae, those bodies sit
-    %   beside the cord in torso tissue. The cord's surroundings are then
-    %   torso tissue, so co = 0.23, and the bone surfaces separately have
-    %   bone inside (0.33/40) and tissue outside (0.23). Consistent.
-    %
-    %   Where bone is a continuous sheath, it ENCLOSES the cord. The region
-    %   between the two surfaces is then the inside of the bone shell, which
-    %   is bone. Leaving the cord's outer value at 0.23 would declare that
-    %   same region to be both 0.23 and 0.33/40, and HBF would solve a
-    %   problem that is neither — while the FEM, which labels tetrahedral
-    %   volumes from the geometry itself, correctly fills it with bone. That
-    %   is the whole of the disagreement between the two solvers on a
-    %   continuous bone model.
-    %
-    %   Rather than keying this off the file name, it is measured from the
-    %   geometry: if the cord sources lie inside the bone surface, the bone
-    %   encloses the cord and the cord's outer conductivity is bone.
-
-    cratio  = 40;
-    ci_cord = [0.33,  0.33/cratio,  0.62,  0.05,  0.23];
-    co_cord = [0.23,  0.23,         0.23,  0.23,  0.00];
-
-    bone_encloses_cord = cord_inside_bone(geoms);
-
-    if bone_encloses_cord
-        co_cord(1) = 0.33/cratio;
-        fprintf(['  Bone ENCLOSES the cord: cord outer conductivity set to ' ...
-                 'bone (%.5f S/m),\n    so it matches the bone compartment ' ...
-                 'it sits inside.\n'], co_cord(1));
-    else
-        fprintf(['  Bone sits beside the cord: cord outer conductivity left ' ...
-                 'as torso tissue (%.2f S/m).\n'], co_cord(1));
-    end
-
-%% STEP 3: Load sensor arrays
+    %% STEP 2: Load sensor arrays
     % Sensor type (MEG/OPM or EEG) is detected automatically from the
     % fields present in the geometry struct, so the same script handles
     % both modalities and array configurations without manual configuration.
@@ -308,7 +218,7 @@ for fIdx = 1:numel(filenames)
     end
 
 
-    %% STEP 4: Load spinal cord source model
+    %% STEP 3: Load spinal cord source model
     % Centreline sources generated by cr_generate_spine_center() in
     % msg_coreg. These define where dipole sources are placed along the
     % spinal cord for leadfield computation.
@@ -320,7 +230,7 @@ for fIdx = 1:numel(filenames)
     sources_spine        = ft_convert_units(sources_spine, 'm');
 
 
-    %% STEP 5: Detect sensor modality (MEG or EEG)
+    %% STEP 4: Detect sensor modality (MEG or EEG)
     % EEG structs have elecpos/chanpos but no coilpos.
     % This determines which FieldTrip cfg field to use (cfg.elec vs
     % cfg.grad) and which channel unit to expect.
@@ -336,7 +246,7 @@ for fIdx = 1:numel(filenames)
     end
 
 
-    %% STEP 6: Build BEM head model
+    %% STEP 5: Build BEM head model
     % Uses the Helsinki BEM Framework (HBF) via FieldTrip.
     % NOTE: cfg.method may need to be 'bem_hbf' depending on your
     % SPM/FieldTrip version — update if ft_prepare_headmodel errors.
@@ -347,14 +257,24 @@ for fIdx = 1:numel(filenames)
     
     cfg_hm              = [];
     cfg_hm.method       = 'hbf';       % change to 'bem_hbf' if needed
-    cfg_hm.conductivity = [ci_cord; co_cord];
+    cfg_hm.conductivity = cond_cord;
     cfg_hm.checkmesh    = 'false';
     % cfg_hm.isolatedsource = 1;       % uncomment for isolated source approach
 
+    t_hm     = tic;
     vol_cord = ft_prepare_headmodel(cfg_hm, bnd_cord);
+    t_hm     = toc(t_hm);
+
+    model_short = regexprep(filenames{fIdx}, '^geometries[_-]?', '');
+    n_vert = bnd_info.n_vertices;
+    n_tri  = bnd_info.n_triangles;
+    log_compute_time(time_log, struct( ...
+        'model', model_short, 'method', 'bem', 'stage', 'headmodel', ...
+        'seconds', t_hm, 'n_sources', size(sources_spine.pos, 1), ...
+        'n_nodes', n_vert, 'n_elements', n_tri));
 
 
-    %% STEP 7: Compute leadfields for front and back sensor arrays
+    %% STEP 6: Compute leadfields for front and back sensor arrays
     % ft_prepare_leadfield computes the leadfield matrix (forward model)
     % for all source positions along the spinal cord centreline.
     %
@@ -390,7 +310,15 @@ for fIdx = 1:numel(filenames)
             cfg.grad = sens_curr;
         end
 
+        t_lf           = tic;
         leadfield_cord = ft_prepare_leadfield(cfg);
+        t_lf           = toc(t_lf);
+        log_compute_time(time_log, struct( ...
+            'model', model_short, 'method', 'bem', 'array', array_name, ...
+            'stage', 'leadfield', 'seconds', t_lf, ...
+            'n_sources', size(sources_spine.pos, 1), ...
+            'n_channels', size(leadfield_cord.leadfield{1}, 1), ...
+            'n_nodes', n_vert, 'n_elements', n_tri));
 
 
         % Save leadfield output
@@ -409,7 +337,7 @@ for fIdx = 1:numel(filenames)
     end
 
 
-    %% STEP 8: Brain lead fields (only if the geometry includes the brain)
+    %% STEP 7: Brain lead fields (only if the geometry includes the brain)
     % A geometry includes the brain when msg_coreg registered the SPM
     % template head and built sources_brain (cr_generate_brain_sources).
     % The brain then gets the standard MEG volume conductor, a three-shell
@@ -433,95 +361,3 @@ for fIdx = 1:numel(filenames)
 end
 
 fprintf('\n All BEM computations completed (woohoo) \n');
-
-
-% LOCAL FUNCTIONS
-
-function tf = cord_inside_bone(geoms)
-% Does the bone surface enclose the cord?
-%
-% Decides from the geometry rather than the file name, so a variant that is
-% renamed, regenerated or added later cannot get the wrong conductivity
-% pairing. Tests the cord source positions, which are the points whose
-% surroundings actually matter for the lead field.
-%
-% A clear majority is required either way: a geometry where only some
-% sources fall inside the bone is neither arrangement, and silently picking
-% one would hide a real problem with the meshes.
-
-    pts = geoms.sources_cent.pos;
-    n   = size(pts, 1);
-    bv  = geoms.mesh_bone.vertices;
-    bf  = geoms.mesh_bone.faces;
-
-    inside = false(n, 1);
-    for k = 1:n
-        inside(k) = tt_is_inside(pts(k,:), bv, bf);
-    end
-    frac = mean(inside);
-
-    if frac > 0.95
-        tf = true;
-    elseif frac < 0.05
-        tf = false;
-    else
-        error('run_bem_leadfields:partialenclosure', ...
-            ['%.1f%% of cord sources lie inside the bone surface. The bone ' ...
-             'neither clearly encloses the cord nor clearly sits beside it, ' ...
-             'so the conductivity pairing cannot be determined. Check the ' ...
-             'bone mesh before computing lead fields.'], frac*100);
-    end
-end
-
-
-function b = fix_winding(b, comp_name, geom_name)
-% Give HBF a counter-clockwise closed boundary, or stop and say why not.
-
-    code = hbf_CheckTriangleOrientation(b.pos, b.tri, 0);
-
-    if code == 1
-        return;                                   % already CCW
-    end
-
-    if code == 2
-        b.tri = b.tri(:, [1 3 2]);
-        if hbf_CheckTriangleOrientation(b.pos, b.tri, 0) ~= 1
-            error('run_bem_leadfields:winding', ...
-                ['%s / %s: flipping the triangles did not produce a ' ...
-                 'counter-clockwise mesh. The surface is not a valid BEM ' ...
-                 'boundary.'], geom_name, comp_name);
-        end
-        return;
-    end
-
-    % code 0 or -1: HBF could not decide. Establish closure first, because
-    % the volume test below is only meaningful on a closed surface.
-    e = sort([b.tri(:,[1 2]); b.tri(:,[2 3]); b.tri(:,[3 1])], 2);
-    [~, ~, ic] = unique(e, 'rows');
-    n_open = sum(accumarray(ic, 1) ~= 2);
-
-    if n_open > 0
-        error('run_bem_leadfields:openboundary', ...
-            ['%s / %s: the surface has %d edge(s) not shared by exactly ' ...
-             'two triangles, so it is open and cannot be a BEM boundary. ' ...
-             'Repair the mesh before computing lead fields.'], ...
-            geom_name, comp_name, n_open);
-    end
-
-    % Closed, so the sign of the volume gives the winding unambiguously.
-    p1 = b.pos(b.tri(:,1), :);
-    p2 = b.pos(b.tri(:,2), :);
-    p3 = b.pos(b.tri(:,3), :);
-    V  = sum(dot(p1, cross(p2 - p1, p3 - p1, 2), 2)) / 6;
-
-    if V < 0
-        b.tri = b.tri(:, [1 3 2]);
-        fprintf(['    %s: HBF could not judge the winding (code %d); the ' ...
-                 'signed volume\n      showed it was clockwise, so the ' ...
-                 'triangles were flipped.\n'], comp_name, code);
-    else
-        fprintf(['    %s: HBF could not judge the winding (code %d); the ' ...
-                 'signed volume\n      confirms it is already ' ...
-                 'counter-clockwise.\n'], comp_name, code);
-    end
-end

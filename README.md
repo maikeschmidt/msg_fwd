@@ -2,8 +2,8 @@
 
 **Forward modelling pipeline for magnetospinography (MSG): BEM and FEM
 lead field computation, and systematic comparison across bone geometry
-variants, solvers, conductivities, mesh resolutions and anatomies — plus
-analytically simpler reference models (Biot–Savart, single sphere).**
+variants, solvers, thoracic organs, CSF and anatomies — plus analytically
+simpler reference models (Biot–Savart, single sphere).**
 
 Developed by **Maike Schmidt** at the **Department of Imaging Neuroscience,
 University College London**.
@@ -24,12 +24,20 @@ The factors it can quantify:
 | Bone geometry | continuous, homogeneous toroidal, inhomogeneous toroidal, MRI-realistic | main pipeline |
 | Solver | BEM vs FEM on matched geometry | main pipeline |
 | Thoracic organs | heart and/or lungs removed | `analyse_organ_removal` |
-| Bone conductivity | sweep across the literature range | `conductivity/` |
 | CSF | FEM with and without a CSF compartment, one mesh | `csf/` |
-| Mesh resolution | surface decimation, volume bound, cord refinement | `convergence/` |
 | Anatomy | affine-warped replicate geometries | `warping/`, `stats/` |
 | Simpler models | Biot–Savart, single sphere | `simpler_models/` |
 
+Computational parameters — mesh resolution and convergence, bone
+conductivity, repeated volume meshing and compute time — are studied in
+[msg_models](https://github.com/maikeschmidt/msg_models), which uses this
+toolbox's functions and metrics. `compute_hierarchy_table` places those
+factors on the same scale when their lead fields exist, and runs on the
+core analysis alone otherwise (`include_model_factors`).
+
+Every lead field runner appends its wall-clock times to a
+`compute_time_log.csv` in its output folder (`functions/log_compute_time.m`);
+msg_models collects and tabulates them.
 Lead fields are computed for three orthogonal dipole orientations
 (ventral–dorsal, rostral–caudal, left–right) and compared with a single set
 of metrics defined in one place (see [Metrics](#metrics)).
@@ -48,6 +56,7 @@ Two further documents sit alongside this one:
 | Repository | Role |
 |---|---|
 | [msg_coreg](https://github.com/maikeschmidt/msg_coreg) | Coregistration — produces the geometry `.mat` files this pipeline consumes. **Run first.** |
+| [msg_models](https://github.com/maikeschmidt/msg_models) | Computational parameters — mesh resolution and convergence, bone conductivity, mesh repeatability, compute time |
 | [msg_pert](https://github.com/maikeschmidt/msg_pert) | Perturbation analysis — how sensitive each forward model is to shifts in source or sensor position |
 | [msg_error](https://github.com/maikeschmidt/msg_error) | MRI-derived head/neck geometries and error analysis |
 
@@ -153,21 +162,9 @@ msg_fwd/
 ├── compute_hierarchy_table.m        — every factor on one scale (run last)
 ├── diagnose_tetgen_dump.m           — inspect a failed TetGen run
 │
-├── conductivity/                    — bone conductivity sweep
-│   ├── run_bone_conductivity_bem.m
-│   ├── run_bone_conductivity_fem.m
-│   └── analyse_bone_conductivity.m
-│
 ├── csf/                             — CSF compartment, FEM only
 │   ├── run_fem_leadfields_csf.m     — one mesh, solved with and without CSF
 │   └── analyse_csf_effect.m
-│
-├── convergence/                     — mesh resolution, three independent sweeps
-│   ├── run_fem_surface_convergence.m / analyse_surface_convergence.m
-│   ├── run_fem_convergence.m        / analyse_convergence.m
-│   ├── run_fem_cord_refinement.m    / analyse_cord_refinement.m
-│   ├── run_bem_convergence.m        / analyse_torso_decimation.m
-│   └── analyse_convergence_all.m    — cross-compares every sweep
 │
 ├── warping/                         — FEM lead fields on warped anatomies
 │   ├── run_fem_leadfields_warped.m  — transforms the volume mesh, no re-meshing
@@ -190,16 +187,16 @@ msg_fwd/
 │   ├── compare_results.m            — pairwise RE and r² matrices
 │   ├── compute_metrics.m            — convenience wrapper for a single pair
 │   ├── organise_leadfield.m         — reshape a raw lead field by orientation
-│   ├── lf_unit_scale.m, lf_scale_to_ftnam.m, repair_bem_scale.m — unit handling
+│   ├── lf_unit_scale.m, lf_scale_to_ftnam.m — unit handling
 │   ├── cmp_select.m                 — filter the comparison registry
 │   ├── plot_topoplot_publication.m / plot_topoplot_meg.m / plot_topoplot_eeg.m
-│   ├── plot_metric_decomposition.m, plot_per_source_metrics.m,
-│   │   plot_convergence_vs_reference.m — shared figure layouts
+│   ├── plot_metric_decomposition.m, plot_per_source_metrics.m — shared figure layouts
 │   ├── st_bh_fdr.m, st_boot_ci_median.m, st_rank_biserial.m,
 │   │   st_signflip_test.m           — statistics helpers
+│   ├── fem_build_volume_mesh.m      — THE tetrahedral mesher (TetGen via ISO2Mesh)
+│   ├── log_compute_time.m           — compute-time log written by every runner
 │   ├── fem_add_csf_layer.m, convert_duneuro_to_fieldtrip.m, ft_headmodel_hbf.m
-│   └── get_experimental_split.m, split_experimental_lf.m,
-│       load_original_references.m, getfield_safe.m
+│   └── get_experimental_split.m, split_experimental_lf.m, getfield_safe.m
 │
 ├── tests/
 │   ├── test_lf_metrics.m            — metric properties, no toolbox dependencies
@@ -278,8 +275,15 @@ Sensor arrays are detected automatically, in priority order:
 | 3 | `front/back_coils_2axis` | biaxial arrays |
 
 **FEM** (`run_fem_leadfields.m`) uses DUNEuro via `fem_calc_fwds`. Volume
-meshes are generated with TetGen through ISO2Mesh, and the St. Venant
-source model is used. FEM output is scaled to fT/nAm to match the BEM.
+meshes are generated by `fem_build_volume_mesh` (TetGen through ISO2Mesh),
+and the St. Venant source model is used. FEM output is scaled to fT/nAm to
+match the BEM.
+
+The one random step in meshing is the choice of an interior seed point per
+region for TetGen. Set `mesh_seed` in `run_fem_leadfields.m` to make it
+reproducible; the random state used is saved with the cached volume mesh
+(`mesh_info.rng_state`) either way. msg_models measures how much
+re-meshing the same geometry changes the mesh.
 
 ### Brain
 

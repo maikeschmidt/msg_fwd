@@ -14,6 +14,7 @@
 %     run_bone_conductivity_bem.m   scales by 1e15 at save time and sets
 %     run_bem_convergence.m         units_out = 'fT/nAm'  -> needs x 1
 %     run_conductivity_perturbation.m
+%     (the first two are in msg_models)
 %
 %   Applying the wrong factor is silent and catastrophic. Comparing a
 %   T/nAm BEM leadfield against an fT/nAm FEM leadfield makes the BEM
@@ -195,7 +196,7 @@ function warn_if_implausible(lf_struct, u)
              '%.3g, far outside the physical range for that unit. It was ' ...
              'probably mis-scaled before saving; comparisons against a ' ...
              'correctly scaled file will show RE near 100%%. See ' ...
-             'repair_bem_scale. Warned once per session.'], u, m);
+             'repair_bem_scale (msg_models). Warned once per session.'], u, m);
         warned = true;
     end
 end

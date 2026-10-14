@@ -106,32 +106,21 @@ seeded, so warp *k* is the same deformation in both runs.
 Each block is independent of the others. Doing them cheapest-first gives
 usable results early.
 
-### 2a. Bone conductivity — ~1 day
+> Bone conductivity, mesh convergence and mesh repeatability are run from
+> [msg_models](https://github.com/maikeschmidt/msg_models); see its
+> RUN_ORDER.md. They write to the folders named in `config_paths.m`, so
+> `compute_hierarchy_table` here picks them up when they exist.
 
-```matlab
-run_bone_conductivity_bem     % 11 BEM builds (conductivity is baked in)
-run_bone_conductivity_fem     % meshes ONCE, 11 solves
-```
+Every runner appends its mesh, build and solve times to a
+`compute_time_log.csv` in its output folder.
 
-### 2b. CSF — ~half a day
+### 2a. CSF — ~half a day
 
 ```matlab
 run_fem_leadfields_csf        % one mesh, two solves (with / without CSF)
 ```
 
-### 2c. Mesh convergence — ~1–3 days, resumable
-
-```matlab
-run_fem_convergence           % 9 levels, COARSEST FIRST
-run_bem_convergence           % 6 levels
-```
-
-Both sweeps are ordered coarsest first and skip levels whose output already
-exists, so stopping early still leaves an analysable sweep. The finest FEM
-levels are by far the most expensive — drop them from `maxvol_mm3_levels`
-if time is short and you will still get a convergence curve.
-
-### 2d. Replicates — **by far the biggest job**, several days
+### 2b. Replicates — **by far the biggest job**, several days
 
 > **For the FEM, transform the volume mesh rather than re-meshing.**
 > Re-tetrahedralising N warped geometries puts TetGen in the loop N times,
@@ -182,13 +171,13 @@ load_and_organise_leadfields
 run_all_analysis
 
 % Supporting analyses — each needs its own lead fields from Phase 2
-analyse_bone_conductivity     % needs 2a
-analyse_csf_effect            % needs 2b
-analyse_convergence           % needs 2c
-st_warp_summary               % needs 2d — intervals across warped anatomies
+analyse_csf_effect            % needs 2a
+st_warp_summary               % needs 2b — intervals across warped anatomies
 plot_warp_family              % the warp-family figure
 
-% LAST — pulls every factor above onto one scale
+% LAST — pulls every factor above onto one scale. Also reads the
+% msg_models sweeps when they exist; include_model_factors = false
+% builds it from the core analysis alone.
 compute_hierarchy_table
 compute_full_comparison_table   % formats the same numbers as full tables
 ```
@@ -256,9 +245,8 @@ base geom ──> cr_generate_warps ─> cr_build_warp_geometries ──> BEM
                                                               v
                                           st_warp_summary
 
-base geom ──> run_bone_conductivity_{bem,fem} ──> analyse_bone_conductivity
 base geom ──> run_fem_leadfields_csf ──────────> analyse_csf_effect
-base geom ──> run_{fem,bem}_convergence ───────> analyse_convergence
+msg_models sweeps (conductivity, convergence) ──> (optional) hierarchy table
 
 BEM organ variants ─> load_and_organise_leadfields ─> analyse_organ_removal
 
@@ -272,10 +260,7 @@ BEM organ variants ─> load_and_organise_leadfields ─> analyse_organ_removal
 Suggested priority:
 
 1. **`run_all_analysis`** — every main figure and table
-2. **Bone conductivity** (2a) — cheap
-3. **CSF** (2b) — cheap
-4. **Replicates** (2d) — the only route to any group statistics
-5. **Convergence** (2c) — important, but the most droppable at the margin
+2. **CSF** (2a) — cheap
+3. **Replicates** (2b) — the only route to any group statistics
 
-Phases 2a–2c together are roughly two days. Phase 2d alone is longer than
-all of them combined.
+Phase 2a is roughly half a day. Phase 2b takes several days.
