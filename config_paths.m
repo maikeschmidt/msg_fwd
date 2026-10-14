@@ -62,8 +62,8 @@
 
 % ROOTS — in most cases these are the only two lines that need changing
 
-data_root    = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates';           % SET THIS
-results_root = 'D:\Simulations\Paper_1\but_actualy\reviewer_updates\results_final_final_final_test';   % SET THIS
+data_root    = 'D:\Thesis\chapters_4_and_5';           % SET THIS
+results_root = 'D:\Thesis\chapters_4_and_5\all_analysis_results';   % SET THIS
 
 % External binaries. duneuro_binpath is the FOLDER holding
 % bst_duneuro_meeg_win64.exe, not the executable.
@@ -115,6 +115,9 @@ convergence_fem_cord    = fullfile(convergence_fem_base, 'cord_refinement');
 convergence_bem_allsurf = fullfile(convergence_bem_base, 'convergence_allsurf');
 convergence_bem_torso   = fullfile(convergence_bem_base, 'convergence_torso');
 
+% Mesh repeat fields
+mesh_repeat_fields = fullfile(data_root, 'mesh_repeatability');
+benchmark_fields   = fullfile(data_root, 'compute_benchmark');
 
 % RESULTS
 % Every analysis writes to its own subfolder of this.
