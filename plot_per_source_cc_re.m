@@ -123,8 +123,9 @@ if n_pairs == 0
 end
 
 % Truncate colour/marker arrays to number of pairs
-plot_colors  = pair_colors(1:n_pairs, :);
-plot_markers = pair_markers(1:n_pairs);
+% Colours and markers repeat when there are more pairs than the palette has
+plot_colors  = pair_colors(mod(0:n_pairs-1, size(pair_colors, 1)) + 1, :);
+plot_markers = pair_markers(mod(0:n_pairs-1, numel(pair_markers)) + 1);
 pair_lw      = pub_line_width;
 pair_ms      = pub_marker_size;
 

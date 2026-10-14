@@ -106,8 +106,9 @@ if isempty(valid_scatter)
 end
 
 n_scatter  = numel(valid_scatter);
-sc_colors  = pair_colors(1:n_scatter, :);
-sc_markers = pair_markers(1:n_scatter);
+% Colours and markers repeat when there are more series than the palette has
+sc_colors  = pair_colors(mod(0:n_scatter-1, size(pair_colors, 1)) + 1, :);
+sc_markers = pair_markers(mod(0:n_scatter-1, numel(pair_markers)) + 1);
 
 % Build display labels
 scatter_labels = cell(1, n_scatter);
