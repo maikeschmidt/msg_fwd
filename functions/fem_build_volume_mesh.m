@@ -23,6 +23,18 @@ function [tet, info] = fem_build_volume_mesh(geoms, opts)
 %     .opt_scale      surf2mesh quality optimisation scale       (1)
 %     .reduce_torso   decimate the torso surface before meshing  (true)
 %     .torso_keep     fraction of torso faces kept               (0.5)
+%     .other_keep     fraction of bone, heart and lung faces kept (1).
+%                     The cord is never decimated: that would move its
+%                     boundary relative to the fixed source positions. Used
+%                     to rebuild surface-refinement sweeps; production
+%                     leaves it at 1.
+<<<<<<< Updated upstream
+%     .cord_maxvol_mm3  separate volume bound for the spinal cord region
+%                     only, mm^3 ([] = use maxvol_mm3 everywhere). Applied
+%                     as a per-region TetGen constraint, as in the cord
+%                     refinement sweep; every other region keeps maxvol_mm3.
+=======
+>>>>>>> Stashed changes
 %     .seed           RNG seed for the region seed points. Empty uses the
 %                     current global stream, as the production runs do;
 %                     the state actually used is returned either way, so
@@ -46,6 +58,8 @@ function [tet, info] = fem_build_volume_mesh(geoms, opts)
 %     .vol_tissue_mm3   [1 x 5] summed tetrahedron volume per tissue
 %     .n_surf_vertices, .n_surf_faces   size of the merged surface input
 %     .time_s           struct: surfaces, seeds, tetgen, cleanup, total
+%     .surfaces         the five boundaries as meshed (.name, .pos in m,
+%                       .tri), after decimation and orientation
 %     .opts             the options used, with defaults filled in
 %
 % ERRORS:
@@ -69,11 +83,23 @@ function [tet, info] = fem_build_volume_mesh(geoms, opts)
 % This file is part of the MSG Forward Modelling Toolbox (msg_fwd).
 
 if nargin < 2 || isempty(opts), opts = struct(); end
+
+% Reject options this version does not know. A misspelt or newer option
+% would otherwise be ignored silently and the mesh built with the default.
+known   = {'maxvol_mm3', 'opt_scale', 'reduce_torso', 'torso_keep', 'other_keep', ...
+           'cord_maxvol_mm3', 'seed', 'label', 'dump_dir', 'verbose'};
+unknown = setdiff(fieldnames(opts), known);
+if ~isempty(unknown)
+    error('fem_build_volume_mesh:option', 'Unknown option(s): %s. Known: %s.', ...
+        strjoin(unknown', ', '), strjoin(known, ', '));
+end
 opts = set_default(opts, 'maxvol_mm3',   500);
 opts = set_default(opts, 'opt_scale',    1);
 opts = set_default(opts, 'reduce_torso', true);
 opts = set_default(opts, 'torso_keep',   0.5);
+opts = set_default(opts, 'other_keep',   1);
 opts = set_default(opts, 'seed',         []);
+opts = set_default(opts, 'cord_maxvol_mm3', []);
 opts = set_default(opts, 'label',        'geometry');
 opts = set_default(opts, 'dump_dir',     '');
 opts = set_default(opts, 'verbose',      true);
@@ -99,11 +125,15 @@ for ii = 1:numel(ordering)
     pos = mesh_tmp.vertices;
     tri = mesh_tmp.faces;
 
-    % Downsample torso to reduce FEM mesh complexity
-    if ii == 5 && opts.reduce_torso
+    % Decimate the torso (production), and bone, heart and lungs only when
+    % other_keep < 1. Index 1, the cord, is never decimated.
+    keep = 1;
+    if ii == 5 && opts.reduce_torso,  keep = opts.torso_keep; end
+    if ii > 1 && ii < 5,              keep = opts.other_keep; end
+    if keep < 1
         patch_in.vertices = pos;
         patch_in.faces    = tri;
-        patch_out = reducepatch(patch_in, opts.torso_keep);
+        patch_out = reducepatch(patch_in, keep);
         pos = patch_out.vertices;
         tri = patch_out.faces;
     end
@@ -254,9 +284,20 @@ end
 say(opts.verbose, '  Generating tetrahedral mesh (TetGen)...\n');
 t0 = tic;
 try
-    [node, elem, ~] = surf2mesh(merged_mesh.p, merged_mesh.e, ...
-        min(merged_mesh.p), max(merged_mesh.p), ...
-        opts.opt_scale, tetgen_maxvol, cent, [], [], 'tetgen1.5');
+    if isempty(opts.cord_maxvol_mm3)
+        [node, elem, ~] = surf2mesh(merged_mesh.p, merged_mesh.e, ...
+            min(merged_mesh.p), max(merged_mesh.p), ...
+            opts.opt_scale, tetgen_maxvol, cent, [], [], 'tetgen1.5');
+    else
+        % Per-region bound: 4th column of the regions matrix, in m^3. maxvol
+        % must be passed EMPTY or surf2mesh ignores the region column.
+        % Region 1 is the cord (see STEP 2).
+        regions = [cent, repmat(tetgen_maxvol, size(cent, 1), 1)];
+        regions(1, 4) = opts.cord_maxvol_mm3 * 1e-9;
+        [node, elem, ~] = surf2mesh(merged_mesh.p, merged_mesh.e, ...
+            min(merged_mesh.p), max(merged_mesh.p), ...
+            opts.opt_scale, [], regions, [], [], 'tetgen1.5');
+    end
 catch meshErr
     % Save exactly what TetGen was given, so the failure can be reproduced
     % without re-running the whole pipeline.
@@ -326,6 +367,7 @@ info.n_surf_faces     = size(merged_mesh.e, 1);
 info.time_s = struct('surfaces', t_surf, 'seeds', t_seeds, ...
                      'tetgen', t_tetgen, 'cleanup', t_cleanup, ...
                      'total', toc(t_all));
+info.surfaces = bnd;
 info.opts = opts;
 
 say(opts.verbose, '  Mesh: %d nodes, %d tets (%.1f s)\n', info.n_nodes, info.n_tets, info.time_s.total);

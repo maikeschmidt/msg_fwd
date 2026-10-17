@@ -390,10 +390,14 @@ end
 % test that was run, not only the two FEM ones.
 %
 % Each sweep contributes two comparisons: the coarsest level and the finest
-% level, both against the PRODUCTION level of that same sweep. The
-% production level is the reference because that is the mesh the reported
-% results were computed on, so each number is the cost of having chosen a
-% different resolution. Sweeps whose folders are absent are skipped.
+% level, both against the keep = 0.50 level of that same sweep. In the
+% torso-only sweeps that level is the production mesh, so each number is
+% the cost of having chosen a different torso resolution. In the
+% all-surfaces sweeps it is NOT the production mesh (production decimates
+% only the torso; these also decimate bone, heart and lungs), so the
+% numbers are the effect of surface resolution around a mesh that is
+% itself coarser than production. Sweeps whose folders are absent are
+% skipped.
 
 conv_sweeps = { ...
   % dir                       manifest                              file pattern                              meth  res field        factor                   label                          unit
