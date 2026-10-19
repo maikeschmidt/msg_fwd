@@ -327,6 +327,13 @@ if has_both
         title(tl2, sprintf('R² (FEM vs BEM) and dipole–normal angle — Sensor axis %d', ax), ...
             'FontSize', 16, 'FontWeight', 'bold');
 
+        % One scale for the three orientations of this sensor axis, framing
+        % all of their data, so the panels can be compared directly
+        ang_all = cellfun(@(o) angle_deg.(o)(:)', orientation_labels_n, 'uni', 0);
+        rsq_all = cellfun(@(o) rsq_normal.(o)(ax, :), orientation_labels_n, 'uni', 0);
+        ang_lim = padded_limits([ang_all{:}], 0, 90);
+        rsq_lim = padded_limits([rsq_all{:}], 0, 1);
+
         for oi = 1:3
             ori_label = orientation_labels_n{oi};
 
@@ -342,7 +349,7 @@ if has_both
                 'MarkerSize',      8, ...
                 'MarkerFaceColor', ori_colors_n(oi,:));
             set(gca, 'YColor', ori_colors_n(oi,:));
-            ylim([0, 90]);
+            ylim(ang_lim);
             if oi == 1
                 ylabel('Angle to surface normal (°)', 'FontSize', 16);
             end
@@ -358,7 +365,7 @@ if has_both
                 'MarkerSize',      8, ...
                 'MarkerFaceColor', ori_colors_n(oi,:) * 0.5);
             set(gca, 'YColor', ori_colors_n(oi,:) * 0.5);
-            ylim([0, 1]);
+            ylim(rsq_lim);
             if oi == 3
                 ylabel('R² (FEM vs BEM)', 'FontSize', 16);
             end
@@ -390,6 +397,13 @@ if has_both
         title(tl3, sprintf('R² vs dipole–normal angle — Sensor axis %d', ax), ...
             'FontSize', 16, 'FontWeight', 'bold');
 
+        % One scale for the three orientations of this sensor axis, framing
+        % all of their data, so the panels can be compared directly
+        ang_all = cellfun(@(o) angle_deg.(o)(:)', orientation_labels_n, 'uni', 0);
+        rsq_all = cellfun(@(o) rsq_normal.(o)(ax, :), orientation_labels_n, 'uni', 0);
+        ang_lim = padded_limits([ang_all{:}], 0, 90);
+        rsq_lim = padded_limits([rsq_all{:}], 0, 1);
+
         for oi = 1:3
             ori_label = orientation_labels_n{oi};
             rsq_row   = rsq_normal.(ori_label)(ax, :);
@@ -409,15 +423,16 @@ if has_both
             set(cb3, 'FontSize', 11);
 
             % Linear trend line
+            x_lim = ang_lim;
             p     = polyfit(angle_deg.(ori_label), rsq_row, 1);
-            x_fit = linspace(0, 90, 200);
+            x_fit = linspace(x_lim(1), x_lim(2), 200);
             hold(ax3, 'on');
             plot(ax3, x_fit, polyval(p, x_fit), '--k', 'LineWidth', 1.8);
             hold(ax3, 'off');
 
             % Pearson r annotation
             r_val = corr(angle_deg.(ori_label)', rsq_row');
-            text(ax3, 3, 0.06, sprintf('r = %.2f', r_val), ...
+            text(ax3, 0.03, 0.06, sprintf('r = %.2f', r_val), 'Units', 'normalized', ...
                 'FontSize', 12, 'FontWeight', 'bold', 'Color', 'k');
 
             xlabel(ax3, 'Angle to surface normal (°)', 'FontSize', 14);
@@ -425,8 +440,11 @@ if has_both
                 ylabel(ax3, 'R² (FEM vs BEM)', 'FontSize', 16);
             end
             title(ax3, ori_display_n{oi}, 'FontSize', 16, 'FontWeight', 'bold');
-            xlim(ax3, [0, 90]);
-            ylim(ax3, [0, 1]);
+            % Limits follow the data so the spread of R² is visible (R² from
+            % lf_metrics usually sits close to 1, which a 0-1 axis flattens),
+            % shared across the three orientations of this sensor axis
+            xlim(ax3, ang_lim);
+            ylim(ax3, rsq_lim);
             grid(ax3, 'on');
             set(ax3, 'FontSize', 12, 'LineWidth', 1.5, 'TickDir', 'out');
         end
@@ -606,3 +624,16 @@ if has_both
 end
 
 fprintf('Normal angle analysis complete. Saved to: %s\n', save_ang_dir);
+
+
+% LOCAL FUNCTIONS
+
+function lim = padded_limits(v, lo, hi)
+% Axis limits that frame the data with an 8% margin, kept inside [lo, hi]
+    v = v(isfinite(v));
+    if isempty(v), lim = [lo, hi]; return; end
+    span = max(v) - min(v);
+    if span == 0, span = max(abs(max(v)) * 0.01, 1e-6); end
+    lim = [max(lo, min(v) - 0.08*span), min(hi, max(v) + 0.08*span)];
+    if lim(2) <= lim(1), lim = [lo, hi]; end
+end
