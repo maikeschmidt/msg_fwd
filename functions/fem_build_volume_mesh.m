@@ -286,14 +286,22 @@ try
             min(merged_mesh.p), max(merged_mesh.p), ...
             opts.opt_scale, tetgen_maxvol, cent, [], [], 'tetgen1.5');
     else
-        % Per-region bound: 4th column of the regions matrix, in m^3. maxvol
-        % must be passed EMPTY or surf2mesh ignores the region column.
-        % Region 1 is the cord (see STEP 2).
+        % Cord bound as a region constraint (4th column of the regions
+        % matrix, m^3; region 1 is the cord, see STEP 2), PLUS the global
+        % bound on every element. With region constraints alone (a bare
+        % '-a'), TetGen applies each bound only to the elements it assigns
+        % to that region's seed point, and the rest of the volume came out
+        % far coarser than the production mesh at the same nominal bound
+        % (lungs about a third of the elements, torso two thirds). Passing
+        % both '-a<global>' and '-a' keeps the global bound everywhere and
+        % tightens the cord on top of it. surf2mesh takes maxvol EMPTY here,
+        % or it drops the region column, and runs the command as given.
         regions = [cent, repmat(tetgen_maxvol, size(cent, 1), 1)];
         regions(1, 4) = opts.cord_maxvol_mm3 * 1e-9;
+        tetgen_cmd = ['-A -q1.414a' num2str(tetgen_maxvol) ' -a'];
         [node, elem, ~] = surf2mesh(merged_mesh.p, merged_mesh.e, ...
             min(merged_mesh.p), max(merged_mesh.p), ...
-            opts.opt_scale, [], regions, [], [], 'tetgen1.5');
+            opts.opt_scale, [], regions, [], [], 'tetgen1.5', tetgen_cmd);
     end
 catch meshErr
     % Save exactly what TetGen was given, so the failure can be reproduced
