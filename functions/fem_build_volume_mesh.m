@@ -28,13 +28,10 @@ function [tet, info] = fem_build_volume_mesh(geoms, opts)
 %                     boundary relative to the fixed source positions. Used
 %                     to rebuild surface-refinement sweeps; production
 %                     leaves it at 1.
-<<<<<<< Updated upstream
 %     .cord_maxvol_mm3  separate volume bound for the spinal cord region
 %                     only, mm^3 ([] = use maxvol_mm3 everywhere). Applied
 %                     as a per-region TetGen constraint, as in the cord
 %                     refinement sweep; every other region keeps maxvol_mm3.
-=======
->>>>>>> Stashed changes
 %     .seed           RNG seed for the region seed points. Empty uses the
 %                     current global stream, as the production runs do;
 %                     the state actually used is returned either way, so
