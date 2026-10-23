@@ -49,6 +49,12 @@ function [tet, info] = fem_build_volume_mesh(geoms, opts)
 %     .comp_names       component names, in TetGen region order
 %     .region_seeds     [n_comp x 3] seed point per region (m)
 %     .seed_inside_own  logical, each seed lies inside its own surface
+%     .seed_compartment name of the compartment each seed actually lies in:
+%                       the innermost component surface enclosing it. Must
+%                       equal comp_names, or TetGen labels the wrong space.
+%     .seed_redrawn     logical, the first seed for that region was in the
+%                       wrong compartment and a new one was drawn
+%     .vol_expected_mm3 [1 x 5] volume per tissue enclosed by the surfaces
 %     .rng_state        RNG state immediately before the seeds were drawn
 %     .n_nodes, .n_tets
 %     .n_tets_tissue    [1 x 5] tetrahedra per tissue label
@@ -62,6 +68,11 @@ function [tet, info] = fem_build_volume_mesh(geoms, opts)
 % ERRORS:
 %   fem_build_volume_mesh:badSeed     a region seed is non-finite
 %   fem_build_volume_mesh:noSeed      no interior seed found for a region
+%   fem_build_volume_mesh:seedCompartment  a seed could not be placed in
+%                                     its own compartment
+%   fem_build_volume_mesh:tissueVolume  a tissue's meshed volume differs
+%                                     from the volume its surfaces enclose,
+%                                     i.e. a region was labelled wrongly
 %   fem_build_volume_mesh:tetgen      TetGen failed; when opts.dump_dir is
 %                                     set, its input is saved there first
 %
@@ -222,6 +233,15 @@ t_surf = toc(t0);
 % a fine grid instead. That draw is the only random step in the mesher.
 
 t0 = tic;
+
+% Which component surface lies inside which. A seed inside its own surface
+% is not necessarily in its own compartment: if another surface lies inside
+% that one (the cord inside a continuous bone, the canal wall of a hollow
+% bone), a seed drawn inside it lands in that inner space instead, and
+% TetGen labels the wrong volume. Each region's seed must therefore avoid
+% every surface nested inside its own.
+[nest, comp_vol] = component_nesting(klust);
+
 if ~isempty(opts.seed)
     rng(opts.seed, 'twister');
 end
@@ -244,9 +264,23 @@ cent(numel(klust), :) = [mean(V(:,1)), y_min + 0.8*(y_max - y_min), mean(V(:,3))
 
 % Spinal cord and each bone segment: random interior point on a 0.5 mm
 % grid, sampled across the two shorter axes at the midpoint of the longest
+seed_redrawn = false(numel(klust), 1);
 for ii = 1:(1 + bone_count)
     say(opts.verbose, '  Finding interior seed for %s...\n', klust(ii).name);
-    cent(ii, :) = random_interior_seed(klust(ii));
+    [cent(ii, :), seed_redrawn(ii)] = random_interior_seed(klust(ii), klust(nest(ii, :)));
+end
+
+% Centroid seeds (heart, lungs, torso) that are outside their own surface,
+% or inside a surface nested in it, are replaced by a random interior point
+% that avoids the nested surfaces. Done after the cord and bone draws so
+% those draw the same points from a given seed as before.
+for ii = (2 + bone_count):numel(klust)
+    if ~in_own_compartment(cent(ii, :), ii, klust, nest)
+        say(opts.verbose, '  Centroid seed for %s is not in its compartment; redrawing...\n', ...
+            klust(ii).name);
+        cent(ii, :) = random_interior_seed(klust(ii), klust(nest(ii, :)));
+        seed_redrawn(ii) = true;
+    end
 end
 t_seeds = toc(t0);
 
@@ -262,14 +296,23 @@ if ~isempty(bad_seed)
         ['Region seed(s) %s are non-finite. TetGen cannot parse these ' ...
          'and will fail with an empty error message.'], mat2str(bad_seed'));
 end
-seed_inside_own = false(numel(klust), 1);
+seed_inside_own  = false(numel(klust), 1);
+seed_compartment = cell(1, numel(klust));
 for ii = 1:numel(klust)
-    seed_inside_own(ii) = tt_is_inside(cent(ii,:), klust(ii).vertices, klust(ii).faces);
-    if ~seed_inside_own(ii)
-        warning('fem_build_volume_mesh:seedOutside', ...
-            ['Seed for %s is OUTSIDE its own surface. TetGen will ' ...
-             'mislabel that compartment.'], klust(ii).name);
-    end
+    seed_inside_own(ii)  = tt_is_inside(cent(ii,:), klust(ii).vertices, klust(ii).faces);
+    seed_compartment{ii} = innermost_component(cent(ii,:), klust, comp_vol);
+end
+wrong = find(~strcmp(seed_compartment, {klust.name}));
+if ~isempty(wrong)
+    lines = arrayfun(@(k) sprintf('    %s seed lies in %s', klust(k).name, ...
+        seed_compartment{k}), wrong, 'uni', 0);
+    error('fem_build_volume_mesh:seedCompartment', ...
+        ['Region seed(s) not in their own compartment on %s; TetGen would ' ...
+         'label the wrong volume:\n%s'], opts.label, strjoin(lines, '\n'));
+end
+if any(seed_redrawn)
+    say(opts.verbose, '  Seeds redrawn (first draw in the wrong compartment): %s\n', ...
+        strjoin({klust(seed_redrawn).name}, ', '));
 end
 
 
@@ -359,14 +402,52 @@ t_cleanup = toc(t0);
 
 vol_mm3 = abs(tet_volumes(tet.pos, tet.tet)) * 1e9;
 
+% Every tissue label must lie in 1-5. A region TetGen received no seed for
+% keeps a raw region ID and would otherwise reach DUNEuro unlabelled.
+if any(tet.tissue < 1 | tet.tissue > 5)
+    error('fem_build_volume_mesh:tissueVolume', ...
+        '%d tetrahedra on %s have no tissue label (an unseeded region).', ...
+        sum(tet.tissue < 1 | tet.tissue > 5), opts.label);
+end
+
+% Each tissue's meshed volume against the volume its surfaces enclose. A
+% seed in the wrong space swaps volume between tissues (bone taking a piece
+% of torso, say), which this catches whatever the cause. The tetrahedra
+% fill the input surfaces exactly, so anything beyond rounding is a
+% labelling error.
+tissue_of = [1, 2*ones(1, bone_count), 3, 3, 4, 4, 5];
+vol_tissue = accumarray(tet.tissue(:), vol_mm3, [5 1])';
+vol_expect = zeros(1, 5);
+if numel(tissue_of) == numel(klust)
+    for ii = 1:numel(klust)
+        inner = nest(ii, :);
+        direct = inner & ~any(nest(inner, :), 1);   % nested in ii, not in a child of ii
+        vol_expect(tissue_of(ii)) = vol_expect(tissue_of(ii)) + ...
+            (comp_vol(ii) - sum(comp_vol(direct))) * 1e9;
+    end
+    rel = abs(vol_tissue - vol_expect) ./ max(vol_expect, eps);
+    tissue_names = {'cord', 'bone', 'heart', 'lungs', 'torso'};
+    bad = find(rel > 0.01);
+    if ~isempty(bad)
+        lines = arrayfun(@(t) sprintf('    %-6s meshed %12.0f mm^3, surfaces enclose %12.0f mm^3', ...
+            tissue_names{t}, vol_tissue(t), vol_expect(t)), bad, 'uni', 0);
+        error('fem_build_volume_mesh:tissueVolume', ...
+            'Tissue volumes on %s do not match their surfaces (a region is mislabelled):\n%s', ...
+            opts.label, strjoin(lines, '\n'));
+    end
+end
+
 info.bone_count       = bone_count;
 info.comp_names       = {klust.name};
 info.region_seeds     = cent;
 info.seed_inside_own  = seed_inside_own;
+info.seed_compartment = seed_compartment;
+info.seed_redrawn     = seed_redrawn;
+info.vol_expected_mm3 = vol_expect;
 info.n_nodes          = size(tet.pos, 1);
 info.n_tets           = size(tet.tet, 1);
 info.n_tets_tissue    = accumarray(tet.tissue(:), 1, [5 1])';
-info.vol_tissue_mm3   = accumarray(tet.tissue(:), vol_mm3, [5 1])';
+info.vol_tissue_mm3   = vol_tissue;
 info.n_surf_vertices  = size(merged_mesh.p, 1);
 info.n_surf_faces     = size(merged_mesh.e, 1);
 info.time_s = struct('surfaces', t_surf, 'seeds', t_seeds, ...
@@ -382,10 +463,17 @@ end
 
 % LOCAL FUNCTIONS
 
-function p = random_interior_seed(comp)
-% One random point on a 0.5 mm grid inside a closed component. The longest
-% axis is fixed at its midpoint so only a plane is searched (a full 3D grid
-% is too slow).
+function [p, redrawn] = random_interior_seed(comp, excl)
+% One random point on a 0.5 mm grid inside a closed component and outside
+% every surface in excl (the surfaces nested inside it), so the point lies
+% in the component's own compartment. The longest axis is fixed at its
+% midpoint so only a plane is searched (a full 3D grid is too slow).
+% Candidates are drawn one at a time, so when the first draw is valid the
+% random stream is used exactly as without excl. redrawn is true when the
+% first draw was inside a nested surface.
+
+    if nargin < 2, excl = struct('vertices', {}, 'faces', {}); end
+    redrawn = false;
 
     box_min = min(comp.vertices);
     box_max = max(comp.vertices);
@@ -406,7 +494,60 @@ function p = random_interior_seed(comp)
             'No valid interior seed found for %s.', comp.name);
     end
     valid_idx = find(inside);
-    p = candidates(valid_idx(randi(numel(valid_idx))), :);
+    while ~isempty(valid_idx)
+        k = randi(numel(valid_idx));
+        p = candidates(valid_idx(k), :);
+        if ~any(arrayfun(@(e) tt_is_inside(p, e.vertices, e.faces), excl))
+            return;
+        end
+        redrawn = true;
+        valid_idx(k) = [];
+    end
+    error('fem_build_volume_mesh:seedCompartment', ...
+        ['Every interior grid point of %s is inside a surface nested in it, ' ...
+         'so no seed can be placed in its own compartment.'], comp.name);
+end
+
+
+function [nest, vol] = component_nesting(klust)
+% nest(i,j) is true when component j lies inside component i. Tested on
+% three vertices of j (majority), since the surfaces do not touch. vol is
+% each closed surface's enclosed volume (m^3), used to order the nesting.
+    n   = numel(klust);
+    vol = zeros(1, n);
+    for i = 1:n
+        v = klust(i).vertices; f = klust(i).faces;
+        vol(i) = abs(sum(dot(v(f(:,1),:), cross(v(f(:,2),:), v(f(:,3),:), 2), 2)) / 6);
+    end
+    nest = false(n);
+    for j = 1:n
+        nv  = size(klust(j).vertices, 1);
+        idx = unique(round(linspace(1, nv, 3)));
+        for i = 1:n
+            if i == j || vol(i) <= vol(j), continue; end
+            hits = arrayfun(@(k) tt_is_inside(klust(j).vertices(k,:), ...
+                klust(i).vertices, klust(i).faces), idx);
+            nest(i, j) = sum(hits) * 2 > numel(idx);
+        end
+    end
+end
+
+
+function tf = in_own_compartment(p, ii, klust, nest)
+% Inside component ii's surface and outside every surface nested in it
+    tf = tt_is_inside(p, klust(ii).vertices, klust(ii).faces) && ...
+         ~any(arrayfun(@(e) tt_is_inside(p, e.vertices, e.faces), klust(nest(ii, :))));
+end
+
+
+function name = innermost_component(p, klust, vol)
+% Name of the smallest component surface enclosing p: the compartment p
+% lies in. 'outside' when no surface encloses it.
+    inside = arrayfun(@(c) tt_is_inside(p, c.vertices, c.faces), klust);
+    if ~any(inside), name = 'outside'; return; end
+    cand = find(inside);
+    [~, k] = min(vol(cand));
+    name = klust(cand(k)).name;
 end
 
 
